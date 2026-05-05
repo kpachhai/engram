@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from collections.abc import Generator
 from datetime import UTC, datetime
 from pathlib import Path
 
@@ -33,7 +34,7 @@ def _vec_b() -> list[float]:
 
 
 @pytest.fixture
-def vault(tmp_path: Path) -> VaultStorage:
+def vault(tmp_path: Path) -> Generator[VaultStorage, None, None]:
     """Spin up a fresh VaultStorage on a tmp path."""
     thoughts_dir = tmp_path / "thoughts"
     indexes_dir = tmp_path / ".indexes"

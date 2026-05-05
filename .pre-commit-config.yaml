@@ -28,19 +28,16 @@ repos:
         args: ["--fix"]
       - id: ruff-format
 
-  - repo: https://github.com/pre-commit/mirrors-mypy
-    rev: v1.11.2
+  # mypy runs through uv so the resolved dependency tree matches uv.lock and
+  # CI exactly. The mirrors-mypy hook installs into an isolated venv whose
+  # versions can diverge from uv.lock, which lets test-side errors slip past
+  # local pre-commit even though CI catches them. We trade hook-internal
+  # caching for src+tests coverage that mirrors CI.
+  - repo: local
     hooks:
-      - id: mypy
-        additional_dependencies:
-          - "pydantic>=2.7"
-          - "pydantic-settings>=2.4"
-          - "structlog>=24.1"
-          - "typer>=0.12"
-          - "fastmcp>=2.0"
-          - "httpx>=0.27"
-        # Read configuration from pyproject.toml so [[tool.mypy.overrides]] for
-        # tests applies. Restrict to src/ here; CI's full `uv run mypy` covers
-        # tests separately.
-        args: ["--config-file=pyproject.toml"]
-        files: ^src/
+      - id: mypy-uv
+        name: mypy (uv-managed, full repo)
+        entry: uv run mypy
+        language: system
+        pass_filenames: false
+        types: [python]

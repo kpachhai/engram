@@ -63,14 +63,18 @@ def _make_md(body: str = "[Lesson] when sqlite-vec returns fewer results", **kwa
 
 def test_split_frontmatter_basic():
     content = "---\nfoo: bar\n---\nbody text\n"
-    fm, body = split_frontmatter(content)
+    result = split_frontmatter(content)
+    assert result is not None
+    fm, body = result
     assert fm.strip() == "foo: bar"
     assert body == "body text\n"
 
 
 def test_split_frontmatter_empty_body():
     content = "---\nfoo: bar\n---\n"
-    fm, body = split_frontmatter(content)
+    result = split_frontmatter(content)
+    assert result is not None
+    fm, body = result
     assert fm.strip() == "foo: bar"
     assert body == ""
 
@@ -87,7 +91,9 @@ def test_split_frontmatter_unclosed_fence_returns_none():
 def test_split_frontmatter_body_contains_triple_dash():
     """A4: body containing literal --- mid-document round-trips intact."""
     content = "---\nfoo: bar\n---\nfirst paragraph\n\n---\n\nsecond paragraph\n"
-    fm, body = split_frontmatter(content)
+    result = split_frontmatter(content)
+    assert result is not None
+    fm, body = result
     assert fm.strip() == "foo: bar"
     assert "first paragraph" in body
     assert "second paragraph" in body
@@ -111,6 +117,7 @@ def test_read_thought_round_trip(tmp_path: Path):
     result = read_thought(file_path)
     assert result is not None
     thought, drifts = result
+    assert thought is not None
     assert thought.id == tid
     assert thought.prefix == "Lesson"
     assert thought.portability == "portable"

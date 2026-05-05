@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import sqlite3
-from collections.abc import Sequence
+from collections.abc import Generator, Sequence
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
 from uuid import UUID, uuid4
@@ -33,7 +33,7 @@ _FP_BASE = "0" * 64
 
 
 @pytest.fixture
-def conn(tmp_path: Path) -> sqlite3.Connection:
+def conn(tmp_path: Path) -> Generator[sqlite3.Connection, None, None]:
     c = open_connection(tmp_path / "engram.db")
     yield c
     c.close()
