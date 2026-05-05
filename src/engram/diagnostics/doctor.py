@@ -12,6 +12,7 @@ of three statuses: ``OK``, ``WARN``, or ``FAIL``. The aggregated
 
 from __future__ import annotations
 
+import asyncio
 import enum
 import logging
 import os
@@ -20,6 +21,7 @@ from dataclasses import dataclass, field
 from pathlib import Path
 
 from engram.config.models import EffectiveConfig
+from engram.diagnostics import check_codes
 from engram.embedding.fastembed import FastEmbedProvider
 from engram.embedding.protocol import EmbeddingProvider
 from engram.errors import EmbeddingError
@@ -35,6 +37,8 @@ from engram.storage.sqlite_queries import (
     get_stats,
     iter_all_thought_paths,
 )
+from engram.sync import gitops, startup_probes
+from engram.sync.gitops import conflict_marker_scan
 
 _log = logging.getLogger("engram.diagnostics.doctor")
 
@@ -374,6 +378,130 @@ def _maybe_repair(
         )
 
 
+# === Phase 2 sync checks (Step 13) ===
+
+
+_PROBE_CODE_TO_STATUS_DEFAULT: dict[str, CheckStatus] = {
+    # Codes whose probe surfaces them as WARN map to WARN in the doctor;
+    # codes whose probe surfaces them as FAIL map to FAIL.
+    check_codes.GIT_VERSION_FLOOR: CheckStatus.FAIL,
+    check_codes.BRANCH_ALIGNMENT: CheckStatus.WARN,
+    check_codes.CONFLICT_MARKERS_PRESENT: CheckStatus.FAIL,
+    check_codes.CLOUD_SYNC_UNDER_DOTGIT: CheckStatus.FAIL,
+    check_codes.GITIGNORE_INDEXES: CheckStatus.FAIL,
+    check_codes.SIGNED_COMMITS_REQUIRED: CheckStatus.WARN,
+    check_codes.LFS_DRIFT: CheckStatus.WARN,
+    check_codes.AUTOCRLF_DRIFT: CheckStatus.FAIL,
+    check_codes.SUBMODULE_UNDER_VAULT: CheckStatus.FAIL,
+    check_codes.GPG_AGENT_REACHABLE: CheckStatus.WARN,
+    check_codes.VAULT_IDENTITY_REMOTE_MATCH: CheckStatus.WARN,
+    check_codes.SYNC_USER_IDENTITY_SET: CheckStatus.WARN,
+    check_codes.WORKING_TREE_DIRTY_AT_STARTUP: CheckStatus.WARN,  # WARN at runtime
+    check_codes.READ_ONLY_ROLE_CONTRADICTS_AUTO_PUSH: CheckStatus.FAIL,
+}
+
+
+def _check_conflict_markers_present(
+    report: DoctorReport,
+    config: EffectiveConfig,
+) -> None:
+    """Refuse vaults with merge-conflict markers in any markdown file."""
+    found = conflict_marker_scan(config.thoughts_dir)
+    if not found:
+        report.add(
+            check_codes.CONFLICT_MARKERS_PRESENT,
+            CheckStatus.OK,
+            "no conflict markers in any thought file",
+        )
+        return
+    report.add(
+        check_codes.CONFLICT_MARKERS_PRESENT,
+        CheckStatus.FAIL,
+        f"{len(found)} thought file(s) contain conflict markers; resolve before serving",
+        detail=", ".join(str(p) for p in found[:5]) + ("..." if len(found) > 5 else ""),
+    )
+
+
+def _is_git_vault(vault_path: Path) -> bool:
+    """Cheap check: does the vault have a ``.git`` entry?"""
+    git_marker = vault_path / ".git"
+    return git_marker.exists()
+
+
+def run_sync_diagnostics(
+    report: DoctorReport,
+    config: EffectiveConfig,
+) -> None:
+    """Append the 14 Phase 2 sync checks to ``report``.
+
+    Most checks reuse the probe logic from
+    :mod:`engram.sync.startup_probes`. The ``conflict_markers_present``
+    check is doctor-specific (the startup probe runs identical logic via
+    its own pathway during ``engram serve`` startup).
+
+    When the vault is NOT a git working tree, the entire sync-check
+    sweep is skipped (returning OK for every code) - non-git vaults
+    are a valid local-only configuration.
+    """
+    # Conflict-marker scan first - it is the highest-priority FAIL.
+    _check_conflict_markers_present(report, config)
+
+    if not _is_git_vault(config.vault_path):
+        for code in check_codes.ALL_PHASE_2_CHECK_CODES:
+            if code == check_codes.CONFLICT_MARKERS_PRESENT:
+                continue
+            report.add(
+                code,
+                CheckStatus.OK,
+                f"{code}: skipped (vault is not a git working tree)",
+            )
+        return
+
+    # Run the probes synchronously so doctor stays a sync API.
+    probe_report = asyncio.run(
+        startup_probes.run_startup_probes(
+            config.sync,
+            config.vault_path,
+            thoughts_dir=config.thoughts_dir,
+        )
+    )
+
+    seen_codes: set[str] = set()
+
+    for failure in probe_report.failures:
+        seen_codes.add(failure.code)
+        report.add(
+            failure.code,
+            CheckStatus.FAIL,
+            failure.message,
+            detail=failure.detail,
+        )
+
+    for warning in probe_report.warnings:
+        if warning.code in seen_codes:
+            continue
+        seen_codes.add(warning.code)
+        report.add(
+            warning.code,
+            CheckStatus.WARN,
+            warning.message,
+            detail=warning.detail,
+        )
+
+    # Codes that did NOT surface from probes are silently OK; advertise
+    # them as OK rows so doctor output is comprehensive.
+    for code in check_codes.ALL_PHASE_2_CHECK_CODES:
+        if code in seen_codes:
+            continue
+        if code == check_codes.CONFLICT_MARKERS_PRESENT:
+            continue  # already added above
+        report.add(
+            code,
+            CheckStatus.OK,
+            f"{code}: ok",
+        )
+
+
 def run_diagnostics(
     config: EffectiveConfig,
     *,
@@ -381,6 +509,7 @@ def run_diagnostics(
     repair: bool = False,
     remove_orphans: bool = False,
     embedder_factory: Callable[[EffectiveConfig], EmbeddingProvider] | None = None,
+    skip_sync_checks: bool = False,
 ) -> DoctorReport:
     """Run all diagnostic checks against the configured vault.
 
@@ -395,6 +524,8 @@ def run_diagnostics(
         embedder_factory: Optional override that returns an :class:`EmbeddingProvider`
             given the config. Defaults to building a :class:`FastEmbedProvider`.
             Tests inject a stub here.
+        skip_sync_checks: If True, skip the Phase 2 sync diagnostics. Useful
+            for unit tests that target Phase 1 behavior on non-git vaults.
 
     Returns:
         :class:`DoctorReport` with one :class:`CheckResult` per check and an
@@ -438,7 +569,24 @@ def run_diagnostics(
     finally:
         storage.close()
 
+    if not skip_sync_checks:
+        try:
+            run_sync_diagnostics(report, config)
+        except Exception as exc:
+            _log.exception("sync diagnostics raised: %s", exc)
+            report.add(
+                "sync_checks_internal",
+                CheckStatus.FAIL,
+                "sync diagnostics raised an unexpected error",
+                detail=str(exc),
+            )
+
     return report
+
+
+# Suppress unused-import lint - gitops is referenced through public
+# helpers run inside run_sync_diagnostics.
+_ = gitops
 
 
 __all__ = [
@@ -446,4 +594,5 @@ __all__ = [
     "CheckStatus",
     "DoctorReport",
     "run_diagnostics",
+    "run_sync_diagnostics",
 ]
