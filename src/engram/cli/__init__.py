@@ -50,6 +50,7 @@ def _root(
 # circular imports.
 from engram.cli import doctor as _doctor_cmd  # noqa: E402
 from engram.cli import init as _init_cmd  # noqa: E402
+from engram.cli import migrate as _migrate_cmd  # noqa: E402
 from engram.cli import reindex as _reindex_cmd  # noqa: E402
 from engram.cli import serve as _serve_cmd  # noqa: E402
 
@@ -57,6 +58,7 @@ _init_cmd.register(app)
 _doctor_cmd.register(app)
 _reindex_cmd.register(app)
 _serve_cmd.register(app)
+_migrate_cmd.register(app)
 
 
 __all__ = ["app"]
