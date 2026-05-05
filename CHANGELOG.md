@@ -84,5 +84,33 @@ The MCP tool surface is committed-stable for the v1.x lifetime per the API stabi
     does not exist, `--config` file does not exist, no `vaults:` list, no
     primary vault marked, requested `--vault` not in list.
 - 239 tests total now (47 new config tests), coverage 94.22%.
+- `engram.storage.sqlite` - SQLite + sqlite-vec connection factory and schema:
+  - Three spec-defined tables (`thoughts`, `thought_embeddings` virtual,
+    `migrations`) plus a Phase 1 `engram_settings` KV table that records
+    embedding model name, embedding dimension, and sqlite-vec version (Risk
+    R22 mitigation; uses settings rows instead of an undocumented schema table).
+  - sqlite-vec extension probe + load via `sqlite_vec.load(conn)`. Detects
+    when Python's stdlib sqlite3 lacks loadable-extension support and raises
+    a clear `IndexError` with a remediation pointer to uv-managed Python.
+  - Dimension and model-name mismatch detection on reopen: changing the
+    embedding model raises `IndexError` directing the user to
+    `engram reindex --full --model <new>`.
+  - Schema version tracked via `PRAGMA user_version`. WAL journal mode.
+    Database file mode 0600 on POSIX.
+- `engram.storage.sqlite_queries` - parameterized query helpers:
+  - `insert_thought` (atomic row + optional embedding insert),
+    `get_thought_row`, `list_thoughts` (returns rows + true `total_count`
+    pre-pagination), `search_thoughts_by_vector` (sqlite-vec ANN with
+    metadata filter; returns rows + cosine similarity in [0, 1]; pending
+    rows excluded), `update_thought_metadata`, `update_thought_body`,
+    `delete_thought`, `upsert_embedding`, `mark_embedding_status`,
+    `list_thoughts_with_status` (for doctor --repair), `get_stats`,
+    `record_migration_start`/`record_migration_complete`,
+    `iter_all_thought_paths`.
+  - Tag filtering uses `json_each` rather than `LIKE '%"x"%"` so adversarial
+    tag names don't false-match substrings (Risk R24).
+  - All SQL is parameterized; injection attempts via filter values land as
+    literal strings.
+- 62 new tests across the SQLite layer; total 301; coverage 92.69%.
 
 [Unreleased]: https://github.com/kpachhai/engram/compare/...HEAD
