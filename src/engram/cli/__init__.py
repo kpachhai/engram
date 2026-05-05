@@ -56,6 +56,7 @@ from engram.cli import migrate as _migrate_cmd  # noqa: E402
 from engram.cli import reindex as _reindex_cmd  # noqa: E402
 from engram.cli import serve as _serve_cmd  # noqa: E402
 from engram.cli import sync as _sync_cmd  # noqa: E402
+from engram.cli import team_vault as _team_vault_cmd  # noqa: E402
 
 _init_cmd.register(app)
 _doctor_cmd.register(app)
@@ -65,6 +66,7 @@ _migrate_cmd.register(app)
 _clone_cmd.register(app)
 _sync_cmd.register(app)
 _bundle_cmd.register(app)
+_team_vault_cmd.register(app)
 
 
 __all__ = ["app"]
