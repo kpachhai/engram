@@ -38,7 +38,13 @@ class LockError(EngramError):
 
 
 class SyncError(EngramError):
-    """Git sync issue (conflict, push rejected, network failure)."""
+    """Git sync issue (conflict, push rejected, network failure).
+
+    Raised by :mod:`engram.sync` for transitions the coordinator cannot
+    automatically reconcile (e.g. attempting an undocumented state
+    transition, working-tree contamination at startup, or ``--force``-style
+    history rewrites detected via the reflog gate).
+    """
 
     error_code: str = "sync_error"
 
