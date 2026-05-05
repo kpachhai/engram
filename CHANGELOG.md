@@ -9,7 +9,101 @@ The MCP tool surface is committed-stable for the v1.x lifetime per the API stabi
 
 ## [Unreleased]
 
-### Added
+### Added (Phase 2 - multi-machine sync)
+
+- **Sync coordinator state machine** (`engram.sync.coordinator`) with 10
+  explicit states (`IDLE`, `DEBOUNCING`, `COMMITTING`,
+  `COMMITTED_NOT_PUSHED`, `FETCHING`, `PUSHING`, `PAUSED_FOR_MIGRATION`,
+  `AUTH_REQUIRED`, `MANUAL_RESOLUTION_REQUIRED`, `DISABLED`). Allowed
+  transitions encoded in `ALLOWED_TRANSITIONS`; disallowed transitions
+  raise `SyncError`. Owns asyncio queue + lock + ring buffer of last
+  256 events. Debounce window (default 60s) coalesces rapid captures;
+  max-deferral ceiling (default 300s) flushes long bursts.
+- **Typed async git wrapper** (`engram.sync.gitops`) over the Phase 1
+  `run_git` helper with `GitErrorClass` classification (AUTH,
+  NETWORK_TRANSIENT, NETWORK_PERMANENT, NON_FAST_FORWARD, CONFLICT,
+  LOCK_HELD, UNKNOWN). Functions: `is_inside_work_tree`,
+  `current_branch`, `remote_url`, `default_remote_branch`,
+  `status_porcelain` (porcelain v1 -z), `ahead_behind_count`,
+  `commit_paths`, `fetch`, `pull_rebase`, `push` (with
+  `force_with_lease` + `set_upstream`), `verify_commit`, `git_version`.
+- **Conflict marker scanner** (`engram.sync.gitops.conflict_marker_scan`):
+  whole-file walker requiring BOTH `<<<<<<<` AND `>>>>>>>` markers;
+  the lone hunk separator is a markdown horizontal-rule and does NOT
+  trigger.
+- **Per-vault identity check** (`engram.sync.identity`) reading
+  `.engram/identity.local` (machine-local; gitignored). Defends
+  against R-H3 cross-vault contamination by refusing to push when
+  the resolved `origin` URL does not match `expected_remote_pattern`.
+- **R-M9 reflog gate**: before any pull-rebase, the coordinator
+  captures the previous `origin/<branch>` SHA, fetches, then asserts
+  reachability via `git merge-base --is-ancestor`. If unreachable
+  (force-push detected upstream), refuses to auto-rebase and
+  transitions to `MANUAL_RESOLUTION_REQUIRED`. `--force-with-lease`
+  is the only force semantics ever invoked.
+- **MigrationLock** (`engram.utils.lock.MigrationLock`): separate
+  flock from `VaultLock`; `MigrationLock.is_held()` cross-process
+  probe. Coordinator parks in `PAUSED_FOR_MIGRATION` while migration
+  is running, resumes on release.
+- **14 startup probes** (`engram.sync.startup_probes`) mapping 1:1
+  to doctor check codes: git version floor, autocrlf drift, LFS
+  drift on `*.md`, branch alignment, submodules under `thoughts_dir`,
+  remote default-branch match, gitignore required entries
+  (`.indexes/` + `*.sqlite*`), cloud-sync under `.git/`, GPG agent
+  reachable, vault identity remote match (R-H3), per-vault user
+  identity (R-M14), working-tree-dirty at startup (R-M12),
+  read-only role contradicts auto-push, signed commits required.
+  Per-cycle re-runs of probes 7 + 11 catch mid-session admin changes.
+- **`engram clone-vault <url> <local_path>`** (Step 14 / R-H1):
+  `git clone --no-checkout` -> delete `.git/hooks/` -> `git checkout`
+  so a malicious post-checkout hook in the remote never executes.
+  Writes a starter `.engram/identity.local` template.
+- **`engram sync`** subcommand with `--pull` / `--push` /
+  `--first-push` / `--resume` (default = pull-then-push). Refuses
+  to run while the per-vault flock is held by `engram serve`.
+- **`engram sync compact`** quarterly maintenance: `git gc --auto`
+  + `gc.reflogExpire=30.days.ago` (L2/L3 mitigation).
+- **`engram serve` startup ordering** (Step 17): startup probes
+  before lock; conflict-marker scan after lock; coordinator built +
+  attached to `VaultStorage`; drain on shutdown.
+- **14 doctor sync checks** (`engram.diagnostics.doctor.run_sync_diagnostics`)
+  reusing the probe logic. Non-git vaults emit OK rows for every
+  Phase 2 code rather than failing checks that do not apply.
+- **ADR 005** documenting the state machine + cross-vault contamination
+  guard + force semantics + conflict-marker handling.
+- **`docs/MULTI_MACHINE_SETUP.md`**: operator-facing setup guide.
+- **`docs/PHASE_2_CODE_COMPLETE.md`**: Phase 2 exit-criteria validation
+  paralleling the Phase 1 doc.
+
+### Changed
+
+- `engram.config.SyncConfig` extended with 11 new Pydantic-validated
+  Phase 2 fields: `role` (`primary` | `read-only`), `disabled`,
+  `debounce_window_seconds`, `max_deferral_seconds`,
+  `push_retry_count`, `push_retry_backoff_seconds`,
+  `push_timeout_seconds`, `allow_unsigned`, `use_no_verify`,
+  `signed_pull_required`, `expected_remote_pattern`.
+- `engram.storage.facade.VaultStorage` gains an optional
+  `_sync_coordinator` attribute and `set_sync_coordinator()`
+  injection point. `_post_capture_sync` forwards
+  `thought.file_path` to `coordinator.enqueue` when attached;
+  unit tests stay hermetic by leaving the coordinator unset.
+
+### Security
+
+- R-H1: `clone-vault` deletes hooks BEFORE checkout. Verified by
+  test that plants a malicious `post-checkout` hook in the bare
+  source and asserts the sentinel file is never written.
+- R-H3: `vault_identity_remote_match` probe refuses pushes to a
+  remote URL that does not match the per-vault identity pattern.
+- R-H6: `conflict_markers_present` doctor + startup check refuses
+  to serve a vault containing literal merge markers.
+- R-H7: `cloud_sync_under_dotgit` probe FAILs vaults whose `.git/`
+  resolves under a known consumer cloud-sync provider.
+- R-M9: reflog gate refuses to auto-rebase across an upstream
+  history rewrite; the operator must intervene manually.
+
+### Added (Phase 1)
 
 - Initial project scaffold per `10-CODE_QUALITY.md`: `pyproject.toml` (PEP 621),
   `ruff` lint + format config, `mypy` strict mode, `pytest` config with coverage,
