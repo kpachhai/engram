@@ -1,22 +1,36 @@
 # Multi-vault setup
 
 Phase 3 introduces multi-vault hosting: one `engram serve` process
-serves N vaults under different roles. This guide covers the
+serves N vaults under different roles. Phase 4 adds the
+`team-write` role for shared team vaults. This guide covers the
 per-user config layout, role semantics, and the offline-preparation
 flow (so you don't get caught downloading an embedding model the
 first time you try to capture a thought without network).
 
 ## Concepts
 
-* **Primary vault**: the vault that accepts captures. Exactly one
-  primary per `engram serve` process.
+* **Primary vault**: the vault that accepts captures by default.
+  Exactly one primary per `engram serve` process.
 * **Read-only vault**: a mirror of someone else's vault, imported
   via `engram import`. Search includes it (with attribution); writes
   refuse with `VaultReadOnlyError`.
+* **Team-write vault** (Phase 4): a shared team vault that accepts
+  writes from multiple operators after passing a capture-time
+  client-side gate (member-enrollment + policy refuse-or-pass) AND
+  a push-time server-side `pre-receive` hook. Requires `remote_url`.
+  See `TEAM_BRAIN_GUIDE.md` for the full setup walkthrough.
 * **Vault registry**: in-process resolver that binds each vault's
   logical `name` to its open storage + role + sync coordinator. The
   registry is the canonical enforcement point for two invariants:
   no two vaults realpath-collide, and at most one is primary.
+
+## Role taxonomy
+
+| Role | Writes? | Cross-vault search? | LLM tools? | Phase |
+|------|---------|---------------------|-------------|-------|
+| `primary` | yes (default capture target) | yes (own only) | yes | 1+ |
+| `read-only` | refused with VaultReadOnlyError | yes (with attribution) | yes (per portability gate) | 3+ |
+| `team-write` | yes (after capture gate + push hook) | yes (with attribution) | yes (per portability gate) | 4+ |
 
 ## Per-user config layout
 

@@ -6,17 +6,28 @@
 
 ## Status
 
-Pre-1.0. Phase 1 (solo MVP + Open Brain migration), Phase 2
-(multi-machine personal sync via git transport), and Phase 3
-(multi-vault foundation + friend-share + optional LLM) are
-code-complete. See `docs/PHASE_1_CODE_COMPLETE.md`,
-`docs/PHASE_2_CODE_COMPLETE.md`, and
-`docs/PHASE_3_CODE_COMPLETE.md` for the exit-criteria validation.
+Pre-1.0. Phases 1-4 are code-complete:
 
-Phase 3 setup + flow guides:
+* Phase 1 (solo MVP + Open Brain migration)
+* Phase 2 (multi-machine personal sync via git transport)
+* Phase 3 (multi-vault foundation + friend-share + optional LLM)
+* Phase 4 (Team Brain - multi-target write + GPG-bound sender
+  attribution + per-prefix routing + server-side `pre-receive` hook)
 
-* `docs/MULTI_VAULT_SETUP.md` - mounting N vaults under different
-  roles (one `primary` + many `read-only`).
+See `docs/PHASE_<N>_CODE_COMPLETE.md` for each phase's exit-criteria
+validation.
+
+Phase 4 setup + flow guides:
+
+* `docs/TEAM_BRAIN_GUIDE.md` - bootstrapping a team vault, member
+  enrollment, hook install per platform, revocation, disaster
+  recovery.
+* `docs/MULTI_VAULT_SETUP.md` - role taxonomy table covering all
+  three roles (`primary`, `read-only`, `team-write`).
+* `docs/adr/007-team-brain.md` - Phase 4 design decisions D1-D9.
+
+Phase 3 setup + flow guides remain valid:
+
 * `docs/FRIEND_SHARE_GUIDE.md` - export / import bundle workflow.
 * `docs/LLM_FEATURES.md` - optional LLM-mediated tools
   (`summarize_thought` + `synthesize_thoughts`) with per-thought
@@ -35,7 +46,8 @@ planning repo.
 | 1 | Solo MVP + Open Brain migration | code-complete |
 | 2 | Multi-machine sync via git transport | code-complete |
 | 3 | Multi-vault + friend-share via bundles + optional LLM | code-complete |
-| 4-6 | Team / org / enterprise | gated by adoption |
+| 4 | Team Brain (multi-writer + GPG attribution + server hook) | code-complete |
+| 5-6 | Org / enterprise | gated by adoption |
 
 ## Why
 
@@ -147,10 +159,11 @@ uv run mypy
 |---|---|---|
 | 1 | Solo MVP + OB migration | Code-complete (see `docs/PHASE_1_CODE_COMPLETE.md`); 6 operational criteria pending live deployment |
 | 2 | Multi-machine personal sync (git) | Code-complete (see `docs/PHASE_2_CODE_COMPLETE.md`); 1 operational criterion (7-day two-machine dogfood) pending |
-| 3 | Multi-vault foundation + friend-share + optional LLM features | Designed, not built |
-| 4-6 | Team / organization / enterprise | Designed, gated by adoption |
+| 3 | Multi-vault foundation + friend-share + optional LLM features | Code-complete (see `docs/PHASE_3_CODE_COMPLETE.md`); 1 operational criterion (7-day mixed-corpus dogfood) pending |
+| 4 | Team Brain (multi-target write + GPG-bound attribution + per-prefix routing + server-side hook) | Code-complete (see `docs/PHASE_4_CODE_COMPLETE.md`); 2 operational criteria (3-machine 7-day dogfood + revocation ceremony) pending |
+| 5-6 | Organization / enterprise | Designed, gated by adoption |
 
-Decision gates between phases are explicit in `03-ROADMAP.md`. Phase 4+ is gated by real-team adoption, not speculation.
+Decision gates between phases are explicit in `03-ROADMAP.md`. Phase 5+ is gated by real-org adoption, not speculation.
 
 ## Contributing
 

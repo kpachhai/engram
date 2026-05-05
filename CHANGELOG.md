@@ -9,6 +9,100 @@ The MCP tool surface is committed-stable for the v1.x lifetime per the API stabi
 
 ## [Unreleased]
 
+### Added (Phase 4 - Team Brain)
+
+- **`team-write` role** for `VaultMount.role` joining `primary` and
+  `read-only`. N team-write vaults may be mounted alongside the
+  singleton primary; team-write requires `remote_url` (refused at
+  config-load with `team_write_requires_remote` if absent). Canonical
+  `vault_id = sha256(remote_url)[:16]` derived at validation time.
+- **Per-prefix routing rules** + `auto_route` opt-in flag in
+  `~/.config/engram/config.yaml`. Captures matching a `RoutingRule`
+  prefix auto-route to the rule's target vault unless an explicit
+  `vault:` arg or `block`/`sensitive` portability overrides per the
+  pinned invariants 1+2.
+- **Capture-time gate composition**
+  (`engram.team.capture_gate.gate_team_capture`): the read-only-role
+  refusal + member-enrollment assert + policy refuse-or-pass +
+  `captured_by` stamping client-side gate.
+- **Sender attribution**: `Thought.captured_by` + `Frontmatter.captured_by`
+  fields. Set automatically when capturing into a `team-write` vault;
+  None for personal captures and Phase 1+2+3 thoughts (backwards
+  compatible). SQLite migration adds the column with NULL default.
+- **GPG identity wrapper** (`engram.team.identity.GpgIdentity`):
+  `gpg --list-secret-keys --with-colons` discovery + subkey-to-primary
+  resolution. `assert_member_enrolled` refuses unenrolled fingerprints
+  with `TeamMemberNotEnrolled`.
+- **Persistent push queue**
+  (`engram.team.push_queue.PersistentPushQueue`): durable per-vault
+  queue at `<vault>/.engram/push-queue.local`. Survives engram restart;
+  partial-line tolerance from SIGKILL mid-write; orphan-on-auth-failure
+  to `<personal>/.engram/orphans/<id>.tar.gz`; disk-full at enqueue
+  raises `PushQueuePersistenceFailed` (capture refusal upstream).
+- **Routing dispatcher** (`engram.team.routing.resolve_target_vault`):
+  5-rule precedence (block-veto, sensitive-fall-through, explicit-arg-
+  wins, auto-route-match, fallback-primary) + multi-prefix tie-break
+  (first prefix wins) + rule priority tie-breaker + ambiguity refusal
+  with `RoutingRuleAmbiguous`.
+- **`engram team-vault setup`** CLI: bootstraps a team vault by
+  writing 5 canonical files (`engram.config.yaml`,
+  `.engram/team-policy.yaml`, `.engram/members.yaml`, `.gitignore`,
+  `.engram/setup_complete` sentinel). Idempotent + resume-after-partial.
+- **`engram team-vault enroll-key`** CLI: discovers operator's GPG
+  primary fingerprint and prints next-steps.
+- **`engram team-vault add-member`** CLI: steward-only enrollment
+  helper. Writes line-level-merge-friendly YAML.
+- **`engram team-vault revoke-key`** CLI: steward-only revocation.
+  Historical thoughts under the revoked key remain attributable;
+  new captures refuse with `team_member_not_enrolled`.
+- **Server-side `pre-receive` hook bundle**
+  (`engram/team/server_hooks/pre_receive.py`): stdlib-only Python
+  3.10+ script. Refuses `.indexes/` paths, `block` portability,
+  `attribution_committer_mismatch`, disallowed prefixes, force-push,
+  and non-steward mutation of policy/members. Lists ALL violations
+  on rejection (not just the first). Hand-rolled restricted YAML
+  parser (no PyYAML dep).
+- **Phase 4 doctor codes** (8 new): `multiple_team_write_vaults_ok`,
+  `team_member_not_enrolled`, `team_pending_pushes`,
+  `team_membership_revoked`, `team_policy_violation_quarantined`,
+  `serve_config_stale`, `routing_rule_priority_collision`,
+  `team_vault_embedding_mismatch`. `ALL_PHASE_4_CHECK_CODES` superset
+  has 30 codes total.
+- **11 new errors**: `TeamMemberNotEnrolled`, `TeamPolicyViolation`,
+  `RoutingRuleAmbiguous`, `RoutingTargetNotMounted`,
+  `BlockThoughtInTeamVaultDisallowed`, `TeamVaultEmbeddingMismatch`,
+  `TeamMembershipRevoked`, `AttributionCommitterMismatch`,
+  `TeamWriteRequiresRemote`, `TeamVaultAlreadyInitialized`,
+  `PushQueuePersistenceFailed`.
+- **CaptureInputMetadata.vault** field (additive). Phase 1+2+3 clients
+  omitting it see Phase 3 semantics unchanged (pinned invariant 6).
+- **ADR 007 - Team Brain** documenting D1-D9 design decisions.
+- **TEAM_BRAIN_GUIDE.md** operator setup walkthrough (GPG bootstrap,
+  setup, hook install per platform, member add, revocation, disaster
+  recovery).
+- **MULTI_VAULT_SETUP.md** updated with Phase 4 role taxonomy table.
+
+### Security (Phase 4)
+
+- **Two-layer enforcement boundary** (pinned invariant 4): client-side
+  is canonical for capture-time policies (block routing, member
+  enrollment); server-side hook is canonical for push-time policies
+  (allowlists, attribution integrity, force-push refusal, steward-only
+  mutation). The two layers compose - a single bypass doesn't breach
+  the boundary.
+- **GPG-fingerprint-bound attribution**: replaces free-form
+  `default_user` for team-vault sender id. Refuses captures whose
+  `captured_by` doesn't match the local GPG primary fingerprint
+  (client-side) and refuses pushes whose `captured_by` doesn't match
+  the GPG-signed git committer fingerprint (server-side).
+- **Steward-only mutation** of `team-policy.yaml` + `members.yaml`:
+  enforced by the pre-receive hook reading the OLD tree's stewards
+  list and refusing pushes from non-stewards.
+- **`.indexes/` push refusal**: defense-in-depth; canonical
+  `.gitignore` PLUS server-side hook refusal (P4-H1 mitigation).
+- **Force-push refusal**: `denyNonFastForwards` PLUS server-side
+  hook check (P4-H3 mitigation).
+
 ### Added (Phase 3 - multi-vault foundation + friend-share + optional LLM)
 
 - **VaultRegistry** (`engram.multivault.registry`): in-process
