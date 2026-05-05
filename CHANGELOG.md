@@ -39,6 +39,32 @@ The MCP tool surface is committed-stable for the v1.x lifetime per the API stabi
     `GIT_LFS_SKIP_SMUDGE=1`) per `02-TECHNICAL_DESIGN.md` Flow C.
 - 109 tests covering all of the above plus property-based (hypothesis) tests
   for fingerprint stability, atomic-write byte/text round-trip, and filename
-  uniqueness across 2000-capture batches; coverage at 96.17%.
+  uniqueness across 2000-capture batches.
+- `engram.utils.lock` - per-vault advisory lock at `<vault>/.indexes/engram.lock`
+  using `fcntl.flock(LOCK_EX | LOCK_NB)` so the kernel arbitrates between
+  concurrent processes attempting to serve the same vault. Diagnostic JSON
+  metadata (pid, hostname, acquired_at, version) for "who holds the lock"
+  reporting; cross-host vs same-host detection; `--force` override unlinks
+  and retries once. Stale locks self-recover via flock semantics on FD close.
+  atexit + SIGTERM/SIGINT cleanup hooks; signal handlers restored on release.
+  Concurrent-process test uses subprocess.Popen so flock is exercised
+  across kernel-arbitrated FDs.
+- `engram.models` - Pydantic v2 boundary types:
+  - `Frontmatter` model with strict validation (canonical + custom prefixes
+    accepted; path-traversal, NULL, RTL-override unicode rejected; portability
+    Literal-typed; tz-aware datetime enforced; 64-hex-char fingerprint
+    pattern; `schema_version` defaults to 1 per NFR5; `extra="allow"` so
+    unknown future fields round-trip).
+  - `CANONICAL_PREFIXES` constant (15 values) and
+    `DEFAULT_PORTABILITY_BY_PREFIX` (Domain and Artifact default to
+    `sensitive` per BYOC).
+  - `Thought` and `ThoughtWithSimilarity` runtime objects with `vault` and
+    `legacy_id` fields present from v1.0 for forward compat (R29).
+  - `CaptureInput`, `CaptureOutput`, `SearchInput`, `SearchOutput`,
+    `ListInput`, `ListOutput`, `StatsOutput`, `FetchInput`, `FetchOutput`,
+    `Filter`, `PortabilityCounts`, `SortOption` - one-to-one MCP API
+    contract per `02-TECHNICAL_DESIGN.md`.
+- 192 tests total at this checkpoint (109 from layer-0 + 13 lock + 70 models),
+  coverage 94.15%.
 
 [Unreleased]: https://github.com/kpachhai/engram/compare/...HEAD
