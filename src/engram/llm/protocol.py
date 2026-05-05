@@ -1,4 +1,4 @@
-"""LLMProvider Protocol + lightweight result types (Phase 3 Step 12).
+"""LLMProvider Protocol + lightweight result types.
 
 Adapters in :mod:`engram.llm.providers` implement this Protocol; tests
 substitute :class:`engram.llm.providers.MockProvider`. The protocol is
@@ -9,7 +9,7 @@ intentionally narrow:
   ``"mock"``).
 * ``is_local``: distinguishes local (Ollama / llama.cpp) from remote
   providers. The resolver uses this to enforce the
-  sensitive-thought-needs-local-provider rule (R-H9).
+  sensitive-thought-needs-local-provider rule.
 * ``complete``: async; takes a fully-assembled prompt + token budget +
   timeout and returns a :class:`CompletionResult`. Raising
   :class:`engram.errors.LLMProviderError` is the expected failure
@@ -49,7 +49,7 @@ class CompletionResult:
 
 @runtime_checkable
 class LLMProvider(Protocol):
-    """Async interface every Phase 3 LLM adapter must implement."""
+    """Async interface every LLM adapter must implement."""
 
     name: str
     is_local: bool

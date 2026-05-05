@@ -1,29 +1,29 @@
-"""Provider resolution + per-thought portability gate (Phase 3 Step 12).
+"""Provider resolution + per-thought portability gate.
 
 The resolver is the single decision point that answers: "given a list
 of thoughts the caller wants to send to an LLM, and given the
 per-user / per-vault config, which provider should we use - or do we
 refuse?". It encodes the load-bearing security rules:
 
-1. **block thought ALWAYS refuses** (R-H10). No flag, config, or
-   provider locality overrides this. Returns
+1. **block thought ALWAYS refuses**. No flag, config, or provider
+   locality overrides this. Returns
    :class:`engram.errors.BlockThoughtLLMDisallowed`.
-2. **sensitive thought requires a local provider** (R-H9). If the
-   resolved provider is remote (``is_local=False``), refuse with
+2. **sensitive thought requires a local provider**. If the resolved
+   provider is remote (``is_local=False``), refuse with
    ``sensitive_thought_remote_provider_disallowed``.
-3. **Per-vault LLM config from a read-only-role vault is dropped**
-   (SF-13 / R-M2). Friend's vault declaring ``provider: anthropic``
-   does not influence the importer's runtime choice.
-4. **Cross-provider synthesis is refused by default** (Q4). If the
-   thoughts span multiple vaults whose per-vault LLM config disagrees
-   on provider, refuse with ``cross_provider_synthesis_disallowed``.
+3. **Per-vault LLM config from a read-only-role vault is dropped**.
+   Friend's vault declaring ``provider: anthropic`` does not influence
+   the importer's runtime choice.
+4. **Cross-provider synthesis is refused by default**. If the thoughts
+   span multiple vaults whose per-vault LLM config disagrees on
+   provider, refuse with ``cross_provider_synthesis_disallowed``.
    Per-thought lookup uses the registry's role/coordinator/config
    surface.
-5. **base_url validation against trust file** (SF-9 / R-M5). The
-   trust file at ``~/.config/engram/trusted-llm-urls.yaml`` lists
-   regex patterns; only ``base_url``s matching a pattern are
-   permitted. Three default patterns are baked in
-   (``localhost`` + ``api.anthropic.com`` + ``api.openai.com``).
+5. **base_url validation against trust file**. The trust file at
+   ``~/.config/engram/trusted-llm-urls.yaml`` lists regex patterns;
+   only ``base_url``s matching a pattern are permitted. Three default
+   patterns are baked in (``localhost`` + ``api.anthropic.com`` +
+   ``api.openai.com``).
 
 The resolver returns the singleton :class:`engram.llm.protocol.LLMProvider`
 the caller should use; ``None`` when no LLM is configured.
@@ -133,14 +133,14 @@ def _per_vault_provider_set(
 
     Cross-provider check: if the per-thought provider lookup yields
     more than one provider name across the thought set, the resolver
-    refuses (Q4).
+    refuses.
 
     Args:
         thoughts: thoughts in the LLM context window.
         primary_vault_name: which vault holds primary writes (per-vault
             LLM config from the primary is honored).
-        read_only_vault_names: per SF-13, the resolver IGNORES per-vault
-            LLM config from read-only-role vaults.
+        read_only_vault_names: the resolver IGNORES per-vault LLM config
+            from read-only-role vaults.
         user_llm: per-user fallback LLM config.
         per_vault_llm: lookup table keyed on vault name. ``None`` value
             means "no per-vault override; fall back to user_llm".
@@ -151,7 +151,7 @@ def _per_vault_provider_set(
     for t in thoughts:
         vaults_seen.add(t.vault)
         if t.vault in read_only_vault_names:
-            # SF-13: drop the read-only vault's LLM config; use user-level.
+            # Drop the read-only vault's LLM config; use user-level.
             cfg = user_llm
         else:
             cfg = per_vault_llm.get(t.vault) or user_llm
@@ -185,7 +185,7 @@ def resolve_provider(
         config: per-user effective config (carries primary vault name +
             per-user LLM block).
         read_only_vault_names: vaults whose per-vault LLM config the
-            resolver should drop (SF-13).
+            resolver should drop.
         per_vault_llm: per-vault LLM overrides keyed by vault name.
 
     Raises:
@@ -203,7 +203,7 @@ def resolve_provider(
         )
         raise BlockThoughtLLMDisallowed(msg)
 
-    # 2. cross-provider check + per-vault config dropping (SF-13).
+    # 2. cross-provider check + per-vault config dropping.
     primary_vault_name = config.vault_name
     ro = read_only_vault_names or set()
     provider_name, _vaults_seen = _per_vault_provider_set(
@@ -225,7 +225,7 @@ def resolve_provider(
     # 4. base_url trust gate.
     validate_base_url(effective_llm.base_url)
 
-    # 5. construct provider singleton (lazy, per R-L5).
+    # 5. construct provider singleton (lazy).
     provider = build_provider(effective_llm)
     if provider is None:
         msg = "build_provider returned None despite resolved provider name"

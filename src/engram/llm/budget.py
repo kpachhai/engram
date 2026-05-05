@@ -1,7 +1,7 @@
-"""Per-day cost cap + token-budget pre-truncation (Phase 3 Step 13).
+"""Per-day cost cap + token-budget pre-truncation.
 
 The budget tracker persists to ``<primary-vault>/.indexes/llm_usage.json``
-so cap state survives serve restarts. Per the Phase 3 plan:
+so cap state survives serve restarts:
 
 * :meth:`LLMBudget.check_budget` raises
   :class:`engram.errors.LLMProviderError` with reason
@@ -12,8 +12,8 @@ so cap state survives serve restarts. Per the Phase 3 plan:
   write leaves either the previous-good or the new-good file.
 * :func:`truncate_to_budget` drops lowest-similarity thoughts until the
   prompt fits ``max_input_tokens``, BUT preserves the per-vault floor
-  (Step 5's ``min_per_vault_results``). If the floor itself exceeds the
-  budget, raise ``prompt_too_large_even_at_floor`` (SF-6).
+  (``min_per_vault_results``). If the floor itself exceeds the budget,
+  raise ``prompt_too_large_even_at_floor``.
 
 Token estimates use a simple ``len(text) // 4`` heuristic for the
 naked thought body; providers update the actual token count post-hoc

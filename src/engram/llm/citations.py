@@ -1,6 +1,4 @@
-"""LLM response citation post-validator (Phase 3 Step 15).
-
-Per ``docs/PHASE_3_PLAN.md`` Step 15:
+"""LLM response citation post-validator.
 
 * Parse the LLM response for thought-id-shaped substrings (UUID-v7
   regex).
@@ -8,10 +6,10 @@ Per ``docs/PHASE_3_PLAN.md`` Step 15:
 * Strip hallucinated citations + replace with ``[citation removed]``.
 * Emit a WARN log entry per stripped citation.
 
-Rationale (Q5 default): the user trusted the model with the retrieved
-set; the model citing thoughts the retrieval did NOT surface is
-unverifiable and risks disclosure of information from outside the
-user's filter. Conservative behavior: strip.
+Rationale: the user trusted the model with the retrieved set; the model
+citing thoughts the retrieval did NOT surface is unverifiable and risks
+disclosure of information from outside the user's filter. Conservative
+behavior: strip.
 """
 
 from __future__ import annotations

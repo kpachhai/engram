@@ -1,4 +1,4 @@
-"""Five LLM adapters + a MockProvider for tests (Phase 3 Step 12).
+"""Five LLM adapters + a MockProvider for tests.
 
 Each adapter speaks its native HTTP API via :mod:`httpx`. The adapters
 are deliberately thin - they translate one Pydantic-ish request shape
@@ -13,10 +13,9 @@ be primed with canned completions. ``respx`` (a transitive
 test-only dependency) covers the live-HTTP shaping in
 ``tests/llm/test_providers_mocked.py``.
 
-Per the Phase 3 plan SF-9 fix, ``OpenAICompatibleProvider`` validates
-its ``base_url`` against the trust file at
-``~/.config/engram/trusted-llm-urls.yaml``; the validation is run by
-:func:`engram.llm.resolver.validate_base_url` BEFORE provider
+``OpenAICompatibleProvider`` validates its ``base_url`` against the
+trust file at ``~/.config/engram/trusted-llm-urls.yaml``; the validation
+is run by :func:`engram.llm.resolver.validate_base_url` BEFORE provider
 construction so a misconfigured URL never even opens an HTTP client.
 """
 
@@ -39,9 +38,9 @@ _log = logging.getLogger("engram.llm.providers")
 def _read_api_key(api_key_env: str | None) -> str | None:
     """Return the env var's value if set, else ``None``.
 
-    Phase 3 plan: keys NEVER stored on disk. ``api_key_env`` names the
-    env var; the operator sets it in their shell. Default ``None`` is
-    valid for local providers.
+    Keys are NEVER stored on disk. ``api_key_env`` names the env var;
+    the operator sets it in their shell. Default ``None`` is valid for
+    local providers.
     """
     if not api_key_env:
         return None
@@ -72,8 +71,8 @@ class AnthropicProvider:
         """POST to /v1/messages and parse the assistant turn.
 
         Args:
-            retrieved_thoughts: Phase 3 optional context (unused by this
-                adapter; the post-validator handles citation attribution).
+            retrieved_thoughts: Optional context (unused by this adapter;
+                the post-validator handles citation attribution).
         """
         del retrieved_thoughts
         if not self.api_key:
@@ -316,7 +315,7 @@ class LlamaCppProvider:
 class OpenAICompatibleProvider:
     """Generic OpenAI-compatible adapter for custom ``base_url``s.
 
-    The trust-file gate (R-M5 / SF-9) runs at provider construction in
+    The trust-file gate runs at provider construction in
     :func:`engram.llm.resolver.validate_base_url`; this adapter assumes
     the URL has already been validated.
     """
@@ -427,8 +426,8 @@ class MockProvider:
 def build_provider(config: LLMConfig) -> LLMProvider | None:
     """Construct the right adapter for ``config.provider``; ``None`` when unset.
 
-    The provider singleton is built lazily on first LLM tool call (R-L5)
-    so engram serve startup is unaffected when no LLM is configured.
+    The provider singleton is built lazily on first LLM tool call so
+    engram serve startup is unaffected when no LLM is configured.
     Trust-file validation runs in :func:`engram.llm.resolver.validate_base_url`
     BEFORE this function for ``openai_compatible``.
     """
