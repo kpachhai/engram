@@ -166,8 +166,8 @@ write leaves either the previous-good or new-good state.
 
 ## See also
 
-* `docs/PHASE_3_PLAN.md` - the implementation plan this ADR locks in.
-* `docs/PHASE_3_CODE_COMPLETE.md` - exit-criteria evidence.
+* `docs/archive/phases/PHASE_3_PLAN.md` - the implementation plan this ADR locks in.
+* `docs/archive/phases/PHASE_3_CODE_COMPLETE.md` - exit-criteria evidence.
 * `docs/MULTI_VAULT_SETUP.md` - operator setup guide.
 * `docs/FRIEND_SHARE_GUIDE.md` - export / import flow walkthrough.
 * `docs/LLM_FEATURES.md` - provider config + portability rules.

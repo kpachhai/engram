@@ -291,6 +291,6 @@ you removed those entries, restore them.
 ## See Also
 
 * `docs/adr/007-team-brain.md` - design decisions.
-* `docs/PHASE_4_CODE_COMPLETE.md` - exit-criteria evidence.
-* `docs/PHASE_4_PLAN.md` - the 22-step implementation plan.
+* `docs/archive/phases/PHASE_4_CODE_COMPLETE.md` - exit-criteria evidence.
+* `docs/archive/phases/PHASE_4_PLAN.md` - the 22-step implementation plan.
 * `docs/MULTI_VAULT_SETUP.md` - the multi-vault role taxonomy.

@@ -14,13 +14,15 @@ import pytest
 REPO_ROOT = Path(__file__).resolve().parents[2]
 DOCS_DIR = REPO_ROOT / "docs"
 
-#: Multi-vault docs.
+#: Operator-facing multi-vault docs. The archived phase docs are
+#: deliberately excluded — they're historical artifacts, the relative
+#: links inside them target docs from their original location, and
+#: rewriting those links would mutate the historical record.
 _PHASE_3_DOCS = (
     DOCS_DIR / "adr" / "006-multi-vault-and-llm.md",
     DOCS_DIR / "MULTI_VAULT_SETUP.md",
     DOCS_DIR / "FRIEND_SHARE_GUIDE.md",
     DOCS_DIR / "LLM_FEATURES.md",
-    DOCS_DIR / "PHASE_3_CODE_COMPLETE.md",
 )
 
 #: Match `[text](path)` markdown links; the target group is the path.

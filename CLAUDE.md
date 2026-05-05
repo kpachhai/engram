@@ -29,9 +29,11 @@ engram/
 │   ├── FRIEND_SHARE_GUIDE.md         # bundle export/import flow
 │   ├── TEAM_BRAIN_GUIDE.md           # shared team vault + GPG attribution
 │   ├── LLM_FEATURES.md               # opt-in summarize / synthesize tools
-│   ├── PHASE_<N>_PLAN.md             # historical: per-phase implementation plan
-│   ├── PHASE_<N>_CODE_COMPLETE.md    # historical: per-phase exit-criteria evidence
-│   └── adr/                          # 7 ADRs (one per major design choice)
+│   ├── PUBLISHING.md                 # PyPI release procedure (maintainer-only)
+│   ├── DEPLOYMENT_MODEL.md           # local-first thesis (why not cloud-hosted)
+│   ├── adr/                          # 7 ADRs (one per major design choice)
+│   └── archive/
+│       └── phases/                   # historical: PHASE_<N>_PLAN + PHASE_<N>_CODE_COMPLETE
 ├── src/engram/
 │   ├── cli/                          # all engram CLI commands (typer-based)
 │   ├── config/                       # 5-layer config loader + Pydantic models
@@ -55,7 +57,7 @@ The spec lives outside this repo at `~/repos/github.com/kpachhai/idea-forge/docs
 
 ## Phase history (historical context, not active work)
 
-engram shipped across four phases. The phase artifacts in `docs/PHASE_<N>_*.md`, `docs/adr/`, and `CHANGELOG.md` are the historical record:
+engram shipped across four phases. The phase artifacts in `docs/archive/phases/PHASE_<N>_*.md`, `docs/adr/`, and `CHANGELOG.md` are the historical record:
 
 | Phase | Scope |
 |---|---|

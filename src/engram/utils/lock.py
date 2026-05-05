@@ -22,7 +22,7 @@ lock file and retrying once. This is a deliberate user-initiated override
 Caveat: POSIX file locking on NFS/SMB and on consumer cloud-sync providers
 (Dropbox, iCloud) is unreliable; engram's startup-time path-detection check
 (implemented in :mod:`engram.cli.serve`) should refuse or warn before
-locking. See **Open Question Q10** in ``docs/PHASE_1_PLAN.md``.
+locking. See **Open Question Q10** in ``docs/archive/phases/PHASE_1_PLAN.md``.
 """
 
 from __future__ import annotations

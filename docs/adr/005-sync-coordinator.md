@@ -21,7 +21,7 @@ left two questions open:
    silently leaks one vault's content into another's history.
 
 Phase 2 also added the cross-cutting risks R-H1 through R-H10 + R-M1
-through R-M15 from `docs/PHASE_2_PLAN.md`. Several of those (R-M9
+through R-M15 from `docs/archive/phases/PHASE_2_PLAN.md`. Several of those (R-M9
 force-push gap, R-H6 conflict markers, R-H7 cloud-sync corruption) need
 explicit decisions captured here.
 
@@ -172,7 +172,7 @@ simultaneously. Phase 3 multi-vault isolation reduces blast radius.
 
 ## References
 
-- `docs/PHASE_2_PLAN.md` - the full 21-step implementation plan with
+- `docs/archive/phases/PHASE_2_PLAN.md` - the full 21-step implementation plan with
   risk + edge-case tables.
 - `docs/MULTI_MACHINE_SETUP.md` - operator-facing setup guide.
 - `src/engram/sync/coordinator.py` - reference implementation.

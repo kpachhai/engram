@@ -346,5 +346,5 @@ the conflict by hand, commit, and re-run.
 
 - ADR 005 - sync coordinator state machine + cross-vault contamination guard
 - ADR 003 - system git CLI sync transport
-- `docs/PHASE_2_PLAN.md` - implementation plan with risk + edge-case tables
+- `docs/archive/phases/PHASE_2_PLAN.md` - implementation plan with risk + edge-case tables
 - `src/engram/sync/coordinator.py` - reference implementation

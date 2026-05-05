@@ -230,8 +230,8 @@ bundle import flow daily and explicitly asks for live updates.
 
 ## See Also
 
-* `docs/PHASE_4_PLAN.md` - the implementation plan this ADR closes the loop on.
-* `docs/PHASE_4_CODE_COMPLETE.md` - exit-criteria evidence.
+* `docs/archive/phases/PHASE_4_PLAN.md` - the implementation plan this ADR closes the loop on.
+* `docs/archive/phases/PHASE_4_CODE_COMPLETE.md` - exit-criteria evidence.
 * `docs/TEAM_BRAIN_GUIDE.md` - operator-facing setup walkthrough.
 * `docs/adr/006-multi-vault-and-llm.md` - Phase 3 design rationale (the multi-vault primitives this Phase scales).
 * `docs/adr/005-sync-coordinator.md` - Phase 2 sync coordinator state machine (Phase 4 scales to N writers per remote).

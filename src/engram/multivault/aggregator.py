@@ -28,7 +28,7 @@ The floor + the ``k`` cap together produce a list of length
 case; the caller is expected to handle the larger list when the floor
 exceeds the implied cap.
 
-Reference: ``docs/PHASE_3_PLAN.md`` Step 5 + Pinned Portability Invariant.
+Reference: ``docs/archive/phases/PHASE_3_PLAN.md`` Step 5 + Pinned Portability Invariant.
 """
 
 from __future__ import annotations
