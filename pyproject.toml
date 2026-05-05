@@ -125,7 +125,7 @@ ignore = [
 # Tests legitimately use assert (S101), fake secret-shaped strings to
 # exercise redaction (S105/S106/S107), and have looser annotation/docstring
 # requirements (ANN/D).
-"tests/**/*.py" = ["S101", "S105", "S106", "S107", "ANN", "D"]
+"tests/**/*.py" = ["S101", "S105", "S106", "S107", "S108", "ANN", "D"]
 "bench/**/*.py" = ["S101", "ANN", "D"]
 "docs/**/*.py" = ["S101", "ANN", "D"]
 
