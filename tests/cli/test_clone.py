@@ -84,3 +84,17 @@ def test_clone_vault_invalid_url_fails(tmp_path: Path) -> None:
     bad = tmp_path / "does-not-exist.git"
     result = runner.invoke(app, ["clone-vault", str(bad), str(target)])
     assert result.exit_code == 2
+
+
+def test_clone_vault_creates_indexes_and_thoughts_dirs(tmp_path: Path) -> None:
+    """Regression: a freshly cloned vault must include the .indexes/ and
+    thoughts/ directories that ``engram doctor`` requires to pass.
+
+    Surfaced by the smoke test in MULTI_MACHINE_SETUP.md - early Phase 2
+    builds left the operator to create these by hand."""
+    source = _seed_remote(tmp_path)
+    target = tmp_path / "clone"
+    result = runner.invoke(app, ["clone-vault", str(source), str(target)])
+    assert result.exit_code == 0
+    assert (target / ".indexes").is_dir()
+    assert (target / "thoughts").is_dir()

@@ -69,17 +69,17 @@ git init --bare ~/smoke-engram-remote.git
 uv run engram init ~/smoke-vault-a
 cd ~/smoke-vault-a
 git remote add origin ~/smoke-engram-remote.git
-cat > .gitignore <<EOF
+cat >| .gitignore <<EOF  # `>|` overrides zsh noclobber if set
 .indexes/
 *.sqlite
 *.sqlite-wal
 *.sqlite-shm
 EOF
-cat > .gitattributes <<EOF
+cat >| .gitattributes <<EOF
 *.md text eol=lf
 EOF
 mkdir -p .engram
-cat > .engram/identity.local <<EOF
+cat >| .engram/identity.local <<EOF
 vault_id: smoke-test
 expected_remote_pattern: '^.*smoke-engram-remote\.git$'
 user_email: smoke@example.com
@@ -100,14 +100,14 @@ uv run engram doctor --config ~/smoke-vault-a/engram.config.yaml
 uv run engram clone-vault ~/smoke-engram-remote.git ~/smoke-vault-b
 cd ~/smoke-vault-b
 # Re-create the per-vault identity (NOT carried by the clone since it's gitignored).
-cat > .engram/identity.local <<EOF
+cat >| .engram/identity.local <<EOF
 vault_id: smoke-test
 expected_remote_pattern: '^.*smoke-engram-remote\.git$'
 user_email: smoke@example.com
 user_name: Smoke Test
 EOF
 # engram init writes engram.config.yaml; clone-vault does NOT, so do it now if missing.
-test -f engram.config.yaml || cat > engram.config.yaml <<EOF
+test -f engram.config.yaml || cat >| engram.config.yaml <<EOF
 vault_name: primary
 thoughts_dir: $(pwd)/thoughts
 sync:
@@ -174,7 +174,7 @@ cd ~/engram-personal
 git remote add origin git@host:user/engram-personal.git
 
 # Add the safety entries to .gitignore (engram doctor catches missing entries).
-cat > .gitignore <<EOF
+cat >| .gitignore <<EOF  # `>|` overrides zsh noclobber if set
 .indexes/
 *.sqlite
 *.sqlite-wal
@@ -182,13 +182,13 @@ cat > .gitignore <<EOF
 EOF
 
 # Pin line endings + drop git LFS for *.md.
-cat > .gitattributes <<EOF
+cat >| .gitattributes <<EOF
 *.md text eol=lf
 EOF
 
 # Tag the vault identity.
 mkdir -p .engram
-cat > .engram/identity.local <<EOF
+cat >| .engram/identity.local <<EOF
 vault_id: example-personal
 expected_remote_pattern: '^git@host:user/engram-personal\.git$'
 user_email: you@example.com
@@ -213,7 +213,7 @@ Then reproduce the per-machine identity:
 
 ```bash
 cd ~/engram-personal
-cat > .engram/identity.local <<EOF
+cat >| .engram/identity.local <<EOF
 vault_id: example-personal
 expected_remote_pattern: '^git@host:user/engram-personal\.git$'
 user_email: you@example.com
