@@ -30,10 +30,17 @@ import typer
 
 from engram import __version__
 from engram.errors import (
+    TeamMemberNotEnrolled,
     TeamVaultAlreadyInitialized,
     VaultError,
 )
 from engram.team.identity import GpgIdentity
+from engram.team.members import (
+    MemberEntry,
+    MembersList,
+    is_valid_fingerprint,
+    normalize_fingerprint,
+)
 
 _log = logging.getLogger("engram.cli.team_vault")
 
@@ -228,6 +235,125 @@ def setup_cmd(
     return written
 
 
+def add_member_cmd(
+    members_yaml_path: Path,
+    *,
+    fingerprint: str,
+    display_name: str | None = None,
+    caller_fingerprint: str,
+    stewards: list[str],
+) -> MembersList:
+    """Add a member fingerprint to a team vault's members.yaml.
+
+    Steward-only: refuses if ``caller_fingerprint`` is not in
+    ``stewards``. Returns the updated MembersList; the caller is
+    responsible for serializing + git committing.
+    """
+    caller_norm = normalize_fingerprint(caller_fingerprint)
+    stewards_norm = {normalize_fingerprint(s) for s in stewards}
+    if caller_norm not in stewards_norm:
+        msg = (
+            f"team_member_not_enrolled: caller {caller_fingerprint!r} is not "
+            f"a steward; only stewards may add members"
+        )
+        raise TeamMemberNotEnrolled(msg)
+    if not is_valid_fingerprint(fingerprint):
+        msg = f"invalid fingerprint: {fingerprint!r} (must be 40 hex chars)"
+        raise VaultError(msg)
+    fingerprint_norm = normalize_fingerprint(fingerprint)
+
+    # Load existing members.yaml.
+    if members_yaml_path.exists():
+        from ruamel.yaml import YAML
+
+        yaml_safe = YAML(typ="safe", pure=True)
+        data = yaml_safe.load(members_yaml_path.read_text(encoding="utf-8")) or {}
+        members = MembersList.from_yaml_dict(data)
+    else:
+        members = MembersList()
+
+    # Idempotent: if already enrolled, no-op.
+    if any(m.fingerprint == fingerprint_norm for m in members.members):
+        return members
+
+    new_member = MemberEntry(fingerprint=fingerprint_norm, display_name=display_name)
+    members.members.append(new_member)
+
+    # Write back as canonical bare-string-or-mapping YAML so line-level
+    # merges stay clean (P4-M20).
+    lines = ["members:"]
+    for m in members.members:
+        if m.display_name is not None:
+            lines.append(f"  - fingerprint: {m.fingerprint}")
+            lines.append(f"    display_name: {m.display_name}")
+            if m.superseded_by is not None:
+                lines.append(f"    superseded_by: {m.superseded_by}")
+        else:
+            lines.append(f"  - {m.fingerprint}")
+    if members.revoked:
+        lines.append("revoked:")
+        for fp in members.revoked:
+            lines.append(f"  - {fp}")
+    else:
+        lines.append("revoked: []")
+    members_yaml_path.parent.mkdir(parents=True, exist_ok=True)
+    members_yaml_path.write_text("\n".join(lines) + "\n", encoding="utf-8")
+    return members
+
+
+def revoke_key_cmd(
+    members_yaml_path: Path,
+    *,
+    fingerprint: str,
+    caller_fingerprint: str,
+    stewards: list[str],
+    reason: str | None = None,
+) -> MembersList:
+    """Add a fingerprint to the ``revoked`` list. Steward-only.
+
+    The fingerprint stays in ``members:`` so historical thoughts under
+    that key remain attributable; ``is_enrolled()`` returns False
+    because the revoked list shadows the active membership check.
+    """
+    del reason  # surfaced via revocation log written by the operator
+    caller_norm = normalize_fingerprint(caller_fingerprint)
+    stewards_norm = {normalize_fingerprint(s) for s in stewards}
+    if caller_norm not in stewards_norm:
+        msg = f"caller {caller_fingerprint!r} is not a steward; only stewards may revoke keys"
+        raise TeamMemberNotEnrolled(msg)
+    if not is_valid_fingerprint(fingerprint):
+        msg = f"invalid fingerprint: {fingerprint!r}"
+        raise VaultError(msg)
+    fingerprint_norm = normalize_fingerprint(fingerprint)
+
+    if not members_yaml_path.exists():
+        msg = f"members.yaml not found at {members_yaml_path}"
+        raise VaultError(msg)
+
+    from ruamel.yaml import YAML
+
+    yaml_safe = YAML(typ="safe", pure=True)
+    data = yaml_safe.load(members_yaml_path.read_text(encoding="utf-8")) or {}
+    members = MembersList.from_yaml_dict(data)
+
+    if fingerprint_norm in members.revoked:
+        return members
+    members.revoked.append(fingerprint_norm)
+
+    lines = ["members:"]
+    for m in members.members:
+        if m.display_name is not None:
+            lines.append(f"  - fingerprint: {m.fingerprint}")
+            lines.append(f"    display_name: {m.display_name}")
+        else:
+            lines.append(f"  - {m.fingerprint}")
+    lines.append("revoked:")
+    for fp in members.revoked:
+        lines.append(f"  - {fp}")
+    members_yaml_path.write_text("\n".join(lines) + "\n", encoding="utf-8")
+    return members
+
+
 def register(app: typer.Typer) -> None:
     """Wire the team-vault subcommand group into the engram Typer app."""
     team_vault_app = typer.Typer(
@@ -309,7 +435,115 @@ def register(app: typer.Typer) -> None:
             "  4. Other members run 'engram team-vault join <remote>'.",
         )
 
+    @team_vault_app.command("enroll-key")
+    def enroll_key(
+        gpg_binary: str = typer.Option(
+            "gpg",
+            "--gpg-binary",
+            hidden=True,
+        ),
+    ) -> None:
+        """Discover the operator's GPG signing key and print its primary fingerprint."""
+        identity = GpgIdentity(gpg_binary=gpg_binary)
+        if not identity.is_gpg_available():
+            typer.echo(
+                "error: gpg binary not found on PATH. "
+                "Install gpg (brew install gnupg / apt install gnupg) first.",
+                err=True,
+            )
+            raise typer.Exit(code=2)
+        fp = identity.primary_fingerprint()
+        if fp is None:
+            typer.echo(
+                "error: no GPG secret keys found. "
+                "Generate a key first via: gpg --full-generate-key",
+                err=True,
+            )
+            raise typer.Exit(code=1)
+        typer.echo(f"primary fingerprint: {fp}")
+        typer.echo(
+            f"\nNext: ask a steward to run 'engram team-vault add-member {fp}'.",
+        )
+
+    @team_vault_app.command("add-member")
+    def add_member(
+        fingerprint: str = typer.Argument(
+            ...,
+            help="Primary GPG fingerprint to enroll (40 hex characters).",
+        ),
+        members_yaml: Path = typer.Option(  # noqa: B008
+            ...,
+            "--members-yaml",
+            help="Path to .engram/members.yaml in the team-vault checkout.",
+        ),
+        policy_yaml: Path = typer.Option(  # noqa: B008
+            ...,
+            "--policy-yaml",
+            help="Path to .engram/team-policy.yaml (used to verify caller is a steward).",
+        ),
+        display_name: str | None = typer.Option(None, "--display-name"),
+        gpg_binary: str = typer.Option("gpg", "--gpg-binary", hidden=True),
+    ) -> None:
+        """Add a member fingerprint to the team-vault members.yaml. Steward-only."""
+        from ruamel.yaml import YAML
+
+        identity = GpgIdentity(gpg_binary=gpg_binary)
+        caller_fp = identity.primary_fingerprint()
+        if caller_fp is None:
+            typer.echo("error: no GPG signing key found", err=True)
+            raise typer.Exit(code=2)
+        yaml_safe = YAML(typ="safe", pure=True)
+        policy_data = yaml_safe.load(policy_yaml.read_text(encoding="utf-8")) or {}
+        stewards = policy_data.get("stewards") or []
+        try:
+            add_member_cmd(
+                members_yaml,
+                fingerprint=fingerprint,
+                display_name=display_name,
+                caller_fingerprint=caller_fp,
+                stewards=stewards,
+            )
+        except (TeamMemberNotEnrolled, VaultError) as exc:
+            typer.echo(f"error: {exc}", err=True)
+            raise typer.Exit(code=1) from exc
+        typer.echo(f"enrolled {fingerprint} in {members_yaml}")
+        typer.echo("Commit + push the change for it to take effect.")
+
+    @team_vault_app.command("revoke-key")
+    def revoke_key(
+        fingerprint: str = typer.Argument(...),
+        members_yaml: Path = typer.Option(..., "--members-yaml"),  # noqa: B008
+        policy_yaml: Path = typer.Option(..., "--policy-yaml"),  # noqa: B008
+        reason: str | None = typer.Option(None, "--reason"),
+        gpg_binary: str = typer.Option("gpg", "--gpg-binary", hidden=True),
+    ) -> None:
+        """Add a fingerprint to the revoked list. Steward-only."""
+        from ruamel.yaml import YAML
+
+        identity = GpgIdentity(gpg_binary=gpg_binary)
+        caller_fp = identity.primary_fingerprint()
+        if caller_fp is None:
+            typer.echo("error: no GPG signing key found", err=True)
+            raise typer.Exit(code=2)
+        yaml_safe = YAML(typ="safe", pure=True)
+        policy_data = yaml_safe.load(policy_yaml.read_text(encoding="utf-8")) or {}
+        stewards = policy_data.get("stewards") or []
+        try:
+            revoke_key_cmd(
+                members_yaml,
+                fingerprint=fingerprint,
+                caller_fingerprint=caller_fp,
+                stewards=stewards,
+                reason=reason,
+            )
+        except (TeamMemberNotEnrolled, VaultError) as exc:
+            typer.echo(f"error: {exc}", err=True)
+            raise typer.Exit(code=1) from exc
+        typer.echo(f"revoked {fingerprint} in {members_yaml}")
+        if reason:
+            typer.echo(f"reason: {reason}")
+
     app.add_typer(team_vault_app, name="team-vault")
 
 
-__all__ = ["register", "setup_cmd"]
+__all__ = ["add_member_cmd", "register", "revoke_key_cmd", "setup_cmd"]
