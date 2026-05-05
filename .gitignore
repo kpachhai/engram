@@ -1,0 +1,62 @@
+# engram - .gitignore
+#
+# Note: this file lives in the engram TOOL repo (source code only).
+# A separate .gitignore is generated inside each USER VAULT by `engram init`
+# (which adds .indexes/, *.tmp, swap files, .DS_Store).
+
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+build/
+dist/
+*.egg-info/
+*.egg
+MANIFEST
+
+# Virtualenvs
+.venv/
+venv/
+env/
+ENV/
+
+# uv
+# uv.lock IS committed (per code-quality doc); the cache is not.
+.uv-cache/
+
+# Testing / coverage
+.pytest_cache/
+.coverage
+.coverage.*
+htmlcov/
+coverage.xml
+.tox/
+.nox/
+.hypothesis/
+
+# Type checkers
+.mypy_cache/
+.dmypy.json
+dmypy.json
+.pyre/
+.pytype/
+
+# Editors
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+.DS_Store
+
+# OS
+Thumbs.db
+
+# Pre-commit
+.pre-commit-cache/
+
+# Local development scratch
+scratch/
+*.local.*
