@@ -140,6 +140,10 @@ class VaultStorage:
             embedding_dim=embedding_dim,
             embedding_model_name=embedding_model_name,
         )
+        # Phase 2 wiring point: ``engram serve`` injects the SyncCoordinator
+        # via :meth:`set_sync_coordinator` so unit tests stay hermetic. When
+        # this attribute is None, ``_post_capture_sync`` is a no-op.
+        self._sync_coordinator: object | None = None
 
     def __enter__(self) -> VaultStorage:
         """Return self; storage opened in __init__."""
@@ -269,9 +273,27 @@ class VaultStorage:
         self._post_capture_sync(thought)
         return thought
 
+    def set_sync_coordinator(self, coordinator: object | None) -> None:
+        """Attach (or detach) the Phase 2 sync coordinator.
+
+        Called once by :func:`engram.cli.serve` after the coordinator is
+        constructed. Tests typically leave this unset so capture is fully
+        hermetic.
+        """
+        self._sync_coordinator = coordinator
+
     def _post_capture_sync(self, thought: Thought) -> None:
-        """Hook for Phase 2+ git auto-commit/push. Phase 1 no-op."""
-        del thought
+        """Forward ``thought.file_path`` to the sync coordinator, if attached."""
+        coordinator = self._sync_coordinator
+        if coordinator is None:
+            return
+        try:
+            coordinator.enqueue(thought.file_path)  # type: ignore[attr-defined]
+        except Exception:
+            _log.exception(
+                "sync coordinator enqueue failed for %s; capture remains on disk",
+                thought.file_path,
+            )
 
     # === read ===
 
