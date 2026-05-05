@@ -143,5 +143,82 @@ The MCP tool surface is committed-stable for the v1.x lifetime per the API stabi
     `update_body()`, `delete()`, `stats()`, `repair_pending_embeddings()`.
   - Q1 default applied: content >1 MB raises `VaultError`; >100 KB warns.
 - 55 new tests (23 markdown + 32 facade); total 356; coverage 90.51%.
+- `engram.embedding` - lazy-loaded FastEmbed provider:
+  - `EmbeddingProvider` runtime-checkable Protocol so the storage layer never
+    has to import the concrete provider.
+  - `FastEmbedProvider` boots cold (~2s budget for `initialize`) and lazy-loads
+    `BAAI/bge-small-en-v1.5` on first `embed()` under a `threading.Lock` so the
+    first capture or search after cold start absorbs the 2-3s model-load cost
+    once per process. Dimension verified against the model card on first use.
+  - `aembed()` async wrapper executes the sync embed via `asyncio.to_thread`
+    so the MCP event loop stays unblocked under concurrent tool calls.
+- `engram.storage.reindex` - drift-aware reindex pipeline:
+  - Four modes: `INCREMENTAL` (re-embed drifted bodies + insert new files),
+    `FULL` (re-embed everything from markdown - used after embedding model
+    swap), `REPAIR` (only `embedding_status='pending'` rows), `REMOVE_ORPHANS`
+    (snapshot-guarded SQLite-only cleanup of rows whose markdown disappeared).
+  - Snapshot-timestamp guard (R11): orphan removal compares against the walk
+    start time so concurrent captures during reindex are not deleted.
+- `engram.diagnostics.doctor` - 9-check health pass:
+  - Vault directories exist, sqlite-vec is loadable, embedding settings agree
+    with the `engram_settings` row, embedding model is downloaded, index +
+    markdown counts agree, no orphan rows, no orphan tempfiles, no pending
+    embeddings (`--repair` reconciles).
+  - `CheckStatus` is one of OK / WARN / FAIL; the report's `exit_code`
+    property maps to 0 / 1 / 2 so CI consumers can branch on it directly.
+- `engram.cli` - Typer-driven console entrypoints registered as `engram`:
+  - `engram init <vault>` scaffolds `<vault>/thoughts/`, `<vault>/.indexes/`,
+    `<vault>/.engram/config.yaml` with mode 0700 directories + 0600 config.
+  - `engram doctor` runs the 9-check pass and exits 0/1/2 per status.
+  - `engram reindex` exposes the four modes; `--repair` and `--full` accept
+    explicit model overrides.
+  - `engram serve` acquires the `VaultLock`, builds the FastMCP server, and
+    blocks on stdio. Cloud-sync paths (Dropbox, iCloud, Google Drive) emit
+    a structured WARN per Q10 default.
+- `engram.mcp` - FastMCP-wired tool surface:
+  - Five `@mcp.tool` handlers (capture_thought, search_thoughts, list_thoughts,
+    thought_stats, fetch) - one-to-one with the Open Brain MCP surface so
+    existing prompts and skills work unchanged.
+  - capture: embedding-failure is non-fatal (sets `embedding_status='pending'`,
+    structured WARN logged); content >1 MB rejected with `VaultError`.
+  - fetch: returns null (NOT error) for unknown id so the MCP client can
+    distinguish "no row" from "tool failure".
+- `engram.migration.open_brain` - one-shot Open Brain -> engram migration:
+  - Six steps per `04-MIGRATION.md`: connect/probe (verifies the OB endpoint
+    honors `sort=created_at_asc`), enumerate (paginated `list_thoughts`),
+    transform (UUID-v7, prefix parsing, fingerprint, idempotency triple
+    `(fingerprint, source, created_at)`), write (markdown + SQLite +
+    embedding under Flow A), validate (random-sample byte-level fetch
+    round-trip), report (`migration-report.json` + audit-trail row).
+  - F1 empty corpus, F3 idempotent rerun via triple match, F5 future
+    `created_at` preserved as `legacy_created_at`, F6 empty body skipped
+    + error logged, F8 dry-run reads but writes nothing, F10 `--limit` caps
+    at N, F12 `--prefer-legacy-id-match` in-place update for actively-edited
+    sources.
+  - CLI: `engram migrate-from-open-brain` with `--url` / `--key`
+    (env-var-preferred per ps-aux safety), `--config`, `--vault`, `--dry-run`,
+    `--limit`, `--prefer-legacy-id-match`,
+    `--confirm-supabase-snapshot-taken` (refuses non-dry-run without it),
+    `--report-path`.
+- Test infrastructure:
+  - `tests/fixtures/corpus.py` - deterministic synthetic corpus generator
+    covering all 15 canonical prefixes, all 3 portability values, and
+    strictly-increasing `created_at`. Same generator scales to 10K for the
+    benchmark below.
+  - `tests/properties/test_invariants.py` - hypothesis tests for capture/fetch
+    round-trip, fingerprint stability under whitespace + line-ending
+    normalization, `search` top-k upper bound, and incremental reindex
+    idempotency.
+  - `bench/search_10k.py` - NFR1 measurement harness over 10K synthetic
+    thoughts with a deterministic stub embedder. Local p95 ~37ms (target:
+    <100ms). Exits non-zero when the threshold is exceeded so CI can wire
+    it directly.
+- ADRs at `docs/adr/`: 001-storage-recipe (markdown + SQLite + sqlite-vec),
+  002-mcp-tool-surface (five-tool surface, frozen for v1.x),
+  003-sync-model (git CLI, no library, Phase 2+),
+  004-embedding-model (BAAI/bge-small-en-v1.5 via FastEmbed).
+- Final test count for the Phase 1 cut: 433 tests across 18 modules (config,
+  diagnostics, embedding, mcp, migration, models, storage, utils, fixtures,
+  properties).
 
 [Unreleased]: https://github.com/kpachhai/engram/compare/...HEAD
