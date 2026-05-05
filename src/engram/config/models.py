@@ -22,16 +22,54 @@ DEFAULT_EMBEDDING_MODEL = "BAAI/bge-small-en-v1.5"
 
 
 class SyncConfig(BaseModel):
-    """Per-vault git sync settings (Phase 2+; Phase 1 ignores)."""
+    """Per-vault git sync settings.
+
+    Phase 2 introduces the full multi-machine convergence loop. Existing
+    Phase-1 fields (``auto_pull_on_startup``, ``auto_commit_on_capture``,
+    ``auto_push_on_capture``, ``git_remote``, ``git_branch``,
+    ``startup_pull_timeout_seconds``) keep their semantics; the new fields
+    below tune the sync coordinator state machine and surface the safety
+    knobs documented in ``docs/PHASE_2_PLAN.md`` Layer A.
+    """
 
     model_config = ConfigDict(extra="forbid")
 
+    # Phase 1 fields (kept stable).
     auto_pull_on_startup: bool = True
     auto_commit_on_capture: bool = True
     auto_push_on_capture: bool = False
     git_remote: str = "origin"
     git_branch: str = "main"
     startup_pull_timeout_seconds: float = Field(default=3.0, gt=0.0)
+
+    # Phase 2 additions.
+    #: ``primary`` machines push; ``read-only`` machines pull only (R-H3 work-machine guard).
+    role: Literal["primary", "read-only"] = "primary"
+    #: Master kill-switch; when True the coordinator never enters the run loop.
+    disabled: bool = False
+    #: Quiet-window before a batched commit fires (R-M1 / edge 13/14).
+    debounce_window_seconds: float = Field(default=60.0, ge=1.0)
+    #: Hard ceiling on coalesced bursts so continuous activity still flushes.
+    max_deferral_seconds: float = Field(default=300.0, ge=10.0)
+    #: Push-retry attempts for transient network failures (R-M5/M6 / edge 26/27).
+    push_retry_count: int = Field(default=3, ge=0)
+    #: Initial exponential-backoff seconds between push retries.
+    push_retry_backoff_seconds: float = Field(default=1.0, ge=0.1)
+    #: Hard cap per push invocation (edge 41).
+    push_timeout_seconds: float = Field(default=60.0, ge=1.0)
+    #: Permit fallback to unsigned commits when ``commit.gpgsign=true`` is set
+    #: globally but no signing key is reachable (R-H8); off by default.
+    allow_unsigned: bool = False
+    #: Pass ``--no-verify`` to ``git commit`` so user pre-commit hooks do not
+    #: race the coordinator's own queue (edge 53). Default True per Q3.
+    use_no_verify: bool = True
+    #: Require pulled commits to be GPG-verified against
+    #: ``~/.config/engram/trusted-keys.yaml`` (R-H2 hardening). Off by default
+    #: per Q2; doctor WARNs when on but the trusted-keys file is missing.
+    signed_pull_required: bool = False
+    #: Optional regex the resolved ``origin`` URL must match before any push;
+    #: defends against cross-vault contamination (R-H3).
+    expected_remote_pattern: str | None = None
 
 
 class LLMConfig(BaseModel):
