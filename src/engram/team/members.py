@@ -1,9 +1,9 @@
 """MembersList - one fingerprint-per-line YAML enrolled-member roster.
 
 The members file lives at ``<vault>/.engram/members.yaml`` checked into
-the team's git remote. Phase 4 keeps the format minimal so concurrent
+the team's git remote. The format is intentionally minimal so concurrent
 admins adding members produce line-level merge conflicts rather than
-structured-tree conflicts (P4-M20).
+structured-tree conflicts.
 
 Format (YAML):
 
@@ -70,9 +70,9 @@ class MemberEntry(BaseModel):
 class MembersList(BaseModel):
     """The full enrolled-members roster of a team vault.
 
-    Phase 4 keeps the schema minimal; the YAML file is line-level
+    The schema is intentionally minimal; the YAML file is line-level
     merge-conflict friendly so two admins running ``add-member``
-    concurrently land cleanly via ``git pull --rebase`` (P4-M20).
+    concurrently land cleanly via ``git pull --rebase``.
     """
 
     model_config = ConfigDict(extra="forbid")

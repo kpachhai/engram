@@ -1,4 +1,4 @@
-"""Phase 4 capture-time gate composition.
+"""Team-write capture-time gate composition.
 
 Composes the four client-side checks the team-write capture flow runs
 BEFORE writing the thought to disk:

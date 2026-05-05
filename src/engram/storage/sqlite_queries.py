@@ -43,7 +43,7 @@ from uuid import UUID
 from engram.models.frontmatter import Portability
 from engram.models.mcp import Filter, SortOption
 
-#: Phase 1 vault name for thoughts captured without an explicit vault override.
+#: Default vault name for thoughts captured without an explicit vault override.
 DEFAULT_VAULT_NAME = "default"
 
 
@@ -108,9 +108,9 @@ def insert_thought(
     embedding row is NOT inserted; the caller can later call
     :func:`upsert_embedding` once the embedding is available.
 
-    Phase 4: ``captured_by`` is the GPG primary fingerprint of the
-    capturing user (40 hex; canonical upper-case form). NULL for personal
-    captures and Phase 1+2+3 thoughts.
+    ``captured_by`` is the GPG primary fingerprint of the capturing user
+    (40 hex; canonical upper-case form). NULL for personal captures and
+    for thoughts captured before team-write support shipped.
     """
     if embedding is not None:
         resolved_status: Literal["ok", "pending", "failed"] = embedding_status or "ok"
@@ -185,7 +185,7 @@ def _row_to_dict(row: tuple[Any, ...]) -> dict[str, Any]:
         "embedding_status": row[13],
         "embedding_error": row[14],
     }
-    # Phase 4: row may be 16 cols (with captured_by) or 15 (legacy SELECT).
+    # Row may be 16 cols (with captured_by) or 15 (legacy SELECT shape).
     if len(row) > 15:
         base["captured_by"] = row[15]
     return base
