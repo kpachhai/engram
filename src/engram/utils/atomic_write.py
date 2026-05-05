@@ -35,7 +35,10 @@ def _platform_fsync(fd: int) -> None:
     On macOS uses ``F_FULLFSYNC``; on other platforms uses ``os.fsync``.
     """
     if _IS_DARWIN:
-        fcntl.fcntl(fd, fcntl.F_FULLFSYNC)
+        # F_FULLFSYNC is a Darwin-only fcntl op code; access via getattr so
+        # static type-checkers on Linux don't flag the missing attribute.
+        f_fullfsync = getattr(fcntl, "F_FULLFSYNC")  # noqa: B009
+        fcntl.fcntl(fd, f_fullfsync)
     else:
         os.fsync(fd)
 

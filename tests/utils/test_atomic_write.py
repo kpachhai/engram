@@ -105,7 +105,8 @@ def test_full_fsync_on_macos(tmp_path: Path) -> None:
     with patch("engram.utils.atomic_write.fcntl.fcntl", side_effect=spy_fcntl):
         atomic_write_text(target, "content")
 
-    full_fsync_calls = [c for c in fcntl_calls if len(c) > 1 and c[1] == fcntl.F_FULLFSYNC]
+    f_fullfsync = getattr(fcntl, "F_FULLFSYNC")  # noqa: B009  # Darwin-only attribute
+    full_fsync_calls = [c for c in fcntl_calls if len(c) > 1 and c[1] == f_fullfsync]
     assert len(full_fsync_calls) > 0, "F_FULLFSYNC was not called on macOS"
 
 

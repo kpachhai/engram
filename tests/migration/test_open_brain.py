@@ -9,6 +9,7 @@ from __future__ import annotations
 import json
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
+from typing import Any
 
 import httpx
 import pytest
@@ -61,7 +62,7 @@ def embedder() -> EmbeddingProvider:
     return _StubEmbedder()
 
 
-def _ob_response(thoughts: list[dict]) -> dict:
+def _ob_response(thoughts: list[dict[str, Any]]) -> dict[str, Any]:
     """Wrap a list of thoughts in the JSON-RPC envelope OB returns."""
     return {
         "jsonrpc": "2.0",
@@ -73,7 +74,7 @@ def _ob_response(thoughts: list[dict]) -> dict:
 _PAGE_SIZE = 500
 
 
-def _make_handler(thought_pages: list[list[dict]]):
+def _make_handler(thought_pages: list[list[dict[str, Any]]]):
     """Build an offset-aware httpx mock handler that mirrors Open Brain's pagination.
 
     Probe calls (``limit=1``) return the first item from page 0 (or ``[]``).
@@ -105,7 +106,7 @@ def _make_handler(thought_pages: list[list[dict]]):
 def patched_client():
     """Build an OpenBrainClient backed by a mock transport over the supplied pages."""
 
-    def factory(*pages_list: list[dict]) -> tuple[OpenBrainClient, httpx.Client]:
+    def factory(*pages_list: list[dict[str, Any]]) -> tuple[OpenBrainClient, httpx.Client]:
         handler = _make_handler(list(pages_list))
         transport = httpx.MockTransport(handler)
         client = httpx.Client(transport=transport, base_url="http://test")

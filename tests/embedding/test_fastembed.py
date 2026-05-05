@@ -79,9 +79,11 @@ def test_init_does_not_load_model(fake_fastembed_module):
 def test_first_embed_call_triggers_load(fake_fastembed_module):
     del fake_fastembed_module
     provider = FastEmbedProvider()
-    assert provider.is_loaded is False
+    loaded_before = provider.is_loaded
     vec = provider.embed("hello")
-    assert provider.is_loaded is True
+    loaded_after = provider.is_loaded
+    assert loaded_before is False
+    assert loaded_after is True
     assert len(vec) == DEFAULT_DIMENSION
 
 
