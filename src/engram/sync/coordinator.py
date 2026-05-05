@@ -355,7 +355,16 @@ class SyncCoordinator:
     # === debounce / max-deferral ===
 
     def _arm_debounce_timer(self) -> None:
-        loop = asyncio.get_event_loop()
+        try:
+            loop = asyncio.get_running_loop()
+        except RuntimeError:
+            # No running loop yet: enqueue happened outside an async context
+            # (e.g., a unit test calling capture_thought directly). Defer timer
+            # arming until the run loop starts; the queue still holds the work.
+            if self._state is SyncState.IDLE:
+                with contextlib.suppress(SyncError):
+                    self._transition(SyncState.DEBOUNCING, note="enqueue (loopless)")
+            return
         if self._debounce_handle is not None:
             self._debounce_handle.cancel()
         self._debounce_handle = loop.call_later(
