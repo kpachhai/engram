@@ -158,7 +158,7 @@ module = [
   "fastembed.*",
   "sqlite_vec.*",
   "ruamel.*",
-  "uuid7.*",
+  "uuid_extensions.*",
 ]
 ignore_missing_imports = true
 

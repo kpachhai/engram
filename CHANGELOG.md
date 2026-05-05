@@ -112,5 +112,36 @@ The MCP tool surface is committed-stable for the v1.x lifetime per the API stabi
   - All SQL is parameterized; injection attempts via filter values land as
     literal strings.
 - 62 new tests across the SQLite layer; total 301; coverage 92.69%.
+- `engram.storage.markdown` - markdown SoT layer:
+  - `read_thought()` / `write_thought()` / `split_frontmatter()` / `FrontmatterDrift` /
+    `DriftReason`. Two-parse design (PyYAML safe_load for Pydantic-validated read,
+    ruamel.yaml round-trip for write-side preservation of unknown extras) so
+    forward-compat fields survive write+read cycles (Risk R19).
+  - Frontmatter Schema Drift Handling per `02-TECHNICAL_DESIGN.md`: missing
+    schema_version defaults to 1 (NFR5 exception); missing required field surfaces
+    `MISSING_REQUIRED_FIELD` drift and the file is not indexed; non-UTF-8 surfaces
+    `NOT_UTF8`; YAML parse error surfaces `YAML_PARSE_ERROR`; unknown prefix value
+    surfaces `UNKNOWN_PREFIX` but the file IS indexed; unknown extra fields
+    surface `UNKNOWN_EXTRA_FIELD` (info-level) and round-trip preserved.
+  - A4 explicit test: body containing literal `---` mid-document round-trips intact.
+  - Force-quote `id`, `fingerprint`, `created_at`, `updated_at` on write to avoid
+    YAML scalar misinterpretation (e.g., all-hex-digit fingerprints could parse as int).
+  - Atomic write via `engram.utils.atomic_write`; mode 0600.
+  - Hypothesis property test for write+read body round-trip (handles CRLF
+    normalization + trailing-newline append per the writer contract).
+- `engram.storage.facade` - `VaultStorage` class composing markdown SoT + SQLite:
+  - `capture()` implements the Flow A atomicity contract: markdown write must
+    succeed before SQLite insert; embedding optional (omitted -> embedding_status
+    `'pending'`); SQLite txn wraps row + embedding insert; git sync hook stubbed
+    for Phase 2+. `_post_capture_sync()` is the placeholder.
+  - `parse_prefix_from_content()` extracts `[Word]` from leading body content;
+    falls back to `Note`. Multi-word prefixes (`[Action Item]`, `[Session Summary]`)
+    are returned intact.
+  - BYOC default-portability: `Domain` and `Artifact` default to `sensitive`;
+    other prefixes default to `portable`. Explicit override at capture time.
+  - `get_by_id()`, `list_thoughts()`, `search()`, `update_metadata()`,
+    `update_body()`, `delete()`, `stats()`, `repair_pending_embeddings()`.
+  - Q1 default applied: content >1 MB raises `VaultError`; >100 KB warns.
+- 55 new tests (23 markdown + 32 facade); total 356; coverage 90.51%.
 
 [Unreleased]: https://github.com/kpachhai/engram/compare/...HEAD
