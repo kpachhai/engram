@@ -39,5 +39,8 @@ repos:
           - "typer>=0.12"
           - "fastmcp>=2.0"
           - "httpx>=0.27"
-        args: ["--strict", "--ignore-missing-imports"]
-        files: ^(src|tests)/
+        # Read configuration from pyproject.toml so [[tool.mypy.overrides]] for
+        # tests applies. Restrict to src/ here; CI's full `uv run mypy` covers
+        # tests separately.
+        args: ["--config-file=pyproject.toml"]
+        files: ^src/

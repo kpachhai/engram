@@ -122,7 +122,10 @@ ignore = [
 ]
 
 [tool.ruff.lint.per-file-ignores]
-"tests/**/*.py" = ["S101", "ANN", "D"]
+# Tests legitimately use assert (S101), fake secret-shaped strings to
+# exercise redaction (S105/S106/S107), and have looser annotation/docstring
+# requirements (ANN/D).
+"tests/**/*.py" = ["S101", "S105", "S106", "S107", "ANN", "D"]
 "bench/**/*.py" = ["S101", "ANN", "D"]
 "docs/**/*.py" = ["S101", "ANN", "D"]
 
@@ -158,6 +161,13 @@ module = [
   "uuid7.*",
 ]
 ignore_missing_imports = true
+
+# Tests can skip annotation strictness; the rest of strict mode still applies.
+[[tool.mypy.overrides]]
+module = ["tests.*"]
+disallow_untyped_defs = false
+disallow_incomplete_defs = false
+check_untyped_defs = true
 
 [tool.pydantic-mypy]
 init_forbid_extra = true
