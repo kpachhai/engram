@@ -1,6 +1,4 @@
-"""``summarize_thought`` and ``synthesize_thoughts`` MCP tool handlers (Step 14).
-
-Per the Phase 3 plan Step 14:
+"""``summarize_thought`` and ``synthesize_thoughts`` MCP tool handlers.
 
 * :func:`summarize_thought_handler` - per-thought summarizer.
   Workflow: storage.get_by_id -> portability gate -> resolve_provider
@@ -9,18 +7,17 @@ Per the Phase 3 plan Step 14:
 * :func:`synthesize_thoughts_handler` - cross-vault RAG synthesizer.
   Workflow: aggregate_search (default vault=None routes to primary,
   ``"*"`` opts into all) -> drop friend-vault thoughts unless
-  ``include_friend_vaults=True`` (R-H6 / B-4 fix) -> portability gate
-  -> token-budget truncation respecting per-vault floor (Step 13)
-  -> wrap each thought in ``<thought id="..." vault="..."
-  source="...">`` delimiter -> resolve_provider -> budget check ->
-  provider.complete with anti-injection system prompt -> citation
-  post-validator -> SynthesisOutput.
+  ``include_friend_vaults=True`` -> portability gate -> token-budget
+  truncation respecting per-vault floor -> wrap each thought in
+  ``<thought id="..." vault="..." source="...">`` delimiter ->
+  resolve_provider -> budget check -> provider.complete with
+  anti-injection system prompt -> citation post-validator ->
+  SynthesisOutput.
 
 The handlers raise :class:`engram.errors.BlockThoughtLLMDisallowed`
 or :class:`engram.errors.LLMProviderError` to signal refusal; callers
-(MCP server in Layer F + CLI in a Phase 3.5 follow-up) translate
-those into JSON-RPC error responses with the documented
-``error_code`` constants.
+(MCP server + CLI) translate those into JSON-RPC error responses with
+the documented ``error_code`` constants.
 """
 
 from __future__ import annotations
@@ -59,11 +56,10 @@ _log = logging.getLogger("engram.mcp.llm_tools")
 
 #: System prompt prepended to every synthesize_thoughts call. The text
 #: is short enough to keep token cost low while explicitly instructing
-#: the model to ignore in-content instructions (R-H6 / R-H11
-#: prompt-injection mitigation - documented residual: indirect prompt
-#: injection is unsolved at the model layer; the delimiter wrapping +
-#: this directive + the citation post-validator are the ratchet we ship
-#: in Phase 3, not a guarantee).
+#: the model to ignore in-content instructions. Documented residual:
+#: indirect prompt injection is unsolved at the model layer; the
+#: delimiter wrapping + this directive + the citation post-validator
+#: are the ratchet engram ships, not a guarantee.
 _ANTI_INJECTION_SYSTEM_PROMPT = (
     "You are answering using context from the engram thought store. "
     'Each thought is wrapped in <thought id="..." vault="..." '

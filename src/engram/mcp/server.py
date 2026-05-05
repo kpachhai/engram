@@ -1,20 +1,19 @@
-"""FastMCP server wiring (Phase 1 single-vault + Phase 3 multi-vault).
+"""FastMCP server wiring.
 
 Two factories:
 
-* :func:`build_server` - the original 5-tool single-vault wiring kept
-  for backward compatibility. Phase 1 + 2 callers continue to use this.
-* :func:`build_multivault_server` - Phase 3 wiring that takes a
+* :func:`build_server` - 5-tool single-vault wiring used by
+  single-vault deployments.
+* :func:`build_multivault_server` - multi-vault wiring that takes a
   :class:`engram.multivault.registry.VaultRegistry` and adds the
   ``summarize_thought`` and ``synthesize_thoughts`` tools alongside
-  the stable five (R-L8 - additive change; ``listChanged`` notifies
-  clients of the new tool surface).
+  the stable five.
 
 Each tool is a thin shim around the handlers in
-:mod:`engram.mcp.tools` (Phase 1+2) or
-:mod:`engram.mcp.llm_tools` (Phase 3 LLM tools). The ``engram serve``
-CLI is responsible for acquiring per-vault locks, starting sync
-coordinators, and running the server's stdio loop.
+:mod:`engram.mcp.tools` (storage tools) or :mod:`engram.mcp.llm_tools`
+(LLM tools). The ``engram serve`` CLI is responsible for acquiring
+per-vault locks, starting sync coordinators, and running the server's
+stdio loop.
 """
 
 from __future__ import annotations
@@ -86,8 +85,7 @@ def build_server(
 ) -> FastMCP[Any]:
     """Wire the 5 engram tools to a FastMCP server and return it.
 
-    Phase 1 single-vault entry point. Kept for backwards compatibility
-    with existing tests + Phase 1/2 callers; Phase 3 callers use
+    Single-vault entry point. Multi-vault callers use
     :func:`build_multivault_server`.
     """
     mcp: FastMCP[Any] = FastMCP(server_name)
@@ -276,9 +274,9 @@ def build_multivault_server(
     ) -> dict[str, Any]:
         """Semantic search.
 
-        Phase 3: ``filter.vault == "*"`` opts into multi-vault search;
-        any other value (or absence) routes to the primary only,
-        matching Phase 1+2 client semantics (R-L2).
+        ``filter.vault == "*"`` opts into multi-vault search; any other
+        value (or absence) routes to the primary only, matching
+        single-vault client semantics.
         """
         f = Filter.model_validate(filter) if filter is not None else None
         wants_multivault = (f is not None and f.vault == "*") or (
@@ -323,8 +321,8 @@ def build_multivault_server(
     ) -> dict[str, Any]:
         """Filtered + sorted + paginated list.
 
-        Phase 3: defaults to the primary vault; explicit vault filter
-        routes to the named vault.
+        Defaults to the primary vault; explicit vault filter routes to
+        the named vault.
         """
         f = Filter.model_validate(filter) if filter is not None else None
         target_storage = registry.primary()
@@ -338,7 +336,7 @@ def build_multivault_server(
 
     @mcp.tool
     async def thought_stats() -> dict[str, Any]:
-        """Aggregate counts; primary vault for now (Phase 4 will roll up)."""
+        """Aggregate counts; targets the primary vault."""
         result: StatsOutput = await thought_stats_handler(registry.primary())
         return result.model_dump(mode="json")
 
@@ -346,8 +344,8 @@ def build_multivault_server(
     async def fetch(id: str) -> dict[str, Any]:
         """Lookup a single thought by id (primary vault).
 
-        Phase 3 keeps this targeting primary; cross-vault id lookup
-        is deferred to Phase 4 (the composite key (vault, id) makes
+        Targets the primary vault; cross-vault id lookup is not
+        currently supported (the composite key (vault, id) makes
         single-id ambiguous when the same UUID exists in two vaults
         which can only happen via id collision - already refused at
         bundle import).
@@ -358,7 +356,7 @@ def build_multivault_server(
 
     @mcp.tool
     async def summarize_thought(id: str) -> dict[str, Any]:
-        """LLM-mediated summary of a single thought (Phase 3)."""
+        """LLM-mediated summary of a single thought."""
         payload = SummarizeInput(id=UUID(id))
         result = await summarize_thought_handler(deps, payload=payload)
         return result.model_dump(mode="json")
@@ -371,7 +369,7 @@ def build_multivault_server(
         include_sensitive: bool = False,
         include_friend_vaults: bool = False,
     ) -> dict[str, Any]:
-        """LLM-mediated cross-vault synthesis (Phase 3)."""
+        """LLM-mediated cross-vault synthesis."""
         f = Filter.model_validate(filter) if filter is not None else None
         payload = SynthesizeInput(
             query=query,

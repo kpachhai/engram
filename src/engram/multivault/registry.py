@@ -1,4 +1,4 @@
-"""VaultRegistry - the Phase 3 resolver that binds vault names to storage.
+"""VaultRegistry - the resolver that binds vault names to storage.
 
 The registry is the canonical enforcement point for two cross-vault
 invariants:
@@ -16,12 +16,10 @@ invariants:
    :class:`engram.errors.VaultReadOnlyError`. Doctor surfaces the
    ``skipped`` count rather than failing the whole pass.
 
-The Phase 3 plan reserves :class:`VaultRegistry.__init__` as the
-authoritative collision-detection point; :class:`UserConfig`'s
-``_check_one_primary_vault`` validator is advisory because symlinks may
-change between config load and serve startup.
-
-Reference: ``docs/PHASE_3_PLAN.md`` Step 4 (R-M9, R-H7, R-H8).
+:class:`VaultRegistry.__init__` is the authoritative collision-detection
+point; :class:`UserConfig`'s ``_check_one_primary_vault`` validator is
+advisory because symlinks may change between config load and serve
+startup.
 """
 
 from __future__ import annotations
@@ -43,10 +41,9 @@ _log = logging.getLogger("engram.multivault.registry")
 if TYPE_CHECKING:
     from engram.storage.facade import VaultStorage
 
-#: Recognized role tags. Phase 4 widens to add ``team-write``; previously
-#: ``primary`` / ``read-only`` were the only legal values. The registry
-#: enforces at-most-one-primary; team-write vaults may be mounted in
-#: arbitrary number alongside the singleton primary.
+#: Recognized role tags. The registry enforces at-most-one-primary;
+#: team-write vaults may be mounted in arbitrary number alongside the
+#: singleton primary; read-only mounts are also unbounded.
 VaultRole = Literal["primary", "read-only", "team-write"]
 
 
@@ -60,16 +57,15 @@ class VaultRegistry:
     * ``_coordinators``: optional
       :class:`engram.sync.coordinator.SyncCoordinator` per vault; the
       registry treats coordinators as opaque so this module does not
-      import the sync package directly (kept loose-coupled because Phase 3
-      tests construct a registry without a coordinator).
+      import the sync package directly (kept loose-coupled so tests can
+      construct a registry without a coordinator).
     * ``_roles``: the role each vault was mounted under
       (``"primary"`` / ``"read-only"``).
 
     Construction validates that:
 
     * At most one vault is ``role: "primary"``.
-    * Every vault's ``thoughts_dir`` is unique under ``realpath``
-      (R-M9 / SF-3 fix).
+    * Every vault's ``thoughts_dir`` is unique under ``realpath``.
 
     Use :meth:`mount` after construction to register vaults; the
     realpath collision check runs at every mount call so the property
@@ -130,9 +126,9 @@ class VaultRegistry:
         self._coordinators[name] = coordinator
         self._roles[name] = role
 
-        # Phase 4: read-only is the only role that hard-refuses writes at
-        # the storage layer. team-write keeps writes permitted; the team
-        # policy gate runs at capture-time per Phase 4 invariant 4.
+        # read-only is the only role that hard-refuses writes at the
+        # storage layer. team-write keeps writes permitted; the team
+        # policy gate runs at capture-time.
         storage.set_read_only_role(read_only=(role == "read-only"))
         if coordinator is not None:
             # Defensive: set_sync_coordinator stores the reference and
@@ -222,7 +218,7 @@ class VaultRegistry:
         Helper for :func:`engram.multivault.aggregator.aggregate_search`
         and the multi-vault tool handlers in
         :mod:`engram.mcp.server`. Substring/prefix matching is *not*
-        applied (R-M1: vault filters are exact-match-only).
+        applied (vault filters are exact-match-only).
 
         Args:
             filter_vault: One of ``None`` (route to primary only),

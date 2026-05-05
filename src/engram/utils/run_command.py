@@ -6,9 +6,8 @@ The :func:`run` helper enforces ``shell=False`` (the default) and validates the
 environment variables required by ``02-TECHNICAL_DESIGN.md`` Flow C so git
 never prompts for credentials, merge editor input, or LFS smudge.
 
-Phase 1 has no caller for :func:`run_git` (sync is a Phase 2+ deliverable);
-the helper exists now so the Phase 2 sync coordinator builds on it without
-having to retrofit env-var hygiene into already-wired call sites.
+The helper exists ahead of any sync caller so the sync coordinator builds on
+it without having to retrofit env-var hygiene into already-wired call sites.
 """
 
 from __future__ import annotations

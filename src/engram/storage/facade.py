@@ -11,8 +11,9 @@ implements the capture flow per ``02-TECHNICAL_DESIGN.md`` Flow A:
    itself is not written. ``engram doctor --repair`` reconciles later.
 3. SQLite row + embedding (if present) wrap in a single transaction so the
    index is never half-written.
-4. Git commit/push is a Phase 2+ deliverable; this facade leaves a stub
-   hook (``_post_capture_sync``) for the future sync coordinator.
+4. Git commit/push is delegated to the sync coordinator; this facade leaves a
+   stub hook (``_post_capture_sync``) that forwards to the coordinator when
+   one is attached and is a no-op otherwise.
 
 Open Question Q1 default applied: content larger than 1 MB is rejected
 with a :class:`VaultError`; content larger than 100 KB logs a WARNING
@@ -132,9 +133,10 @@ class VaultStorage:
     ) -> None:
         """Open the SQLite + sqlite-vec connection and ensure the thoughts dir exists.
 
-        ``read_only_role`` is the Phase 3 hard-refusal guard: when True, every
-        public write entry-point (``capture``, ``update_metadata``,
-        ``update_body``, ``delete``, ``repair_pending_embeddings``) raises
+        ``read_only_role`` is the hard-refusal guard for read-only vaults:
+        when True, every public write entry-point (``capture``,
+        ``update_metadata``, ``update_body``, ``delete``,
+        ``repair_pending_embeddings``) raises
         :class:`engram.errors.VaultReadOnlyError` rather than mutating the
         vault. The attribute is normally set by
         :class:`engram.multivault.registry.VaultRegistry` at mount time
@@ -162,7 +164,7 @@ class VaultStorage:
         self._mounted_branch_at_init: str | None = self._read_current_branch()
 
     def _refuse_if_read_only(self, action: str) -> None:
-        """Hard-refusal gate for Phase 3 read-only-role vaults (R-H7/R-H8)."""
+        """Hard-refusal gate for read-only-role vaults."""
         if self.read_only_role:
             msg = (
                 f"vault {self.vault_name!r} is mounted with role=read-only; "
@@ -262,7 +264,7 @@ class VaultStorage:
         Raises:
             VaultError: if content exceeds 1 MB (Q1 default) or markdown write fails.
             VaultReadOnlyError: if this storage is mounted with
-                ``read_only_role=True`` (Phase 3 hard refusal).
+                ``read_only_role=True`` (hard refusal on read-only vaults).
         """
         self._refuse_if_read_only("capture")
         size_bytes = len(content.encode("utf-8"))
@@ -349,12 +351,12 @@ class VaultStorage:
                 absolute_path,
             )
 
-        # Step 4: git commit/push hook (Phase 2+; stubbed).
+        # Step 4: git commit/push hook (forwards to sync coordinator if attached).
         self._post_capture_sync(thought)
         return thought
 
     def set_sync_coordinator(self, coordinator: object | None) -> None:
-        """Attach (or detach) the Phase 2 sync coordinator.
+        """Attach (or detach) the sync coordinator.
 
         Called once by :func:`engram.cli.serve` after the coordinator is
         constructed. Tests typically leave this unset so capture is fully
@@ -443,8 +445,7 @@ class VaultStorage:
         """Patch metadata-only fields. Returns True if updated.
 
         Raises:
-            VaultReadOnlyError: if mounted with ``read_only_role=True``
-                (Phase 3).
+            VaultReadOnlyError: if mounted with ``read_only_role=True``.
         """
         self._refuse_if_read_only("update_metadata")
         if not _q_update_metadata(
@@ -473,8 +474,7 @@ class VaultStorage:
         """Body changed: refresh fingerprint, advance updated_at, re-embed.
 
         Raises:
-            VaultReadOnlyError: if mounted with ``read_only_role=True``
-                (Phase 3).
+            VaultReadOnlyError: if mounted with ``read_only_role=True``.
         """
         self._refuse_if_read_only("update_body")
         existing = self.get_by_id(thought_id)
@@ -500,8 +500,7 @@ class VaultStorage:
         """Remove a thought from both markdown SoT and SQLite.
 
         Raises:
-            VaultReadOnlyError: if mounted with ``read_only_role=True``
-                (Phase 3).
+            VaultReadOnlyError: if mounted with ``read_only_role=True``.
         """
         self._refuse_if_read_only("delete")
         existing = self.get_by_id(thought_id)
@@ -548,9 +547,9 @@ class VaultStorage:
         and the row remains pending for a later doctor run.
 
         Raises:
-            VaultReadOnlyError: if mounted with ``read_only_role=True``
-                (Phase 3). Doctor catches this and reports a "skipped N
-                pending embeddings on read-only vault X" INFO row.
+            VaultReadOnlyError: if mounted with ``read_only_role=True``.
+                Doctor catches this and reports a "skipped N pending
+                embeddings on read-only vault X" INFO row.
         """
         self._refuse_if_read_only("repair_pending_embeddings")
         pending = _q_list_thoughts_with_status(self.conn, "pending")

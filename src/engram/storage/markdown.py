@@ -87,7 +87,7 @@ _KNOWN_FRONTMATTER_FIELDS = _REQUIRED_FRONTMATTER_FIELDS | {
     "vault",
     "legacy_id",
     "legacy_created_at",
-    # Phase 4: GPG primary-fingerprint of capturing user (team-write vaults).
+    # GPG primary-fingerprint of capturing user (team-write vaults).
     "captured_by",
 }
 
@@ -288,8 +288,8 @@ def _serialize_frontmatter(
         payload["vault"] = thought.vault
     if thought.legacy_id is not None:
         payload["legacy_id"] = thought.legacy_id
-    # Phase 4: emit captured_by only when populated (team-write captures);
-    # personal-vault captures keep the Phase 1+2+3 frontmatter shape.
+    # Emit captured_by only when populated (team-write captures);
+    # personal-vault captures keep the original frontmatter shape.
     if thought.captured_by is not None:
         payload["captured_by"] = DoubleQuotedScalarString(thought.captured_by)
 

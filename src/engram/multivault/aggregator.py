@@ -1,4 +1,4 @@
-"""Cross-vault search aggregator (Phase 3 Step 5).
+"""Cross-vault search aggregator.
 
 Two execution modes:
 
@@ -20,7 +20,7 @@ emits ``portability IN ('portable')`` so a ``block`` row never matches.
 :func:`engram.multivault.portability.assert_no_block_in_results` is the
 defense-in-depth re-filter.
 
-Per-vault floor (R-H12): every mounted vault contributes its
+Per-vault floor: every mounted vault contributes its
 ``min_per_vault_results`` regardless of similarity score, then the
 remaining slots up to ``k`` are filled by the global similarity ranking.
 The floor + the ``k`` cap together produce a list of length
@@ -140,11 +140,10 @@ def _embedding_settings_for(storage: VaultStorage) -> tuple[str | None, int | No
 def assert_compatible_embeddings(registry: VaultRegistry) -> None:
     """Refuse cross-vault search when mounted vaults disagree on embedding.
 
-    Phase 3 Step 7 verifier: every mounted vault's
-    ``embedding_model_name`` + ``embedding_dim`` (read from
-    ``engram_settings``) must match. Two vaults with different models
-    produce non-comparable cosine scores; the aggregator refuses rather
-    than ranking apples and oranges (R-M11).
+    Every mounted vault's ``embedding_model_name`` + ``embedding_dim``
+    (read from ``engram_settings``) must match. Two vaults with different
+    models produce non-comparable cosine scores; the aggregator refuses
+    rather than ranking apples and oranges.
 
     The check runs on every cross-vault search invocation; the cost is
     one ``SELECT value FROM engram_settings WHERE key = ?`` per vault
@@ -240,8 +239,8 @@ def aggregate_search(
             the pinned invariant; other fields pass through unchanged.
         include_sensitive: Adds ``sensitive`` thoughts to the per-vault
             push-down filter. ``block`` is ALWAYS excluded regardless.
-        min_per_vault_results: Floor (R-H12); each vault contributes at
-            least this many of its top results before similarity ranking
+        min_per_vault_results: Floor; each vault contributes at least
+            this many of its top results before similarity ranking
             decides the rest.
         aggregate_timeout_seconds: Per-vault wall-clock budget. Vaults
             that exceed it are added to ``degraded_vaults`` and contribute

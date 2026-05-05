@@ -97,9 +97,9 @@ class Frontmatter(BaseModel):
     vault: str | None = None
     legacy_id: str | None = None
     legacy_created_at: datetime | None = None
-    #: Phase 4: GPG primary-key fingerprint (40 hex) of the capturing user
-    #: when the thought lives in a team-write vault. None for personal /
-    #: read-only friend vaults (matches Phase 1+2+3 frontmatter shape).
+    #: GPG primary-key fingerprint (40 hex) of the capturing user when the
+    #: thought lives in a team-write vault. None for personal /
+    #: read-only friend vaults.
     captured_by: str | None = None
 
     @field_validator("prefix")

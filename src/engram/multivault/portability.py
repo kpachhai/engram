@@ -1,6 +1,6 @@
-"""Cross-vault portability defense-in-depth gate (Phase 3 Step 6).
+"""Cross-vault portability defense-in-depth gate.
 
-The portability invariant pinned at the top of ``docs/PHASE_3_PLAN.md``:
+The portability invariant:
 
 1. Default cross-vault search returns ``portable`` thoughts only.
 2. ``include_sensitive=True`` opts into adding ``sensitive`` thoughts.

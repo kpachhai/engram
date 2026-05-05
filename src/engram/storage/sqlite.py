@@ -2,12 +2,12 @@
 
 Per ``02-TECHNICAL_DESIGN.md`` Storage Schema, the engram index has three
 spec-defined tables (``thoughts``, ``thought_embeddings`` virtual, and
-``migrations``) plus a Phase 1 implementation-detail table (``engram_settings``)
+``migrations``) plus an implementation-detail table (``engram_settings``)
 that stores model name + dimension so a startup mismatch can be detected and
-reported via ``engram doctor`` (Risk R22 mitigation).
+reported via ``engram doctor``.
 
-The SQLite schema version is tracked via ``PRAGMA user_version``. Phase 1
-ships at version ``1``; later phases that change schema must increment this
+The SQLite schema version is tracked via ``PRAGMA user_version``. The schema
+currently ships at version ``1``; later schema changes must increment this
 and provide a migration step in :func:`_apply_migrations`.
 
 A common deployment landmine: Python's stdlib ``sqlite3`` module is sometimes
@@ -196,7 +196,7 @@ def _create_schema(conn: sqlite3.Connection, *, embedding_dim: int) -> None:
     )
     conn.execute(_CREATE_MIGRATIONS_TABLE)
     conn.execute(_CREATE_SETTINGS_TABLE)
-    # Phase 4: ensure captured_by column exists on pre-Phase-4 databases.
+    # Ensure captured_by column exists on databases created before team-write support.
     _ensure_captured_by_column(conn)
     conn.execute(f"PRAGMA user_version = {ENGRAM_SCHEMA_VERSION}")
 
@@ -204,10 +204,10 @@ def _create_schema(conn: sqlite3.Connection, *, embedding_dim: int) -> None:
 def _ensure_captured_by_column(conn: sqlite3.Connection) -> None:
     """Add ``captured_by`` column to existing thoughts tables that lack it.
 
-    Phase 4 migration: SQLite ALTER TABLE ADD COLUMN is fast (metadata-only;
-    no row rewrite) and the new column defaults to NULL for Phase 1+2+3
-    rows. Idempotent: a fresh schema already has the column from the
-    CREATE TABLE DDL above, so this no-ops.
+    Online migration: SQLite ALTER TABLE ADD COLUMN is fast (metadata-only;
+    no row rewrite) and the new column defaults to NULL for rows captured
+    before team-write support shipped. Idempotent: a fresh schema already
+    has the column from the CREATE TABLE DDL above, so this no-ops.
     """
     cursor = conn.execute("PRAGMA table_info(thoughts)")
     existing_columns = {row[1] for row in cursor.fetchall()}
