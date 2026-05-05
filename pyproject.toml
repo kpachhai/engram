@@ -128,6 +128,12 @@ ignore = [
 "tests/**/*.py" = ["S101", "S105", "S106", "S107", "S108", "ANN", "D"]
 "bench/**/*.py" = ["S101", "ANN", "D"]
 "docs/**/*.py" = ["S101", "ANN", "D"]
+# engram.errors deliberately uses noun-form names for some Phase 3 exception
+# classes (BlockThoughtLLMDisallowed, BundleCycleDetected, EmbeddingModelMismatch,
+# DuplicateVaultName, VaultPathCollision) because the Phase 3 plan and the MCP
+# error_code constants name them this way. The N818 "must end in Error" rule
+# would force renames that ripple through the plan, ADRs, and error_code map.
+"src/engram/errors.py" = ["N818"]
 
 [tool.ruff.lint.pydocstyle]
 convention = "google"

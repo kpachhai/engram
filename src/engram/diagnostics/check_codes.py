@@ -50,20 +50,66 @@ ALL_PHASE_2_CHECK_CODES: Final[tuple[str, ...]] = (
 )
 
 
+# Phase 3 additions ---------------------------------------------------------
+
+#: At most one vault may declare role=primary. FAIL when count > 1.
+MULTIPLE_PRIMARY_VAULTS: Final[str] = "multiple_primary_vaults"
+#: Two vaults resolve to the same realpath. FAIL.
+VAULT_PATH_COLLISION: Final[str] = "vault_path_collision"
+#: At least two configured vaults declare different embedding models. FAIL
+#: (cross-vault similarity scores would not be comparable).
+EMBEDDING_MODEL_MISMATCH_ACROSS_VAULTS: Final[str] = "embedding_model_mismatch_across_vaults"
+#: INFO-only row reporting the active aggregator mode (ATTACH or SEQUENTIAL).
+AGGREGATOR_MODE: Final[str] = "aggregator_mode"
+#: WARN if LLM is configured but ``provider.health_check()`` does not respond.
+LLM_PROVIDER_REACHABLE: Final[str] = "llm_provider_reachable"
+#: WARN at >=80% of the daily cost cap, per vault that has consumed budget.
+LLM_DAILY_COST_CAP_APPROACHED: Final[str] = "llm_daily_cost_cap_approached"
+#: WARN when a read-only-role vault declares a per-vault LLM block; the
+#: resolver ignores it (R-M2) but operator should know the config is dead.
+READ_ONLY_VAULT_DECLARES_LLM: Final[str] = "read_only_vault_declares_llm"
+#: FAIL when a friend-imported (read-only) vault carries a portability=block
+#: thought; refuse to mount that vault.
+FRIEND_VAULT_BLOCK_THOUGHT_PRESENT: Final[str] = "friend_vault_block_thought_present"
+
+#: Canonical Phase 3 superset; tests iterate this to assert all 22 codes
+#: are unique non-empty snake_case strings.
+ALL_PHASE_3_CHECK_CODES: Final[tuple[str, ...]] = (
+    *ALL_PHASE_2_CHECK_CODES,
+    MULTIPLE_PRIMARY_VAULTS,
+    VAULT_PATH_COLLISION,
+    EMBEDDING_MODEL_MISMATCH_ACROSS_VAULTS,
+    AGGREGATOR_MODE,
+    LLM_PROVIDER_REACHABLE,
+    LLM_DAILY_COST_CAP_APPROACHED,
+    READ_ONLY_VAULT_DECLARES_LLM,
+    FRIEND_VAULT_BLOCK_THOUGHT_PRESENT,
+)
+
+
 __all__ = [
+    "AGGREGATOR_MODE",
     "ALL_PHASE_2_CHECK_CODES",
+    "ALL_PHASE_3_CHECK_CODES",
     "AUTOCRLF_DRIFT",
     "BRANCH_ALIGNMENT",
     "CLOUD_SYNC_UNDER_DOTGIT",
     "CONFLICT_MARKERS_PRESENT",
+    "EMBEDDING_MODEL_MISMATCH_ACROSS_VAULTS",
+    "FRIEND_VAULT_BLOCK_THOUGHT_PRESENT",
     "GITIGNORE_INDEXES",
     "GIT_VERSION_FLOOR",
     "GPG_AGENT_REACHABLE",
     "LFS_DRIFT",
+    "LLM_DAILY_COST_CAP_APPROACHED",
+    "LLM_PROVIDER_REACHABLE",
+    "MULTIPLE_PRIMARY_VAULTS",
     "READ_ONLY_ROLE_CONTRADICTS_AUTO_PUSH",
+    "READ_ONLY_VAULT_DECLARES_LLM",
     "SIGNED_COMMITS_REQUIRED",
     "SUBMODULE_UNDER_VAULT",
     "SYNC_USER_IDENTITY_SET",
     "VAULT_IDENTITY_REMOTE_MATCH",
+    "VAULT_PATH_COLLISION",
     "WORKING_TREE_DIRTY_AT_STARTUP",
 ]

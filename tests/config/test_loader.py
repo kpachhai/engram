@@ -174,7 +174,7 @@ def test_load_config_explicit_vault_name_resolves(fake_home: Path, tmp_path: Pat
         "    role: primary\n"
         "  - name: b\n"
         f"    path: {vault_b}\n"
-        "    role: primary\n",
+        "    role: read-only\n",
     )
     cfg = load_config(vault_name="b")
     assert cfg.vault_path == vault_b.resolve()

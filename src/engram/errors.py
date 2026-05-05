@@ -72,13 +72,122 @@ class MigrationError(EngramError):
     error_code: str = "migration_error"
 
 
+# Phase 3 additions ---------------------------------------------------------
+
+
+class VaultReadOnlyError(VaultError):
+    """A write was attempted against a vault mounted with ``role: read-only``.
+
+    Raised at the storage-layer write boundary (``update_metadata``,
+    ``update_body``, ``delete``, ``write_thought``, ``_q_upsert_embedding``,
+    ``_q_mark_embedding_status``, ``reindex_vault``,
+    ``_repair_pending_embeddings``) to enforce R-H7/R-H8 from the Phase 3
+    plan as a hard refusal rather than a soft skip.
+    """
+
+    error_code: str = "vault_read_only"
+
+
+class VaultPathCollision(VaultError):
+    """Two configured vaults resolve to the same on-disk path after ``realpath``.
+
+    Canonical enforcement point per R-M9: raised by ``VaultRegistry.__init__``
+    after every storage's ``vault_path`` is resolved through ``realpath``;
+    advisory enforcement also exists at config-load time but symlinks may
+    change between load and registry init.
+    """
+
+    error_code: str = "vault_path_collision"
+
+
+class DuplicateVaultName(VaultError):
+    """Two configured vaults share the same logical ``name``.
+
+    Distinct from path collision: the same vault may be reachable under
+    multiple names by mistake. Raised by ``VaultRegistry.mount`` when a
+    second mount is attempted with a name that already exists.
+    """
+
+    error_code: str = "duplicate_vault_name"
+
+
+class EmbeddingModelMismatch(EmbeddingError):
+    """Two vaults declare different embedding models (or dimensions).
+
+    Cross-vault similarity scores are not comparable across embedding
+    models, so the multi-vault aggregator refuses cross-vault search rather
+    than returning rankings the user cannot reason about (R-M11).
+    """
+
+    error_code: str = "embedding_model_mismatch"
+
+
+class BundleImportError(EngramError):
+    """Bundle import refused (path traversal, oversize, format, or staging).
+
+    The reason is carried in the message string. Common reasons:
+    ``path_traversal``, ``oversized_file``, ``oversized_bundle``,
+    ``bad_yaml``, ``id_collision``, ``schema_version_unsupported``,
+    ``staging_failure``, ``bundle_export_lock_held``.
+    """
+
+    error_code: str = "bundle_import_error"
+
+
+class BundleCycleDetected(BundleImportError):
+    """A bundle's ``bundle_id`` already appears in this vault's source chain.
+
+    Walks every existing thought's ``source: bundle:<id> <- ...`` chain
+    looking for the candidate ``manifest.bundle_id``; if found, the bundle
+    is refused (R-M13 cycle detection). Multi-machine same-user imports are
+    not cycles because each export gets a distinct ``bundle_id`` UUID-v7.
+    """
+
+    error_code: str = "bundle_cycle_detected"
+
+
+class BlockThoughtLLMDisallowed(EngramError):
+    """A thought with ``portability: block`` reached an LLM call site.
+
+    The absolute floor of the LLM portability gate (R-H10): no flag,
+    config, or provider locality overrides this refusal. Raised by the
+    resolver and re-asserted as defense-in-depth at the portability gate
+    (Step 6) and at every LLM tool entry point (Step 14).
+    """
+
+    error_code: str = "block_thought_llm_disallowed"
+
+
+class LLMProviderError(EngramError):
+    """LLM provider configuration, validation, or runtime issue.
+
+    Covers reasoned refusals from the resolver (e.g.
+    ``sensitive_thought_remote_provider_disallowed``,
+    ``cross_provider_synthesis_disallowed``,
+    ``daily_cost_cap_exceeded``, ``prompt_too_large``,
+    ``prompt_too_large_even_at_floor``, ``base_url_not_trusted``,
+    ``provider_unreachable``) as well as transient runtime errors (5xx,
+    timeout, malformed response). The reason is the message string.
+    """
+
+    error_code: str = "llm_provider_error"
+
+
 __all__ = [
+    "BlockThoughtLLMDisallowed",
+    "BundleCycleDetected",
+    "BundleImportError",
     "ConfigError",
+    "DuplicateVaultName",
     "EmbeddingError",
+    "EmbeddingModelMismatch",
     "EngramError",
     "IndexError",
+    "LLMProviderError",
     "LockError",
     "MigrationError",
     "SyncError",
     "VaultError",
+    "VaultPathCollision",
+    "VaultReadOnlyError",
 ]

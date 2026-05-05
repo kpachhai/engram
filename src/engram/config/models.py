@@ -12,10 +12,11 @@ forward-compatible.
 
 from __future__ import annotations
 
+import os
 from pathlib import Path
 from typing import Literal
 
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, model_validator
 
 #: Default embedding model name pinned for Phase 1.
 DEFAULT_EMBEDDING_MODEL = "BAAI/bge-small-en-v1.5"
@@ -91,6 +92,36 @@ class LLMConfig(BaseModel):
     max_tokens: int = Field(default=1024, gt=0)
     temperature: float = Field(default=0.2, ge=0.0, le=2.0)
 
+    # Phase 3 additions ---------------------------------------------------
+    #: Wall-clock budget per LLM call; aborts mid-stream on timeout (R-M12).
+    request_timeout_seconds: float = Field(default=60.0, ge=1.0)
+    #: Pre-truncation token budget; refuses retrieval that exceeds it (R-M7).
+    max_input_tokens: int = Field(default=8000, ge=100)
+    #: Per-day cost cap tracked in ``<vault>/.indexes/llm_usage.json`` (R-M7).
+    daily_cost_cap_usd: float = Field(default=5.0, ge=0.0)
+
+
+class AggregatorConfig(BaseModel):
+    """Cross-vault aggregator tunables (Phase 3).
+
+    Composed into :class:`UserConfig` and surfaced on
+    :class:`EffectiveConfig` so each vault's resolved view carries the same
+    aggregator settings. Defaults are the recommended Phase 3 values per
+    Open Question Q3 (per-vault floor of 3 thoughts).
+    """
+
+    model_config = ConfigDict(extra="forbid")
+
+    #: Minimum thoughts each vault contributes to a cross-vault search,
+    #: regardless of similarity (R-H12 small-vault visibility floor).
+    min_per_vault_results: int = Field(default=3, ge=0)
+    #: Per-vault timeout for the aggregator subquery; slow vaults are
+    #: surfaced as ``degraded_vaults`` rather than blocking the merge.
+    aggregate_timeout_seconds: float = Field(default=5.0, gt=0.0)
+    #: Force the sequential code path even when ``mounted_vault_count <=
+    #: 10``. Used by tests; operators rarely need this.
+    force_sequential: bool = False
+
 
 class VaultMount(BaseModel):
     """One entry in the per-user ``vaults:`` list."""
@@ -110,8 +141,62 @@ class UserConfig(BaseModel):
     default_user: str | None = None
     vaults: list[VaultMount] = Field(default_factory=list)
     llm: LLMConfig = Field(default_factory=LLMConfig)
+    aggregator: AggregatorConfig = Field(default_factory=AggregatorConfig)
     log_level: str = "INFO"
     log_format: Literal["text", "json"] = "text"
+
+    @model_validator(mode="after")
+    def _check_one_primary_vault(self) -> UserConfig:
+        """Phase 3 validation gate over ``vaults``.
+
+        Empty ``vaults`` is permitted (Phase 1/2 single-vault deployments
+        synthesize a vault list at load time from the legacy single-vault
+        fields). When ``vaults`` is non-empty, exactly the multi-vault rules
+        from R-M9 / Step 2 of the Phase 3 plan apply:
+
+        * At most one entry may have ``role: primary``.
+        * Names are unique (case-sensitive; substring/prefix matches are
+          fine - the aggregator's vault filter is exact-match-only per
+          R-M1).
+        * No two ``path`` values resolve to the same on-disk directory
+          via :func:`os.path.realpath`. The registry-side check
+          (:class:`engram.multivault.registry.VaultRegistry.__init__`) is
+          the canonical enforcement point because symlinks can change
+          between config load and serve startup, but failing fast at the
+          config layer surfaces the easy mistakes early.
+        """
+        if not self.vaults:
+            return self
+        primary_count = sum(1 for v in self.vaults if v.role == "primary")
+        if primary_count > 1:
+            msg = (
+                f"At most one vault may declare role='primary'; "
+                f"found {primary_count} in vaults: "
+                f"{[v.name for v in self.vaults if v.role == 'primary']}"
+            )
+            raise ValueError(msg)
+        names = [v.name for v in self.vaults]
+        if len(names) != len(set(names)):
+            seen: set[str] = set()
+            dupes = sorted({n for n in names if (n in seen) or seen.add(n)})  # type: ignore[func-returns-value]
+            msg = f"Duplicate vault names in vaults list: {dupes}"
+            raise ValueError(msg)
+        # Realpath collision pre-check (advisory; registry re-asserts).
+        seen_paths: dict[str, str] = {}
+        for mount in self.vaults:
+            try:
+                resolved = os.path.realpath(mount.path)
+            except OSError:  # pragma: no cover - filesystem availability
+                continue
+            if resolved in seen_paths:
+                msg = (
+                    f"Vault path collision (after realpath): "
+                    f"{mount.name!r} and {seen_paths[resolved]!r} "
+                    f"both resolve to {resolved}"
+                )
+                raise ValueError(msg)
+            seen_paths[resolved] = mount.name
+        return self
 
 
 class VaultConfig(BaseModel):
@@ -145,12 +230,22 @@ class EffectiveConfig(BaseModel):
     vault_name: str
     sync: SyncConfig
     llm: LLMConfig
+    #: Cross-vault aggregator tunables; copied from
+    #: :class:`UserConfig.aggregator` so each per-vault effective config
+    #: carries the same values (Phase 3).
+    aggregator: AggregatorConfig = Field(default_factory=AggregatorConfig)
+    #: Vaults discovered on this machine. Phase 1/2 set this to a single
+    #: entry derived from the legacy single-vault fields; Phase 3
+    #: populates it from :attr:`UserConfig.vaults` so downstream code can
+    #: iterate without re-parsing the user config (R-M2).
+    vaults: list[VaultMount] = Field(default_factory=list)
     log_level: str = "INFO"
     log_format: Literal["text", "json"] = "text"
 
 
 __all__ = [
     "DEFAULT_EMBEDDING_MODEL",
+    "AggregatorConfig",
     "EffectiveConfig",
     "LLMConfig",
     "SyncConfig",

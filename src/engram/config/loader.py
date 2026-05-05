@@ -37,6 +37,7 @@ from pydantic_settings import BaseSettings, SettingsConfigDict
 from ruamel.yaml import YAML
 
 from engram.config.models import (
+    AggregatorConfig,
     EffectiveConfig,
     LLMConfig,
     SyncConfig,
@@ -294,6 +295,9 @@ def load_config(
     if not index_dir.is_absolute():
         index_dir = (vault_path / index_dir).resolve()
 
+    aggregator = user_config.aggregator if user_config is not None else AggregatorConfig()
+    effective_vaults = list(user_config.vaults) if user_config is not None else []
+
     try:
         return EffectiveConfig(
             default_user=default_user,
@@ -304,6 +308,8 @@ def load_config(
             vault_name=vault_config.vault_name,
             sync=vault_config.sync,
             llm=effective_llm,
+            aggregator=aggregator,
+            vaults=effective_vaults,
             log_level=log_level,
             log_format=log_format,
         )

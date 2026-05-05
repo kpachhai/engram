@@ -5,14 +5,22 @@ from __future__ import annotations
 import pytest
 
 from engram.errors import (
+    BlockThoughtLLMDisallowed,
+    BundleCycleDetected,
+    BundleImportError,
     ConfigError,
+    DuplicateVaultName,
     EmbeddingError,
+    EmbeddingModelMismatch,
     EngramError,
     IndexError,
+    LLMProviderError,
     LockError,
     MigrationError,
     SyncError,
     VaultError,
+    VaultPathCollision,
+    VaultReadOnlyError,
 )
 
 ALL_ERRORS = [
@@ -24,7 +32,51 @@ ALL_ERRORS = [
     IndexError,
     EmbeddingError,
     MigrationError,
+    # Phase 3 additions
+    VaultReadOnlyError,
+    VaultPathCollision,
+    DuplicateVaultName,
+    EmbeddingModelMismatch,
+    BundleImportError,
+    BundleCycleDetected,
+    BlockThoughtLLMDisallowed,
+    LLMProviderError,
 ]
+
+
+PHASE_3_EXPECTED_CODES: dict[type[EngramError], str] = {
+    VaultReadOnlyError: "vault_read_only",
+    VaultPathCollision: "vault_path_collision",
+    DuplicateVaultName: "duplicate_vault_name",
+    EmbeddingModelMismatch: "embedding_model_mismatch",
+    BundleImportError: "bundle_import_error",
+    BundleCycleDetected: "bundle_cycle_detected",
+    BlockThoughtLLMDisallowed: "block_thought_llm_disallowed",
+    LLMProviderError: "llm_provider_error",
+}
+
+
+@pytest.mark.parametrize(("cls", "expected"), list(PHASE_3_EXPECTED_CODES.items()))
+def test_phase_3_error_code_constants(cls: type[EngramError], expected: str) -> None:
+    assert cls.error_code == expected
+
+
+def test_phase_3_inheritance_relationships() -> None:
+    """Phase 3 errors thread under correct base classes."""
+    assert issubclass(VaultReadOnlyError, VaultError)
+    assert issubclass(VaultPathCollision, VaultError)
+    assert issubclass(DuplicateVaultName, VaultError)
+    assert issubclass(EmbeddingModelMismatch, EmbeddingError)
+    assert issubclass(BundleCycleDetected, BundleImportError)
+    # BlockThoughtLLMDisallowed and LLMProviderError sit directly under EngramError.
+    assert issubclass(BlockThoughtLLMDisallowed, EngramError)
+    assert issubclass(LLMProviderError, EngramError)
+
+
+def test_bundle_cycle_caught_by_bundle_import_error() -> None:
+    """Cycle detection is a refinement of the import-error category."""
+    with pytest.raises(BundleImportError):
+        raise BundleCycleDetected("cycle: abc-123")
 
 
 @pytest.mark.parametrize("cls", ALL_ERRORS)
