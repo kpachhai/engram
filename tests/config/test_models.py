@@ -39,7 +39,7 @@ def test_sync_config_negative_timeout_rejected():
 
 
 def test_llm_config_default_is_phase1_safe():
-    """Phase 1 ignores LLM at runtime; defaults must construct without remote calls."""
+    """LLM defaults must construct without remote calls."""
     llm = LLMConfig()
     assert llm.provider is None
     assert llm.model is None

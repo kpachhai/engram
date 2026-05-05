@@ -1,4 +1,4 @@
-"""Bundle importer tests (Phase 3 Step 10 verifier)."""
+"""Bundle importer tests."""
 
 from __future__ import annotations
 

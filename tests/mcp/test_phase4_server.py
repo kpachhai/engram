@@ -2,14 +2,13 @@
 
 Verifies that ``build_multivault_server``'s ``capture_thought`` tool
 consults the routing dispatcher + capture gate before delegating to
-storage. Covers the four scenarios from the Phase 4 plan Step 16
-verifier:
+storage. Covers four scenarios:
 
 a. Explicit ``meta.vault`` arg routes to the named vault.
 b. ``auto_route=True`` + matching rule routes to the rule's target.
 c. ``auto_route=False`` + matching rule lands in primary.
 d. ``portability=block`` + explicit team-vault arg falls through to
-   primary (pinned invariant 1).
+   primary.
 """
 
 from __future__ import annotations

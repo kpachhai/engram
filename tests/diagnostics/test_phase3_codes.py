@@ -1,8 +1,8 @@
-"""Phase 3 doctor check-code constants.
+"""Multi-vault doctor check-code constants.
 
-Per Phase 3 plan Step 3 verifier - asserts the 8 new codes exist, are
-unique non-empty snake_case strings, and that ``ALL_PHASE_3_CHECK_CODES``
-is a strict superset of ``ALL_PHASE_2_CHECK_CODES``.
+Asserts the 8 multi-vault codes exist, are unique non-empty snake_case
+strings, and that ``ALL_PHASE_3_CHECK_CODES`` is a strict superset of
+``ALL_PHASE_2_CHECK_CODES``.
 """
 
 from __future__ import annotations
@@ -59,13 +59,13 @@ def test_phase_3_superset_includes_all_phase_2() -> None:
 
 
 def test_phase_3_superset_count() -> None:
-    """14 Phase 2 + 8 Phase 3 = 22 codes total, all unique."""
+    """14 sync codes + 8 multi-vault codes = 22 total, all unique."""
     assert len(ALL_PHASE_3_CHECK_CODES) == len(ALL_PHASE_2_CHECK_CODES) + 8
     assert len(set(ALL_PHASE_3_CHECK_CODES)) == len(ALL_PHASE_3_CHECK_CODES)
 
 
 def test_phase_3_codes_appear_in_canonical_superset_in_order() -> None:
-    """Phase 2 codes come first in canonical superset; Phase 3 codes follow."""
+    """Sync codes come first in canonical superset; multi-vault codes follow."""
     head = ALL_PHASE_3_CHECK_CODES[: len(ALL_PHASE_2_CHECK_CODES)]
     assert tuple(head) == tuple(ALL_PHASE_2_CHECK_CODES)
     tail = ALL_PHASE_3_CHECK_CODES[len(ALL_PHASE_2_CHECK_CODES) :]

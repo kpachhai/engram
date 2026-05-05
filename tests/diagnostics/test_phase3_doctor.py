@@ -1,4 +1,4 @@
-"""Phase 3 doctor extension tests (Step 18 verifier)."""
+"""Multi-vault doctor extension tests."""
 
 from __future__ import annotations
 

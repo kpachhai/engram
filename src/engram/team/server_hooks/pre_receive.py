@@ -422,7 +422,7 @@ def run_hook(
 
         changed = _changed_files(upd.old_sha, upd.new_sha, cwd=repo_path)
 
-        # `.indexes/` path refusal (P4-H1).
+        # `.indexes/` path refusal.
         for path in changed:
             if _is_indexes_path(path):
                 all_violations.append(

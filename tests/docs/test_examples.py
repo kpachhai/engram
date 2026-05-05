@@ -1,6 +1,6 @@
-"""Phase 3 doc-example sanity tests (Step 22 verifier).
+"""Multi-vault doc-example sanity tests.
 
-Extracts fenced ``bash`` examples from the Phase 3 docs and asserts:
+Extracts fenced ``bash`` examples from the multi-vault docs and asserts:
 
 * Every ``engram <subcommand>`` referenced in an example actually
   exists as a registered subcommand in the typer app.

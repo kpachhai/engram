@@ -1,1 +1,1 @@
-"""Phase 3 multi-vault tests (registry + aggregator + portability gate)."""
+"""Multi-vault tests (registry + aggregator + portability gate)."""

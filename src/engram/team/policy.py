@@ -31,11 +31,11 @@ class TeamVaultPolicy(BaseModel):
     """Per-team-vault policy: allowlists + sensitive acceptance + stewards.
 
     Loaded from ``<vault>/.engram/team-policy.yaml`` at startup AND every
-    ``engram doctor`` run (Q3 default). Steward-only mutation is enforced
-    by the server-side ``pre-receive`` hook (P4-M5/M6).
+    ``engram doctor`` run. Steward-only mutation is enforced by the
+    server-side ``pre-receive`` hook.
 
-    Per pinned invariant 1: ``portability=block`` is ALWAYS refused at the
-    capture gate regardless of any allowlist.
+    ``portability=block`` is ALWAYS refused at the capture gate regardless
+    of any allowlist.
     """
 
     model_config = ConfigDict(extra="forbid")
@@ -63,7 +63,7 @@ class TeamVaultPolicy(BaseModel):
     stewards: list[str] = Field(default_factory=list)
     #: Minimum engram version for clients that interact with this vault.
     #: Older clients see "upgrade to engram >= X" rather than silent push
-    #: refusal (P4-M7).
+    #: refusal.
     min_engram_version: str = "0.4.0"
 
     def refuse_or_pass(self, thought: Thought) -> None:
@@ -81,8 +81,8 @@ class TeamVaultPolicy(BaseModel):
                 ``accept_sensitive`` is False.
         """
         # Defense-in-depth: block portability never lands in a team-write
-        # vault. Routing dispatcher catches this upstream (Step 8); the
-        # gate also asserts in case of bypass.
+        # vault. Routing dispatcher catches this upstream; the gate also
+        # asserts in case of bypass.
         if thought.portability == "block":
             msg = f"thought {thought.id} has portability=block; refused at team-vault gate"
             raise BlockThoughtInTeamVaultDisallowed(msg)

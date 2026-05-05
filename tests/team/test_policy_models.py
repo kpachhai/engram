@@ -1,6 +1,6 @@
 """Tests for engram.team.policy + engram.team.members + RoutingRule.
 
-Covers the Phase 4 Layer A models: TeamVaultPolicy, MembersList, RoutingRule.
+Covers the team-vault models: TeamVaultPolicy, MembersList, RoutingRule.
 """
 
 from __future__ import annotations

@@ -1,9 +1,8 @@
-"""Step 19: end-to-end multi-machine convergence integration tests.
+"""End-to-end multi-machine convergence integration tests.
 
 Each test is hermetic - own ``tmp_path``, no network. Wraps two
 :class:`VaultStorage` instances against a shared ``git init --bare``
-remote and asserts the convergence properties from PHASE_2_PLAN.md
-§"Phase 2 Exit Criteria".
+remote and asserts the convergence properties.
 """
 
 from __future__ import annotations
@@ -96,7 +95,7 @@ def test_concurrent_capture_no_conflict(tmp_path: Path, linked_clones: tuple[Pat
 def test_force_push_elsewhere_triggers_degraded_mode(
     tmp_path: Path, linked_clones: tuple[Path, Path]
 ) -> None:
-    """An external force-push refuses auto-rebase (R-M9 reflog gate)."""
+    """An external force-push refuses auto-rebase (reflog gate)."""
     a, b = linked_clones
     coord_b = _make_coord(b, push_retry_count=0)
 
@@ -122,7 +121,7 @@ def test_force_push_elsewhere_triggers_degraded_mode(
     cp_force = run_git(["push", "--force", "origin", "main"], c)
     assert cp_force.returncode == 0
 
-    # B has a local-only commit and tries to push - should hit R-M9 gate.
+    # B has a local-only commit and tries to push - should hit the reflog gate.
     new_path = b / "thoughts" / "local.md"
     new_path.parent.mkdir(parents=True, exist_ok=True)
     new_path.write_text("local")

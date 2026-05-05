@@ -1,12 +1,12 @@
-"""Phase 3 cross-vault aggregator tests (Step 5 verifier).
+"""Cross-vault aggregator tests.
 
-Covers the test scenarios enumerated in ``docs/PHASE_3_PLAN.md`` Step 5:
+Covers:
 
 * ATTACH path under threshold (<=10 vaults).
 * SEQUENTIAL path at 11 vaults (forced by ``force_sequential=True`` for
   speed; the natural threshold is also exercised in test_phase3_exit_criteria).
 * Block thoughts NEVER appear in cross-vault results regardless of
-  ``include_sensitive`` flag (the pinned portability invariant).
+  ``include_sensitive`` flag (the portability invariant).
 * Per-vault floor preserves small vaults' top-3.
 * Per-vault timeout produces a ``degraded_vaults`` entry.
 * Vault attribution preserved on every result row.

@@ -1,4 +1,4 @@
-"""Stability tests for the 14 Phase 2 doctor check codes."""
+"""Stability tests for the 14 sync doctor check codes."""
 
 from __future__ import annotations
 
@@ -17,7 +17,7 @@ def test_all_codes_are_unique():
 
 
 def test_expected_count_is_fourteen():
-    """Exactly 14 codes per the Phase 2 plan Step 3 spec."""
+    """Exactly 14 sync check codes."""
     assert len(check_codes.ALL_PHASE_2_CHECK_CODES) == 14
 
 

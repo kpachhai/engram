@@ -1,8 +1,7 @@
-"""Phase 3 exit-criteria integration suite (Step 20 verifier).
+"""Multi-vault exit-criteria integration suite.
 
 Each test corresponds to one of the 18 exit-criterion scenarios
-(a-r) enumerated in ``docs/PHASE_3_PLAN.md`` Step 20. The tests
-overlap with the unit tests in Layers B-F deliberately - this file
+(a-r). The tests overlap with the unit tests deliberately - this file
 is the single Phase-3-code-complete evidence surface that the
 ``docs/PHASE_3_CODE_COMPLETE.md`` exit-criteria table cross-references.
 
@@ -489,7 +488,7 @@ def test_p_drain_on_shutdown_per_vault(tmp_path: Path) -> None:
 async def test_q_adversarial_prompt_injection_does_not_leak(tmp_path: Path) -> None:
     """Crafted injection in friend body + opt-in to friend vaults; mock LLM
     returns guessed UUIDs for non-retrieved thoughts; citation post-validator
-    strips them all (R-H6 / B-4 fix).
+    strips them all.
     """
     primary = _vault_storage(tmp_path, "primary")
     friend = _vault_storage(tmp_path, "alice")

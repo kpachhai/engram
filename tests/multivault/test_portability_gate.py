@@ -1,6 +1,4 @@
-"""Phase 3 portability gate tests (Step 6 verifier).
-
-Per ``docs/PHASE_3_PLAN.md`` Step 6:
+"""Portability gate tests.
 
 * ``strip_block_thoughts`` removes block rows from a list (read paths).
 * ``assert_no_block_in_results`` raises BlockThoughtLLMDisallowed when a

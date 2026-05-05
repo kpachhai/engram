@@ -32,7 +32,7 @@ ALL_ERRORS = [
     IndexError,
     EmbeddingError,
     MigrationError,
-    # Phase 3 additions
+    # Multi-vault errors
     VaultReadOnlyError,
     VaultPathCollision,
     DuplicateVaultName,
@@ -62,7 +62,7 @@ def test_phase_3_error_code_constants(cls: type[EngramError], expected: str) -> 
 
 
 def test_phase_3_inheritance_relationships() -> None:
-    """Phase 3 errors thread under correct base classes."""
+    """Multi-vault errors thread under correct base classes."""
     assert issubclass(VaultReadOnlyError, VaultError)
     assert issubclass(VaultPathCollision, VaultError)
     assert issubclass(DuplicateVaultName, VaultError)

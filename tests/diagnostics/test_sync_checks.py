@@ -60,7 +60,7 @@ def _config_for(repo: Path) -> EffectiveConfig:
 
 
 def test_non_git_vault_skips_all_sync_checks(tmp_path: Path) -> None:
-    """A vault without .git emits OK rows for every Phase 2 code."""
+    """A vault without .git emits OK rows for every sync code."""
     thoughts = tmp_path / "thoughts"
     thoughts.mkdir()
     indexes = tmp_path / ".indexes"
@@ -262,9 +262,9 @@ def test_full_doctor_includes_sync_section(tmp_path: Path) -> None:
 
     report = run_diagnostics(config, embedder_factory=lambda c: _StubEmb())
     names = {c.name for c in report.checks}
-    # Phase 1 checks present.
+    # Single-vault checks present.
     assert "thoughts_dir" in names
-    # Phase 2 checks present.
+    # Sync checks present.
     assert check_codes.CONFLICT_MARKERS_PRESENT in names
     assert check_codes.GITIGNORE_INDEXES in names
 

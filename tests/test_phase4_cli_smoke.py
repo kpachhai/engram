@@ -1,15 +1,15 @@
 """Hermetic CLI smoke against the installed `engram team-vault` binary.
 
-Per the project's "test the binary, not just the suite" Phase Exit
-discipline. Spawns the actual `engram` binary via subprocess against a
-``tmp_path`` workspace and asserts observable state (filesystem layout
-+ stderr classification) for each Phase 4 subcommand.
+Per the project's "test the binary, not just the suite" discipline.
+Spawns the actual `engram` binary via subprocess against a ``tmp_path``
+workspace and asserts observable state (filesystem layout + stderr
+classification) for each team-vault subcommand.
 
 The smoke deliberately uses subprocess + the real binary so wiring
-bugs (Typer registration, argument plumbing, exit codes) surface
-here that the handler-level unit tests miss. Phase 3 surfaced 3
-wiring bugs at this gate that the unit tests didn't catch; Phase 4's
-exit gate prevents the same recurrence.
+bugs (Typer registration, argument plumbing, exit codes) surface here
+that the handler-level unit tests miss; the historical pattern is
+that 3 such wiring bugs slipped through unit tests during earlier
+work, and this gate prevents the same recurrence.
 """
 
 from __future__ import annotations
@@ -64,7 +64,7 @@ def test_engram_version() -> None:
 
 
 def test_team_vault_help() -> None:
-    """`engram team-vault --help` advertises the Phase 4 subcommands."""
+    """`engram team-vault --help` advertises the team-vault subcommands."""
     result = _run(["team-vault", "--help"])
     assert "setup" in result.stdout
     assert "enroll-key" in result.stdout
@@ -151,7 +151,7 @@ def test_engram_doctor_runs(tmp_path: Path) -> None:
 
 
 def test_engram_init_writes_canonical_files(tmp_path: Path) -> None:
-    """Phase 1 init still works end-to-end (regression smoke)."""
+    """init still works end-to-end (regression smoke)."""
     vault_path = tmp_path / "personal"
     _run(["init", str(vault_path)])
     assert (vault_path / "engram.config.yaml").exists()

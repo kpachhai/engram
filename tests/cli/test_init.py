@@ -25,7 +25,7 @@ def test_init_creates_skeleton(tmp_path: Path) -> None:
 
 
 def test_init_gitignore_includes_phase_2_required_patterns(tmp_path: Path) -> None:
-    """Regression: the ``engram doctor`` ``gitignore_indexes`` Phase 2 probe
+    """Regression: the ``engram doctor`` ``gitignore_indexes`` probe
     requires both ``.indexes/`` AND ``*.sqlite`` substrings. The init
     template MUST include them so a freshly initialized vault doctor-passes."""
     target = tmp_path / "vault"

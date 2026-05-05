@@ -1,4 +1,4 @@
-"""Provider adapter HTTP-shape tests (Phase 3 Step 12 verifier).
+"""Provider adapter HTTP-shape tests.
 
 These tests use ``httpx.MockTransport`` (built into httpx; no extra
 dependency) to record the requests each adapter would make and to

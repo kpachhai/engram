@@ -1,4 +1,4 @@
-"""Multi-vault MCP server wiring tests (Phase 3 Step 16 verifier)."""
+"""Multi-vault MCP server wiring tests."""
 
 from __future__ import annotations
 

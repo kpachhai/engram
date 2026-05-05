@@ -1,4 +1,4 @@
-"""Tests for Phase 4 Step 4 - Thought.captured_by + SQLite migration + frontmatter round-trip."""
+"""Tests for Thought.captured_by + SQLite migration + frontmatter round-trip."""
 
 from __future__ import annotations
 
@@ -93,7 +93,7 @@ def test_frontmatter_captured_by_round_trip() -> None:
 
 
 def test_markdown_omits_captured_by_when_none() -> None:
-    """Personal-vault thoughts keep the Phase 1+2+3 frontmatter shape."""
+    """Personal-vault thoughts keep the canonical frontmatter shape."""
     thought = _make_thought(captured_by=None)
     yaml_text = _serialize_frontmatter(thought)
     assert "captured_by" not in yaml_text
@@ -120,7 +120,7 @@ def test_write_then_read_round_trips_captured_by(tmp_path: Path) -> None:
 
 
 def test_phase3_thought_without_captured_by_still_loads(tmp_path: Path) -> None:
-    """Phase 1+2+3 thoughts (no captured_by frontmatter) still parse."""
+    """Personal thoughts (no captured_by frontmatter) still parse."""
     thought = _make_thought(captured_by=None)
     written = write_thought(thought, base_dir=tmp_path)
     read_result = read_thought(written)
@@ -223,7 +223,7 @@ def test_phase4_insert_thought_with_captured_by(tmp_path: Path) -> None:
 
 
 def test_phase4_insert_thought_default_null_captured_by(tmp_path: Path) -> None:
-    """Phase 1+2+3 insert with no captured_by produces NULL row."""
+    """Insert with no captured_by produces NULL row."""
     conn = open_connection(tmp_path / "test.db", embedding_dim=384)
     try:
         thought_id = uuid4()

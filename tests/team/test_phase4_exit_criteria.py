@@ -1,13 +1,13 @@
-"""Phase 4 exit-criterion integration suite (Step 21).
+"""Team-vault exit-criterion integration suite.
 
-Hermetic + in-process: each test wires together the real Phase 4
+Hermetic + in-process: each test wires together the real team-vault
 components (routing dispatcher + capture gate + push queue + policy +
 members + GPG identity wrapper) without spinning up a real git remote.
-The 18 scenarios from the Phase 4 plan are covered.
+The 18 scenarios are covered.
 
 Tests deliberately use mocks for git plumbing + GPG subprocess so the
 suite stays fast and OS-independent. The end-to-end binary smoke that
-exercises real subprocess + real git fixtures lives in the Phase exit
+exercises real subprocess + real git fixtures lives in the exit
 gate (deferred to operational dogfood).
 """
 
@@ -323,11 +323,11 @@ def test_move_thought_metadata_contract_documented() -> None:
     """
 
 
-# === Scenario O: Phase 3 client unchanged ===
+# === Scenario O: pre-team MCP client unchanged ===
 
 
 def test_phase_3_client_unchanged() -> None:
-    """A Phase 3 client without vault arg + auto_route=False lands in primary."""
+    """An MCP client without vault arg + auto_route=False lands in primary."""
     decision = resolve_target_vault(
         thought=_thought(),
         explicit_vault=None,
@@ -442,7 +442,7 @@ def test_pinned_invariant_4_two_layer_enforcement_block() -> None:
     # Server-side: covered in test_pre_receive_hook.py
 
 
-# === Read-only refusal (Phase 3 carry-forward) ===
+# === Read-only refusal ===
 
 
 def test_read_only_role_refuses_capture() -> None:
@@ -460,7 +460,7 @@ def test_read_only_role_refuses_capture() -> None:
 
 
 def test_push_queue_refuses_capture_on_disk_full(tmp_path: Path) -> None:
-    """Per P4-H4: disk-full at enqueue propagates as capture refusal."""
+    """Disk-full at enqueue propagates as capture refusal."""
     from unittest.mock import patch
 
     queue = PersistentPushQueue(vault_path=tmp_path)

@@ -1,4 +1,4 @@
-"""Reflog gate (R-M9) - force-push elsewhere does not auto-rebase."""
+"""Reflog gate - force-push elsewhere does not auto-rebase."""
 
 from __future__ import annotations
 

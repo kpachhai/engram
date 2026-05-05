@@ -1,7 +1,6 @@
-"""Phase 3 multi-vault test harness fixtures.
+"""Multi-vault test harness fixtures.
 
-Per Phase 3 plan Step 19 (verifier subsection of Layer G), this conftest
-defines the integration scaffolding multi-vault tests reuse:
+This conftest defines the integration scaffolding multi-vault tests reuse:
 
 * :func:`make_vault_storage` - spin a one-off
   :class:`engram.storage.facade.VaultStorage` under a sub-path of the

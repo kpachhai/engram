@@ -1,1 +1,1 @@
-"""Phase 3 bundle export/import tests."""
+"""Bundle export/import tests."""

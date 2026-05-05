@@ -1,6 +1,4 @@
-"""Phase 3 cross-vault embedding compatibility tests (Step 7 verifier).
-
-Per ``docs/PHASE_3_PLAN.md`` Step 7:
+"""Cross-vault embedding compatibility tests.
 
 * Two vaults with the same model name + dim: OK.
 * Two vaults with different models or different dims: refuses with

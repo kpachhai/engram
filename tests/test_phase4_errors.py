@@ -1,4 +1,4 @@
-"""Tests for engram.errors Phase 4 additions - team-vault + routing + push queue."""
+"""Tests for engram.errors team-vault additions - team-vault + routing + push queue."""
 
 from __future__ import annotations
 
@@ -44,7 +44,7 @@ def test_phase_4_error_code_constants(cls: type[EngramError], expected: str) -> 
 
 
 def test_phase_4_inheritance_relationships() -> None:
-    """Phase 4 errors thread under correct base classes."""
+    """Team-vault errors thread under correct base classes."""
     assert issubclass(TeamMemberNotEnrolled, VaultError)
     assert issubclass(TeamPolicyViolation, VaultError)
     assert issubclass(RoutingRuleAmbiguous, ConfigError)

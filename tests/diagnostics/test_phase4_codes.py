@@ -1,4 +1,4 @@
-"""Tests for engram.diagnostics.check_codes Phase 4 additions (Step 18 verifier)."""
+"""Tests for engram.diagnostics.check_codes team-vault additions."""
 
 from __future__ import annotations
 
@@ -35,7 +35,7 @@ PHASE_4_NEW_CODES = (
 def test_phase_4_extends_phase_3_superset() -> None:
     """ALL_PHASE_4_CHECK_CODES is a strict superset of ALL_PHASE_3_CHECK_CODES."""
     assert set(ALL_PHASE_3_CHECK_CODES).issubset(set(ALL_PHASE_4_CHECK_CODES))
-    # All Phase 2 codes also propagate.
+    # All sync codes also propagate.
     assert set(ALL_PHASE_2_CHECK_CODES).issubset(set(ALL_PHASE_4_CHECK_CODES))
 
 

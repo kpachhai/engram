@@ -1,7 +1,7 @@
-"""Tests for Phase 4 config role widening + vault_id derivation.
+"""Tests for the team-write role + vault_id derivation.
 
-Covers Step 1 of the Phase 4 plan: VaultMount.role widened to ``team-write``,
-``vault_id`` derived from ``remote_url``, ``team-write`` without remote_url
+Covers: ``VaultMount.role`` widened to ``team-write``, ``vault_id``
+derived from ``remote_url``, and ``team-write`` without ``remote_url``
 refused at config-load.
 """
 
@@ -57,7 +57,7 @@ def test_vault_mount_team_write_without_remote_url_refuses() -> None:
 
 
 def test_vault_mount_primary_does_not_require_remote_url() -> None:
-    """primary role keeps Phase 1+2+3 semantics."""
+    """primary role keeps single-vault semantics."""
     mount = VaultMount(
         name="personal",
         path=Path("/tmp/personal"),
@@ -68,7 +68,7 @@ def test_vault_mount_primary_does_not_require_remote_url() -> None:
 
 
 def test_vault_mount_primary_with_remote_derives_vault_id() -> None:
-    """When remote_url is supplied (e.g. for Phase 2 sync), vault_id derives."""
+    """When remote_url is supplied (e.g. for sync), vault_id derives."""
     mount = VaultMount(
         name="personal",
         path=Path("/tmp/personal"),
@@ -79,7 +79,7 @@ def test_vault_mount_primary_with_remote_derives_vault_id() -> None:
 
 
 def test_user_config_one_primary_two_team_write_validates() -> None:
-    """The Phase 4 happy case: one primary + N team-write."""
+    """Happy case: one primary + N team-write."""
     cfg = UserConfig(
         vaults=[
             VaultMount(name="personal", path=Path("/tmp/p"), role="primary"),

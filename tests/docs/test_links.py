@@ -1,6 +1,6 @@
-"""Doc link validity test (Phase 3 Step 21 verifier).
+"""Doc link validity test.
 
-Walks the Phase 3 docs and asserts every relative markdown link
+Walks the multi-vault docs and asserts every relative markdown link
 target resolves to a file on disk.
 """
 
@@ -14,7 +14,7 @@ import pytest
 REPO_ROOT = Path(__file__).resolve().parents[2]
 DOCS_DIR = REPO_ROOT / "docs"
 
-#: Phase 3 docs created in Layer H.
+#: Multi-vault docs.
 _PHASE_3_DOCS = (
     DOCS_DIR / "adr" / "006-multi-vault-and-llm.md",
     DOCS_DIR / "MULTI_VAULT_SETUP.md",

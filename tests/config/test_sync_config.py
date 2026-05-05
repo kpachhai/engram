@@ -1,4 +1,4 @@
-"""Phase 2 SyncConfig field tests."""
+"""SyncConfig field tests."""
 
 from __future__ import annotations
 

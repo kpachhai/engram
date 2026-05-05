@@ -1,4 +1,4 @@
-"""Provider resolver tests (Phase 3 Step 12 verifier)."""
+"""Provider resolver tests."""
 
 from __future__ import annotations
 

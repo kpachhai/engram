@@ -1,4 +1,4 @@
-"""Phase 3 multi-vault serve startup helpers (Step 17 verifier)."""
+"""Multi-vault serve startup helper tests."""
 
 from __future__ import annotations
 

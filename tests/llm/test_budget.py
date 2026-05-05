@@ -1,4 +1,4 @@
-"""LLMBudget tests (Phase 3 Step 13 verifier)."""
+"""LLMBudget tests."""
 
 from __future__ import annotations
 

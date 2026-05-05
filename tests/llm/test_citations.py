@@ -1,4 +1,4 @@
-"""Citation post-validator tests (Phase 3 Step 15 verifier)."""
+"""Citation post-validator tests."""
 
 from __future__ import annotations
 

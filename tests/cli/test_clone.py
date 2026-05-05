@@ -45,7 +45,7 @@ def test_clone_vault_succeeds(tmp_path: Path) -> None:
 def test_clone_vault_security_property_post_checkout_hook_does_not_fire(
     tmp_path: Path,
 ) -> None:
-    """R-H1: even with hooks pre-staged in .git, ``clone-vault`` deletes them
+    """Even with hooks pre-staged in .git, ``clone-vault`` deletes them
     BEFORE checkout so the malicious hook never runs."""
     source = _seed_remote(tmp_path)
 
@@ -90,7 +90,7 @@ def test_clone_vault_creates_indexes_and_thoughts_dirs(tmp_path: Path) -> None:
     """Regression: a freshly cloned vault must include the .indexes/ and
     thoughts/ directories that ``engram doctor`` requires to pass.
 
-    Surfaced by the smoke test in MULTI_MACHINE_SETUP.md - early Phase 2
+    Surfaced by the smoke test in MULTI_MACHINE_SETUP.md - early
     builds left the operator to create these by hand."""
     source = _seed_remote(tmp_path)
     target = tmp_path / "clone"

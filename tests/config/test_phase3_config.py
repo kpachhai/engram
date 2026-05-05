@@ -1,9 +1,8 @@
-"""Phase 3 config-model tests.
+"""Multi-vault config-model tests.
 
 Covers: new ``LLMConfig`` fields, the ``AggregatorConfig`` model, the
 ``UserConfig._check_one_primary_vault`` validator, and ``EffectiveConfig``
-exposure of the new aggregator + vaults fields. Per the Phase 3 plan
-Step 2 verifier (``tests/config/test_phase3_config.py``).
+exposure of the new aggregator + vaults fields.
 """
 
 from __future__ import annotations
@@ -102,7 +101,7 @@ def test_aggregator_config_extra_forbid() -> None:
 
 
 def test_user_config_empty_vaults_allowed() -> None:
-    """Empty vaults: still permitted (Phase 1/2 single-vault parity)."""
+    """Empty vaults: still permitted (single-vault parity)."""
     cfg = UserConfig()
     assert cfg.vaults == []
 

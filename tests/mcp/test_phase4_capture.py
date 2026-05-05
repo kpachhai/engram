@@ -1,8 +1,9 @@
-"""Tests for Phase 4 Step 10 - CaptureInputMetadata.vault field.
+"""Tests for ``CaptureInputMetadata.vault``.
 
-Step 10 verifier: (a) old metadata without vault field still validates,
-(b) explicit vault arg routes through, (c) explicit vault to a non-mounted
-name refuses with RoutingTargetNotMounted (covered in routing tests).
+(a) old metadata without vault field still validates,
+(b) explicit vault arg routes through, and
+(c) explicit vault to a non-mounted name refuses with
+    RoutingTargetNotMounted (covered in routing tests).
 """
 
 from __future__ import annotations

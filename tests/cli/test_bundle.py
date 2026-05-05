@@ -1,4 +1,4 @@
-"""``engram export`` and ``engram import`` CLI tests (Phase 3 Step 11)."""
+"""``engram export`` and ``engram import`` CLI tests."""
 
 from __future__ import annotations
 
@@ -50,7 +50,7 @@ def test_export_default_portability_via_cli(fake_home: Path, tmp_path: Path) -> 
     )
 
     # Capture a thought into the vault directly via the storage facade
-    # (bypassing CLI capture commands which Phase 3 doesn't introduce).
+    # (bypassing CLI capture commands).
     from engram.storage.facade import VaultStorage
     from engram.storage.sqlite import set_setting
 

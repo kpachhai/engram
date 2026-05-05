@@ -1,7 +1,4 @@
-"""VaultRegistry tests (Phase 3 Step 4 verifier).
-
-Covers the test scenarios enumerated in
-``docs/PHASE_3_PLAN.md`` Step 4:
+"""VaultRegistry tests.
 
 * mount + get round-trip
 * duplicate-name refusal
@@ -197,7 +194,7 @@ def test_storages_for_filter_unknown_name_silently_dropped(tmp_path: Path) -> No
 
 
 def test_storages_for_filter_exact_match_only(tmp_path: Path) -> None:
-    """vault filter is exact-match-only (R-M1; no substring/prefix matching)."""
+    """vault filter is exact-match-only (no substring/prefix matching)."""
     personal = make_vault_storage(base=tmp_path, name="personal")
     archive = make_vault_storage(base=tmp_path, name="personal-archive")
     registry = VaultRegistry()
