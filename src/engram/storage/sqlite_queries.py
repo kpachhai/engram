@@ -99,6 +99,7 @@ def insert_thought(
     embedding: Sequence[float] | None = None,
     embedding_status: Literal["ok", "pending", "failed"] | None = None,
     embedding_error: str | None = None,
+    captured_by: str | None = None,
 ) -> None:
     """Insert a new thoughts row and optionally its embedding, in one transaction.
 
@@ -106,6 +107,10 @@ def insert_thought(
     When ``embedding`` is omitted, the status defaults to ``"pending"`` and the
     embedding row is NOT inserted; the caller can later call
     :func:`upsert_embedding` once the embedding is available.
+
+    Phase 4: ``captured_by`` is the GPG primary fingerprint of the
+    capturing user (40 hex; canonical upper-case form). NULL for personal
+    captures and Phase 1+2+3 thoughts.
     """
     if embedding is not None:
         resolved_status: Literal["ok", "pending", "failed"] = embedding_status or "ok"
@@ -117,8 +122,9 @@ def insert_thought(
             "INSERT INTO thoughts("
             "id, schema_version, prefix, portability, source, "
             "created_at, updated_at, fingerprint, file_path, vault_name, "
-            "tags, legacy_id, legacy_created_at, embedding_status, embedding_error"
-            ") VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+            "tags, legacy_id, legacy_created_at, embedding_status, embedding_error, "
+            "captured_by"
+            ") VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
             (
                 _normalize_id(thought_id),
                 schema_version,
@@ -135,6 +141,7 @@ def insert_thought(
                 _normalize_dt(legacy_created_at) if legacy_created_at else None,
                 resolved_status,
                 embedding_error,
+                captured_by,
             ),
         )
         if embedding is not None:
@@ -149,7 +156,8 @@ def get_thought_row(conn: sqlite3.Connection, thought_id: UUID | str) -> dict[st
     cursor = conn.execute(
         "SELECT id, schema_version, prefix, portability, source, "
         "created_at, updated_at, fingerprint, file_path, vault_name, "
-        "tags, legacy_id, legacy_created_at, embedding_status, embedding_error "
+        "tags, legacy_id, legacy_created_at, embedding_status, embedding_error, "
+        "captured_by "
         "FROM thoughts WHERE id = ?",
         (_normalize_id(thought_id),),
     )
@@ -160,7 +168,7 @@ def get_thought_row(conn: sqlite3.Connection, thought_id: UUID | str) -> dict[st
 
 
 def _row_to_dict(row: tuple[Any, ...]) -> dict[str, Any]:
-    return {
+    base: dict[str, Any] = {
         "id": row[0],
         "schema_version": row[1],
         "prefix": row[2],
@@ -177,6 +185,10 @@ def _row_to_dict(row: tuple[Any, ...]) -> dict[str, Any]:
         "embedding_status": row[13],
         "embedding_error": row[14],
     }
+    # Phase 4: row may be 16 cols (with captured_by) or 15 (legacy SELECT).
+    if len(row) > 15:
+        base["captured_by"] = row[15]
+    return base
 
 
 def _build_where_clause(
@@ -277,7 +289,7 @@ def list_thoughts(
     _columns = (
         "id, schema_version, prefix, portability, source, created_at, updated_at, "
         "fingerprint, file_path, vault_name, tags, legacy_id, legacy_created_at, "
-        "embedding_status, embedding_error"
+        "embedding_status, embedding_error, captured_by"
     )
     # Parameterized; where_sql + sort_sql are controlled, user values bind below.
     list_sql = f"SELECT {_columns} FROM thoughts{where_sql} {sort_sql} LIMIT ? OFFSET ?"  # noqa: S608
@@ -316,7 +328,7 @@ def search_thoughts_by_vector(
         "SELECT t.id, t.schema_version, t.prefix, t.portability, t.source, "
         "t.created_at, t.updated_at, t.fingerprint, t.file_path, t.vault_name, "
         "t.tags, t.legacy_id, t.legacy_created_at, t.embedding_status, t.embedding_error, "
-        "knn.distance "
+        "t.captured_by, knn.distance "
         "FROM (SELECT thought_id, distance FROM thought_embeddings "
         "      WHERE embedding MATCH ? AND k = ?) knn "
         "JOIN thoughts t ON t.id = knn.thought_id"
@@ -331,10 +343,10 @@ def search_thoughts_by_vector(
     rows = cursor.fetchall()
     results: list[tuple[dict[str, Any], float]] = []
     for row in rows:
-        thought_dict = _row_to_dict(row[:15])
+        thought_dict = _row_to_dict(row[:16])
         # sqlite-vec returns cosine DISTANCE in the default metric (lower is closer).
         # Convert to similarity in [0, 1] via 1 - distance (clamped).
-        distance = float(row[15])
+        distance = float(row[16])
         similarity = max(0.0, min(1.0, 1.0 - distance))
         results.append((thought_dict, similarity))
     return results, total_found
@@ -473,7 +485,7 @@ def list_thoughts_with_status(
     cursor = conn.execute(
         "SELECT id, schema_version, prefix, portability, source, created_at, updated_at, "
         "fingerprint, file_path, vault_name, tags, legacy_id, legacy_created_at, "
-        "embedding_status, embedding_error FROM thoughts WHERE embedding_status = ?",
+        "embedding_status, embedding_error, captured_by FROM thoughts WHERE embedding_status = ?",
         (status,),
     )
     return [_row_to_dict(row) for row in cursor.fetchall()]

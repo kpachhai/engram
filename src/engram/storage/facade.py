@@ -205,6 +205,7 @@ class VaultStorage:
         legacy_created_at: datetime | None = None,
         thought_id: UUID | None = None,
         created_at: datetime | None = None,
+        captured_by: str | None = None,
     ) -> Thought:
         """Capture a thought: write markdown SoT, then insert SQLite row.
 
@@ -263,6 +264,7 @@ class VaultStorage:
                 "tags": list(tags) if tags else [],
                 "vault": vault or self.vault_name,
                 "legacy_id": legacy_id,
+                "captured_by": captured_by,
                 "content": content,
                 "file_path": absolute_path,
             }
@@ -289,6 +291,7 @@ class VaultStorage:
                 legacy_created_at=legacy_created_at,
                 schema_version=thought.schema_version,
                 embedding=embedding,
+                captured_by=thought.captured_by,
             )
         except sqlite3.Error:
             # Markdown is on disk (SoT); SQLite is out of sync. Doctor will reconcile.
@@ -546,6 +549,7 @@ class VaultStorage:
                 "tags": row["tags"],
                 "vault": row["vault_name"],
                 "legacy_id": row["legacy_id"],
+                "captured_by": row.get("captured_by"),
                 "content": body,
                 "file_path": abs_path,
             }

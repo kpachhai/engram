@@ -40,6 +40,10 @@ class Thought(BaseModel):
     tags: list[str] = Field(default_factory=list)
     vault: str = "default"
     legacy_id: str | None = None
+    #: Phase 4: GPG primary-key fingerprint (40 hex; canonical form) of the
+    #: capturing user when the thought lands in a team-write vault. None for
+    #: personal-vault captures (Phase 1+2+3 thoughts; backwards compatible).
+    captured_by: str | None = None
     content: str
     file_path: Path
 
