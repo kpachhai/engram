@@ -81,10 +81,26 @@ class BundleImportResult:
 class BundleImporter:
     """Stage-then-merge bundle importer for a target VaultStorage."""
 
-    def __init__(self, *, target: VaultStorage, allow_read_only: bool = False) -> None:
-        """Bind importer to ``target``; refuse a read-only target unless allowed."""
+    def __init__(
+        self,
+        *,
+        target: VaultStorage,
+        allow_read_only: bool = False,
+        embedder: object | None = None,
+    ) -> None:
+        """Bind importer to ``target``; refuse a read-only target unless allowed.
+
+        ``embedder`` is an optional :class:`engram.embedding.protocol.EmbeddingProvider`
+        whose ``embed(text) -> list[float]`` produces vectors for the
+        imported thoughts. When supplied, the importer generates an
+        embedding per imported thought during the merge so cross-vault
+        search via the aggregator can immediately find them. When ``None``,
+        rows are inserted with ``embedding_status='pending'`` and the
+        operator must run ``engram doctor --repair`` to fill them in.
+        """
         self.target = target
         self.allow_read_only = allow_read_only
+        self.embedder = embedder
 
     def import_into(self, bundle_path: Path | str) -> BundleImportResult:
         """Import ``bundle_path`` into the target vault.
@@ -399,6 +415,24 @@ class BundleImporter:
                 # cycle-detection in subsequent imports walks the chain.
                 from engram.storage.sqlite_queries import insert_thought
 
+                # Generate embedding during merge when an embedder is
+                # available; otherwise insert with embedding=None and
+                # let the operator run `engram doctor --repair` post-
+                # import. The latter is awkward for read-only targets
+                # (the repair refuses on read-only role) so the CLI
+                # path always supplies an embedder.
+                embedding: list[float] | None = None
+                if self.embedder is not None:
+                    try:
+                        embedding = list(
+                            self.embedder.embed(tagged_with_path.content)  # type: ignore[attr-defined]
+                        )
+                    except Exception:
+                        _log.exception(
+                            "embedding generation failed for imported thought %s; "
+                            "row will be marked pending",
+                            tagged_with_path.id,
+                        )
                 try:
                     insert_thought(
                         self.target.conn,
@@ -415,7 +449,7 @@ class BundleImporter:
                         legacy_id=tagged_with_path.legacy_id,
                         legacy_created_at=None,
                         schema_version=tagged_with_path.schema_version,
-                        embedding=None,
+                        embedding=embedding,
                     )
                 except VaultError:  # pragma: no cover - storage refused
                     raise

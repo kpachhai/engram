@@ -1,13 +1,22 @@
-"""``engram doctor`` CLI command - thin wrapper over engram.diagnostics.run_diagnostics."""
+"""``engram doctor`` CLI command - thin wrapper over engram.diagnostics.run_diagnostics.
+
+Phase 3: when the per-user config lists more than one vault (the
+multi-vault case), the CLI ALSO runs the Phase 3 checks via
+:func:`engram.diagnostics.phase3_checks.run_phase3_checks`. The Phase
+1+2 single-vault rows still surface for the targeted vault; the
+Phase 3 rows surface eight cross-vault invariants on top.
+"""
 
 from __future__ import annotations
 
+import contextlib
 from pathlib import Path
 
 import typer
 
-from engram.config.loader import load_config
-from engram.diagnostics.doctor import CheckStatus, run_diagnostics
+from engram.config.loader import _load_user_config_if_present, load_config
+from engram.diagnostics.doctor import CheckStatus, DoctorReport, run_diagnostics
+from engram.diagnostics.phase3_checks import run_phase3_checks
 from engram.errors import ConfigError
 
 _STATUS_COLOR = {
@@ -65,6 +74,14 @@ def register(app: typer.Typer) -> None:
             remove_orphans=remove_orphans,
         )
 
+        # Phase 3 multi-vault checks: when the per-user config has >1
+        # vault entry, surface the eight cross-vault rows on top. The
+        # registry built here is for read-only inspection; we close it
+        # before exiting.
+        user_config = _load_user_config_if_present()
+        if user_config is not None and len(user_config.vaults) > 1:
+            _append_phase3_rows(report=report, user_config=user_config)
+
         for check in report.checks:
             color = _STATUS_COLOR[check.status]
             label = check.status.value.upper()
@@ -83,6 +100,65 @@ def register(app: typer.Typer) -> None:
             typer.secho("engram doctor: failures detected", fg=typer.colors.RED)
 
         raise typer.Exit(report.exit_code)
+
+
+def _append_phase3_rows(*, report: DoctorReport, user_config: object) -> None:
+    """Mount each user-config vault read-only + run the Phase 3 checks.
+
+    The registry built here exists for the duration of doctor's read-only
+    pass; storages are closed in reverse-mount order before returning so
+    the next ``engram serve`` invocation can re-open them.
+    """
+    from engram.embedding.fastembed import FastEmbedProvider
+    from engram.multivault.registry import VaultRegistry
+    from engram.storage.facade import VaultStorage
+    from engram.storage.sqlite import set_setting
+
+    registry = VaultRegistry()
+    storages: list[VaultStorage] = []
+    embedder: FastEmbedProvider | None = None
+    try:
+        for mount in user_config.vaults:  # type: ignore[attr-defined]
+            vault_path = mount.path.expanduser().resolve()
+            if not vault_path.exists():
+                continue
+            try:
+                if embedder is None:
+                    embedder = FastEmbedProvider(model_name="BAAI/bge-small-en-v1.5")
+                storage = VaultStorage(
+                    thoughts_dir=vault_path / "thoughts",
+                    index_db_path=vault_path / ".indexes" / "engram.db",
+                    embedding_dim=embedder.dimension,
+                    embedding_model_name="BAAI/bge-small-en-v1.5",
+                    vault_name=mount.name,
+                )
+                set_setting(storage.conn, "embedding_model_name", "BAAI/bge-small-en-v1.5")
+                set_setting(storage.conn, "embedding_dim", str(embedder.dimension))
+                storages.append(storage)
+                registry.mount(name=mount.name, storage=storage, role=mount.role)
+            except Exception as exc:
+                # Mount failure surfaces as a doctor row so the operator
+                # sees what went wrong without taking down the whole pass.
+                typer.echo(
+                    f"  doctor: skipping vault {mount.name!r}: {exc}",
+                    err=True,
+                )
+                continue
+
+        per_vault_llm = {
+            mount.name: getattr(mount, "llm", None)
+            for mount in user_config.vaults  # type: ignore[attr-defined]
+        }
+        run_phase3_checks(
+            report,
+            user_config=user_config,  # type: ignore[arg-type]
+            registry=registry,
+            per_vault_llm=per_vault_llm,
+        )
+    finally:
+        for storage in reversed(storages):
+            with contextlib.suppress(Exception):
+                storage.close()
 
 
 __all__ = ["register"]

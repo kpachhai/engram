@@ -23,6 +23,7 @@ from __future__ import annotations
 import asyncio
 import logging
 from pathlib import Path
+from typing import TYPE_CHECKING, Any
 
 import typer
 
@@ -34,6 +35,9 @@ from engram.errors import IndexError as EngramIndexError
 from engram.logging import configure_logging
 from engram.mcp.server import build_server
 from engram.storage.facade import VaultStorage
+
+if TYPE_CHECKING:
+    from fastmcp import FastMCP
 from engram.sync import startup_probes
 from engram.sync.coordinator import CoordinatorConfig, SyncCoordinator
 from engram.sync.gitops import conflict_marker_scan
@@ -76,6 +80,79 @@ def _coordinator_config_from(config: EffectiveConfig) -> CoordinatorConfig:
         auto_push_on_capture=config.sync.auto_push_on_capture,
         use_no_verify=config.sync.use_no_verify,
         migration_held=lambda: MigrationLock.is_held(config.vault_path),
+    )
+
+
+def _build_multivault_server_for(
+    *,
+    config: EffectiveConfig,
+    primary_storage: VaultStorage,
+    embedder: object,
+    primary_coordinator: object | None,
+) -> FastMCP[Any]:
+    """Build a Phase 3 multi-vault FastMCP server.
+
+    Mounts the primary storage (already opened upstream) into a fresh
+    registry, then opens a read-only-mounted storage for every other
+    vault listed in ``config.vaults``. Skips entries whose path is
+    missing on disk (the operator sees a one-line WARN per skip).
+    """
+    from engram.llm.budget import LLMBudget
+    from engram.mcp.llm_tools import HandlerDeps
+    from engram.mcp.server import build_multivault_server
+    from engram.multivault.registry import VaultRegistry
+    from engram.storage.sqlite import set_setting
+
+    registry = VaultRegistry()
+    registry.mount(
+        name=config.vault_name,
+        storage=primary_storage,
+        role="primary",
+        coordinator=primary_coordinator,
+    )
+
+    for mount in config.vaults:
+        if mount.name == config.vault_name:
+            continue
+        vault_path = mount.path.expanduser().resolve()
+        if not vault_path.exists():
+            _log.warning(
+                "engram serve: skipping %r - path %s does not exist",
+                mount.name,
+                vault_path,
+            )
+            continue
+        try:
+            extra = VaultStorage(
+                thoughts_dir=vault_path / "thoughts",
+                index_db_path=vault_path / ".indexes" / "engram.db",
+                embedding_dim=embedder.dimension,  # type: ignore[attr-defined]
+                embedding_model_name=config.embedding_model,
+                vault_name=mount.name,
+            )
+            set_setting(extra.conn, "embedding_model_name", config.embedding_model)
+            set_setting(extra.conn, "embedding_dim", str(embedder.dimension))  # type: ignore[attr-defined]
+            registry.mount(name=mount.name, storage=extra, role=mount.role)
+        except Exception:
+            _log.exception("engram serve: could not mount %r", mount.name)
+            continue
+
+    budget = LLMBudget.load_or_init(
+        state_path=config.index_dir / "llm_usage.json",
+        daily_cost_cap_usd=config.llm.daily_cost_cap_usd,
+    )
+    deps = HandlerDeps(
+        registry=registry,
+        embedder=embedder,  # type: ignore[arg-type]
+        config=config,
+        budget=budget,
+    )
+    return build_multivault_server(
+        registry,
+        embedder,  # type: ignore[arg-type]
+        deps,
+        default_user=config.default_user,
+        server_name="engram",
     )
 
 
@@ -206,17 +283,32 @@ def register(app: typer.Typer) -> None:
             # event loop. We start it lazily on first enqueue via storage.
 
         try:
-            server = build_server(
-                storage,
-                embedder,
-                default_user=config.default_user,
-                server_name="engram",
-            )
+            # Phase 3: when the per-user config has more than one vault
+            # entry, the serve command builds the multi-vault server with
+            # a registry routing across all configured vaults (one
+            # primary + zero-or-many read-only). Otherwise it uses the
+            # Phase 1 single-vault server unchanged.
+            extra_vaults = [v for v in (config.vaults or []) if v.name != config.vault_name]
+            if extra_vaults:
+                server = _build_multivault_server_for(
+                    config=config,
+                    primary_storage=storage,
+                    embedder=embedder,
+                    primary_coordinator=coordinator,
+                )
+            else:
+                server = build_server(
+                    storage,
+                    embedder,
+                    default_user=config.default_user,
+                    server_name="engram",
+                )
             _log.info(
-                "engram serve starting: vault=%s default_user=%s model=%s",
+                "engram serve starting: vault=%s default_user=%s model=%s extra_vaults=%d",
                 config.vault_name,
                 config.default_user,
                 config.embedding_model,
+                len(extra_vaults),
             )
             server.run()
         finally:

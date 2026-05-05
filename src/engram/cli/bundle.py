@@ -203,8 +203,19 @@ def register(app: typer.Typer) -> None:
         storage = _open_target_storage(effective)
         if target_is_read_only:
             storage.set_read_only_role(read_only=True)
+        # Build an embedder so imported thoughts land with embeddings ready
+        # for cross-vault search. A read-only target can't be repaired
+        # post-import (doctor --repair refuses on read-only role), so the
+        # CLI path always supplies an embedder during the merge.
+        from engram.embedding.fastembed import FastEmbedProvider
+
+        embedder = FastEmbedProvider(model_name=effective.embedding_model)
         try:
-            importer = BundleImporter(target=storage, allow_read_only=allow_read_only)
+            importer = BundleImporter(
+                target=storage,
+                allow_read_only=allow_read_only,
+                embedder=embedder,
+            )
             try:
                 result = importer.import_into(bundle_path)
             except EngramError as exc:
