@@ -66,5 +66,23 @@ The MCP tool surface is committed-stable for the v1.x lifetime per the API stabi
     contract per `02-TECHNICAL_DESIGN.md`.
 - 192 tests total at this checkpoint (109 from layer-0 + 13 lock + 70 models),
   coverage 94.15%.
+- `engram.config` - five-layer config loader + Pydantic models:
+  - Models: `SyncConfig`, `LLMConfig`, `VaultMount`, `UserConfig`, `VaultConfig`,
+    `EffectiveConfig`. The `llm:` block is reserved per `02-TECHNICAL_DESIGN.md`
+    Optional LLM-Mediated Features; Phase 1 parses but ignores it at runtime.
+  - `load_config()` implements the full precedence (defaults -> per-user YAML
+    -> per-vault YAML -> `ENGRAM_*` env -> CLI flags) via two-pass load:
+    Pass 1 resolves the vault path from per-user config + `--config` /
+    `--vault` flags; Pass 2 loads the per-vault YAML at the resolved path.
+  - `resolve_default_user()` priority: CLI > env > per-user YAML > devkit
+    `~/.config/devkit/identity.json` `github_username` > `$USER` > literal
+    `engram-user`. Devkit identity.json is a soft dependency; absence,
+    malformed JSON, and missing field all fall through silently.
+  - `ensure_user_config_dir()` creates `~/.config/engram/` with mode 0700 per
+    `06-SECURITY.md` Boundary B1.
+  - Fatal errors with clear messages for: no vault configured, vault directory
+    does not exist, `--config` file does not exist, no `vaults:` list, no
+    primary vault marked, requested `--vault` not in list.
+- 239 tests total now (47 new config tests), coverage 94.22%.
 
 [Unreleased]: https://github.com/kpachhai/engram/compare/...HEAD
