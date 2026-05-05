@@ -43,10 +43,11 @@ _log = logging.getLogger("engram.multivault.registry")
 if TYPE_CHECKING:
     from engram.storage.facade import VaultStorage
 
-#: Recognized role tags. Phase 3 keeps the role open type but enforces
-#: ``primary`` / ``read-only`` semantics; future phases may add ``team``
-#: or ``shared`` (Phase 4+).
-VaultRole = Literal["primary", "read-only"]
+#: Recognized role tags. Phase 4 widens to add ``team-write``; previously
+#: ``primary`` / ``read-only`` were the only legal values. The registry
+#: enforces at-most-one-primary; team-write vaults may be mounted in
+#: arbitrary number alongside the singleton primary.
+VaultRole = Literal["primary", "read-only", "team-write"]
 
 
 class VaultRegistry:
@@ -129,6 +130,9 @@ class VaultRegistry:
         self._coordinators[name] = coordinator
         self._roles[name] = role
 
+        # Phase 4: read-only is the only role that hard-refuses writes at
+        # the storage layer. team-write keeps writes permitted; the team
+        # policy gate runs at capture-time per Phase 4 invariant 4.
         storage.set_read_only_role(read_only=(role == "read-only"))
         if coordinator is not None:
             # Defensive: set_sync_coordinator stores the reference and

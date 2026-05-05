@@ -12,14 +12,28 @@ forward-compatible.
 
 from __future__ import annotations
 
+import hashlib
 import os
 from pathlib import Path
 from typing import Literal
 
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 
+from engram.errors import TeamWriteRequiresRemote
+
 #: Default embedding model name pinned for Phase 1.
 DEFAULT_EMBEDDING_MODEL = "BAAI/bge-small-en-v1.5"
+
+
+def derive_vault_id(remote_url: str) -> str:
+    """Return the canonical 16-hex vault id for ``remote_url``.
+
+    Per Phase 4 pinned invariant 5: the canonical vault id is
+    ``sha256(remote_url)[:16]``. The user-facing ``name:`` is a
+    per-machine alias; two machines may use different aliases for the
+    same team vault, but the registry indexes by id internally.
+    """
+    return hashlib.sha256(remote_url.encode("utf-8")).hexdigest()[:16]
 
 
 class SyncConfig(BaseModel):
@@ -123,18 +137,66 @@ class AggregatorConfig(BaseModel):
     force_sequential: bool = False
 
 
+class RoutingRule(BaseModel):
+    """Per-prefix routing rule that auto-routes captures to a target vault.
+
+    Phase 4: when ``auto_route: true`` is set in :class:`UserConfig`, a
+    capture whose first prefix matches ``prefix`` is routed to the vault
+    aliased by ``target_vault`` (unless explicit ``vault:`` arg or
+    ``portability: block`` overrides per pinned invariants 1+2).
+    """
+
+    model_config = ConfigDict(extra="forbid")
+
+    prefix: str = Field(min_length=1)
+    target_vault: str = Field(min_length=1)
+    priority: int | None = None
+
+
 class VaultMount(BaseModel):
-    """One entry in the per-user ``vaults:`` list."""
+    """One entry in the per-user ``vaults:`` list.
+
+    Phase 4 widens ``role`` to include ``team-write`` and adds the
+    ``remote_url`` + derived ``vault_id`` fields for team-vault routing.
+    """
 
     model_config = ConfigDict(extra="forbid")
 
     name: str = Field(min_length=1)
     path: Path
-    role: Literal["primary", "read-only"] = "primary"
+    role: Literal["primary", "read-only", "team-write"] = "primary"
+    #: Required for ``role: team-write``. Empty for primary / read-only.
+    remote_url: str | None = None
+    #: Derived from ``remote_url`` at validation time; the canonical
+    #: globally-unique vault id (per Phase 4 pinned invariant 5).
+    vault_id: str | None = None
+
+    @model_validator(mode="after")
+    def _check_team_write_requirements(self) -> VaultMount:
+        """Refuse ``team-write`` without ``remote_url`` and derive vault_id."""
+        if self.role == "team-write":
+            if not self.remote_url:
+                msg = (
+                    f"vault {self.name!r} declares role='team-write' but no "
+                    f"remote_url; team-write vaults require a remote where "
+                    f"the pre-receive hook lives"
+                )
+                raise TeamWriteRequiresRemote(msg)
+            # Derive vault_id from remote_url for stable cross-machine id.
+            object.__setattr__(self, "vault_id", derive_vault_id(self.remote_url))
+        elif self.remote_url is not None and self.vault_id is None:
+            # Non-team-write vaults may still carry remote_url (Phase 2 sync);
+            # derive the vault_id for consistency.
+            object.__setattr__(self, "vault_id", derive_vault_id(self.remote_url))
+        return self
 
 
 class UserConfig(BaseModel):
-    """Per-user configuration: ``~/.config/engram/config.yaml``."""
+    """Per-user configuration: ``~/.config/engram/config.yaml``.
+
+    Phase 4 adds ``auto_route`` (opt-in per Q2 default) and ``routing_rules``
+    for per-prefix routing into team-write vaults.
+    """
 
     model_config = ConfigDict(extra="forbid")
 
@@ -144,6 +206,13 @@ class UserConfig(BaseModel):
     aggregator: AggregatorConfig = Field(default_factory=AggregatorConfig)
     log_level: str = "INFO"
     log_format: Literal["text", "json"] = "text"
+
+    # Phase 4 additions ----------------------------------------------------
+    #: Opt-in per Q2 (default). When True, per-prefix routing rules fire
+    #: when no explicit ``vault:`` arg is supplied to ``capture_thought``.
+    auto_route: bool = False
+    #: Routing rules for ``auto_route``. Empty when ``auto_route`` is off.
+    routing_rules: list[RoutingRule] = Field(default_factory=list)
 
     @model_validator(mode="after")
     def _check_one_primary_vault(self) -> UserConfig:
@@ -174,6 +243,19 @@ class UserConfig(BaseModel):
                 f"found {primary_count} in vaults: "
                 f"{[v.name for v in self.vaults if v.role == 'primary']}"
             )
+            raise ValueError(msg)
+        # Phase 4: N team-write vaults are permitted alongside one primary,
+        # but two team-write vaults must not share the same vault_id (would
+        # mean two aliases pointing at the same remote).
+        team_write_ids = [
+            v.vault_id for v in self.vaults if v.role == "team-write" and v.vault_id is not None
+        ]
+        if len(team_write_ids) != len(set(team_write_ids)):
+            seen_ids: set[str] = set()
+            dupes = sorted(
+                {vid for vid in team_write_ids if vid in seen_ids or seen_ids.add(vid)}  # type: ignore[func-returns-value]
+            )
+            msg = f"Two team-write vaults share the same vault_id (same remote_url): {dupes}"
             raise ValueError(msg)
         names = [v.name for v in self.vaults]
         if len(names) != len(set(names)):
@@ -248,8 +330,10 @@ __all__ = [
     "AggregatorConfig",
     "EffectiveConfig",
     "LLMConfig",
+    "RoutingRule",
     "SyncConfig",
     "UserConfig",
     "VaultConfig",
     "VaultMount",
+    "derive_vault_id",
 ]

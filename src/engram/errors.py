@@ -173,7 +173,134 @@ class LLMProviderError(EngramError):
     error_code: str = "llm_provider_error"
 
 
+# Phase 4 additions ---------------------------------------------------------
+
+
+class TeamMemberNotEnrolled(VaultError):
+    """Local GPG primary-fingerprint absent from a team-vault ``members.yaml``.
+
+    Refusal at capture time (NOT at push time) so the user fails fast with
+    a clear remediation hint rather than a delayed push reject. Resolution:
+    a steward runs ``engram team-vault add-member <fingerprint>`` and the
+    affected member re-pulls.
+    """
+
+    error_code: str = "team_member_not_enrolled"
+
+
+class TeamPolicyViolation(VaultError):
+    """Team-vault policy allowlist or sensitive-acceptance gate refused a capture.
+
+    Reason carried in the message string. Common reasons:
+    ``prefix_not_allowed``, ``source_not_allowed``,
+    ``sensitive_thought_target_does_not_accept``.
+    """
+
+    error_code: str = "team_policy_violation"
+
+
+class RoutingRuleAmbiguous(ConfigError):
+    """Two routing rules match the same first-prefix with no tie-breaker.
+
+    Per-prefix tie-break order: longest-pattern-match wins; ties broken by
+    user-config declaration order; remaining ties refuse with this error.
+    """
+
+    error_code: str = "routing_rule_ambiguous"
+
+
+class RoutingTargetNotMounted(ConfigError):
+    """A routing rule or explicit ``vault:`` arg named an unmounted vault alias.
+
+    The user must either mount the vault (via ``engram team-vault join``)
+    or correct the rule / argument.
+    """
+
+    error_code: str = "routing_target_not_mounted"
+
+
+class BlockThoughtInTeamVaultDisallowed(VaultError):
+    """A ``portability: block`` thought reached a team-write vault.
+
+    Refusal is structural per pinned invariant 1: ``block`` portability
+    ALWAYS lands in personal-primary. Defense-in-depth: the routing
+    dispatcher catches this upstream; this error fires only if a future
+    code path bypasses routing.
+    """
+
+    error_code: str = "block_thought_in_team_vault_disallowed"
+
+
+class TeamVaultEmbeddingMismatch(EmbeddingModelMismatch):
+    """A team-vault policy pins an embedding model the local machine does not match.
+
+    Refines the cross-vault ``EmbeddingModelMismatch`` to surface the
+    team-vault context (the team's policy is the source of truth; the
+    local machine must conform or capture personal-only).
+    """
+
+    error_code: str = "team_vault_embedding_mismatch"
+
+
+class TeamMembershipRevoked(VaultError):
+    """Team-vault remote no longer accepts pushes from this machine's credentials.
+
+    Detected via TTL'd ``git ls-remote`` probe. The mount auto-degrades to
+    ``frozen-read-only``; subsequent captures refuse loudly. Operator
+    remediation: ``engram team-vault unmount --remove-local <name>`` or
+    ``engram orphan-recover --to personal``.
+    """
+
+    error_code: str = "team_membership_revoked"
+
+
+class AttributionCommitterMismatch(SyncError):
+    """A pushed thought's ``captured_by:`` does not match the signed committer fingerprint.
+
+    Raised by the server-side ``pre-receive`` hook. Defends against
+    attribution forgery (P4-H5). The whole push is refused; the rejection
+    message lists every offending file.
+    """
+
+    error_code: str = "attribution_committer_mismatch"
+
+
+class TeamWriteRequiresRemote(ConfigError):
+    """A vault declared ``role: team-write`` without a ``remote_url``.
+
+    The whole Phase 4 trust model presumes a remote where the
+    ``pre-receive`` hook lives; a team-write vault without a remote is
+    structurally meaningless and refused at config-load.
+    """
+
+    error_code: str = "team_write_requires_remote"
+
+
+class TeamVaultAlreadyInitialized(VaultError):
+    """``engram team-vault setup`` ran against a remote already initialized as a team vault.
+
+    First-writer-wins via the existing remote: a second ``setup`` run
+    detects pre-existing canonical files and refuses rather than
+    overwriting.
+    """
+
+    error_code: str = "team_vault_already_initialized"
+
+
+class PushQueuePersistenceFailed(EngramError):
+    """The persistent push queue could not append to its on-disk state.
+
+    Common cause: disk full at enqueue. Capture refuses (rather than
+    silently losing the queued push) so the user knows the thought was
+    NOT durably enqueued.
+    """
+
+    error_code: str = "push_queue_persistence_failed"
+
+
 __all__ = [
+    "AttributionCommitterMismatch",
+    "BlockThoughtInTeamVaultDisallowed",
     "BlockThoughtLLMDisallowed",
     "BundleCycleDetected",
     "BundleImportError",
@@ -186,7 +313,16 @@ __all__ = [
     "LLMProviderError",
     "LockError",
     "MigrationError",
+    "PushQueuePersistenceFailed",
+    "RoutingRuleAmbiguous",
+    "RoutingTargetNotMounted",
     "SyncError",
+    "TeamMemberNotEnrolled",
+    "TeamMembershipRevoked",
+    "TeamPolicyViolation",
+    "TeamVaultAlreadyInitialized",
+    "TeamVaultEmbeddingMismatch",
+    "TeamWriteRequiresRemote",
     "VaultError",
     "VaultPathCollision",
     "VaultReadOnlyError",
