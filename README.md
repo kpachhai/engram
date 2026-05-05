@@ -6,12 +6,36 @@
 
 ## Status
 
-Pre-1.0. Phase 1 (solo MVP + Open Brain migration) and Phase 2 (multi-machine
-personal sync via git transport) are code-complete. See
-`docs/PHASE_1_CODE_COMPLETE.md` and `docs/PHASE_2_CODE_COMPLETE.md` for the
-exit-criteria validation. Multi-machine setup guide:
+Pre-1.0. Phase 1 (solo MVP + Open Brain migration), Phase 2
+(multi-machine personal sync via git transport), and Phase 3
+(multi-vault foundation + friend-share + optional LLM) are
+code-complete. See `docs/PHASE_1_CODE_COMPLETE.md`,
+`docs/PHASE_2_CODE_COMPLETE.md`, and
+`docs/PHASE_3_CODE_COMPLETE.md` for the exit-criteria validation.
+
+Phase 3 setup + flow guides:
+
+* `docs/MULTI_VAULT_SETUP.md` - mounting N vaults under different
+  roles (one `primary` + many `read-only`).
+* `docs/FRIEND_SHARE_GUIDE.md` - export / import bundle workflow.
+* `docs/LLM_FEATURES.md` - optional LLM-mediated tools
+  (`summarize_thought` + `synthesize_thoughts`) with per-thought
+  portability gates and daily cost cap.
+* `docs/adr/006-multi-vault-and-llm.md` - Phase 3 design rationale.
+
+Multi-machine setup (Phase 2 baseline):
 `docs/MULTI_MACHINE_SETUP.md`. The pinned spec lives at
-`docs/superpowers/specs/2026-05-04-engram/` in the maintainer's planning repo.
+`docs/superpowers/specs/2026-05-04-engram/` in the maintainer's
+planning repo.
+
+### Roadmap
+
+| Phase | Scope | Status |
+|---|---|---|
+| 1 | Solo MVP + Open Brain migration | code-complete |
+| 2 | Multi-machine sync via git transport | code-complete |
+| 3 | Multi-vault + friend-share via bundles + optional LLM | code-complete |
+| 4-6 | Team / org / enterprise | gated by adoption |
 
 ## Why
 

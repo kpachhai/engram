@@ -9,6 +9,93 @@ The MCP tool surface is committed-stable for the v1.x lifetime per the API stabi
 
 ## [Unreleased]
 
+### Added (Phase 3 - multi-vault foundation + friend-share + optional LLM)
+
+- **VaultRegistry** (`engram.multivault.registry`): in-process
+  resolver mapping vault `name` -> open `VaultStorage` + role
+  (`primary` / `read-only`) + optional sync coordinator. Mount-time
+  realpath collision check (canonical enforcement point per ADR
+  006 D1). At-most-one-primary invariant + read-only-vault
+  hard-refusal flag plumbing.
+- **Cross-vault aggregator** (`engram.multivault.aggregator`):
+  `aggregate_search` with portability push-down at the per-vault
+  Filter (`block` NEVER returned regardless of any flag);
+  per-vault floor (default 3); ATTACH-vs-SEQUENTIAL mode at the
+  11-vault threshold; `degraded_vaults` list for per-vault
+  timeout. Embedding-model compatibility check on every cross-vault
+  invocation.
+- **Defense-in-depth portability gate**
+  (`engram.multivault.portability`): `assert_no_block_in_results`
+  + `strip_block_thoughts` + `split_portabilities`.
+- **Bundle export / import**
+  (`engram.bundle.{format,exporter,importer}`): on-disk format is
+  `manifest.json` + `thoughts/<rel>.md` in a streaming tar.gz.
+  Per-file 1 MB / per-bundle 4 GB caps; manifest written LAST;
+  importer enforces NFC + path-traversal refusal + YAML safe-load
+  + `portability=block` filter + id-collision pre-flight (atomic)
+  + `bundle_id`-chain cycle detection.
+- **`engram export` / `engram import` CLI** (`engram.cli.bundle`):
+  default portability filter is `portable` only; `--portability` is
+  repeatable; refuses while serve holds the per-vault lock;
+  `--allow-read-only` opt-in.
+- **LLM provider abstraction** (`engram.llm`): five adapters
+  (Anthropic / OpenAI / Ollama / llama.cpp / OpenAI-compatible) +
+  MockProvider for tests + `resolve_provider` per-thought
+  portability gate. `base_url` validated against
+  `~/.config/engram/trusted-llm-urls.yaml`.
+- **`LLMBudget`** (`engram.llm.budget`): per-day cost cap persisted
+  to `<primary>/.indexes/llm_usage.json`; `truncate_to_budget`
+  preserves per-vault floor.
+- **Citation post-validator** (`engram.llm.citations`): strips
+  hallucinated UUID-shaped citations from LLM responses.
+- **`summarize_thought` + `synthesize_thoughts` MCP tools**
+  (`engram.mcp.llm_tools`): per-thought summary + cross-vault RAG
+  with default-off friend-vault inclusion (B-4 fix), anti-injection
+  delimiter wrap + system prompt, citation post-validation.
+- **Multi-vault server** (`engram.mcp.server.build_multivault_server`):
+  registry-routed 5 stable tools + 2 additive Phase 3 LLM tools.
+- **Multi-vault serve startup**
+  (`engram.cli.serve_multivault`): testable orchestrator for the
+  Step 17 ordering.
+- **Phase 3 doctor extensions** (`engram.diagnostics.phase3_checks`):
+  eight new checks corresponding to the eight new Phase 3 codes.
+- **Phase 3 errors** (`engram.errors`): `VaultReadOnlyError`,
+  `VaultPathCollision`, `DuplicateVaultName`,
+  `EmbeddingModelMismatch`, `BundleImportError`,
+  `BundleCycleDetected`, `BlockThoughtLLMDisallowed`,
+  `LLMProviderError`.
+- **Phase 3 config**: `AggregatorConfig`, new `LLMConfig` fields,
+  `UserConfig._check_one_primary_vault` validator,
+  `EffectiveConfig.aggregator` + `.vaults`.
+- **Documentation**: `docs/adr/006-multi-vault-and-llm.md`,
+  `docs/PHASE_3_CODE_COMPLETE.md`, `docs/MULTI_VAULT_SETUP.md`,
+  `docs/FRIEND_SHARE_GUIDE.md`, `docs/LLM_FEATURES.md`.
+
+### Changed (Phase 3)
+
+- `EffectiveConfig` now carries `aggregator` and `vaults` fields
+  populated by the loader from `UserConfig`.
+- `VaultStorage` accepts `read_only_role: bool`; every public write
+  entry-point gates on this flag.
+- `engram.diagnostics.check_codes` exposes
+  `ALL_PHASE_3_CHECK_CODES` (14 Phase 2 + 8 Phase 3 = 22 codes).
+- Pre-existing fingerprint property test fixed: hypothesis can
+  generate mixed line-ending content; test now normalizes to
+  LF-only first, then exercises the three transforms.
+
+### Security (Phase 3)
+
+- Per-thought portability gate at the LLM layer (`block` always
+  refuses; `sensitive` requires local provider).
+- Friend-vault content excluded from LLM RAG by default
+  (`include_friend_vaults=False`).
+- Anti-injection delimiter wrap + system prompt + citation
+  post-validator.
+- Bundle import gate: path-traversal, oversize, YAML safe-load,
+  block filter, id-collision atomicity, cycle detection.
+- Read-only vault hard refusal at storage write boundary.
+- LLM `base_url` trust file (separate from main config).
+
 ### Added (Phase 2 - multi-machine sync)
 
 - **Sync coordinator state machine** (`engram.sync.coordinator`) with 10
