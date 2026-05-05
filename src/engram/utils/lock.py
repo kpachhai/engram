@@ -202,4 +202,106 @@ class VaultLock:
         os.kill(os.getpid(), signum)
 
 
-__all__ = ["LOCK_FORMAT_VERSION", "VaultLock"]
+_MIGRATION_LOCK_FILENAME = "migration.lock"
+
+
+class MigrationLock:
+    """Per-vault flock used to pause the sync coordinator during migration.
+
+    Step 12 deliverable. ``engram migrate-from-open-brain`` acquires this
+    lock for the duration of migration; the sync coordinator polls it
+    before every git invocation and transitions to
+    ``paused-for-migration`` when it is held.
+
+    The lock file lives at ``<vault>/.indexes/migration.lock`` (separate
+    from :class:`VaultLock` so a serve-loop CAN observe the migration
+    holder while it is still in the foreground itself).
+    """
+
+    def __init__(self, vault_path: Path) -> None:
+        """Create a (not yet acquired) migration lock handle."""
+        self.vault_path = Path(vault_path)
+        self.lock_path = self.vault_path / _INDEXES_SUBDIR / _MIGRATION_LOCK_FILENAME
+        self._fd: int | None = None
+
+    def __enter__(self) -> Self:
+        """Acquire the migration lock and return self."""
+        self.acquire()
+        return self
+
+    def __exit__(
+        self,
+        exc_type: type[BaseException] | None,
+        exc_val: BaseException | None,
+        exc_tb: TracebackType | None,
+    ) -> None:
+        """Release on context exit."""
+        self.release()
+
+    def acquire(self) -> None:
+        """Acquire the migration flock; raises :class:`LockError` on contention."""
+        if self._fd is not None:
+            msg = f"MigrationLock already held for {self.vault_path}"
+            raise LockError(msg)
+        self.lock_path.parent.mkdir(parents=True, exist_ok=True)
+        fd = os.open(str(self.lock_path), os.O_CREAT | os.O_RDWR, _LOCK_FILE_MODE)
+        try:
+            fcntl.flock(fd, fcntl.LOCK_EX | fcntl.LOCK_NB)
+        except BlockingIOError as exc:
+            os.close(fd)
+            msg = f"migration lock at {self.lock_path} is held by another process"
+            raise LockError(msg) from exc
+        metadata = {
+            "pid": os.getpid(),
+            "hostname": socket.gethostname(),
+            "acquired_at": datetime.now(UTC).isoformat(),
+        }
+        os.ftruncate(fd, 0)
+        os.lseek(fd, 0, os.SEEK_SET)
+        os.write(fd, json.dumps(metadata).encode("utf-8"))
+        os.fsync(fd)
+        self._fd = fd
+
+    def release(self) -> None:
+        """Release the migration lock; idempotent."""
+        if self._fd is None:
+            return
+        try:
+            with contextlib.suppress(OSError):
+                fcntl.flock(self._fd, fcntl.LOCK_UN)
+            with contextlib.suppress(OSError):
+                os.close(self._fd)
+            self.lock_path.unlink(missing_ok=True)
+        finally:
+            self._fd = None
+
+    @classmethod
+    def is_held(cls, vault_path: Path) -> bool:
+        """Return True iff another process currently holds the migration lock.
+
+        Implementation: try to acquire-and-release. ``flock`` is the only
+        reliable observability primitive; a stat-based check would race
+        any in-flight unlink. The acquire-and-release roundtrip is cheap
+        (microseconds) and runs once per coordinator tick.
+        """
+        lock_path = vault_path / _INDEXES_SUBDIR / _MIGRATION_LOCK_FILENAME
+        if not lock_path.exists():
+            return False
+        try:
+            fd = os.open(str(lock_path), os.O_RDWR, _LOCK_FILE_MODE)
+        except OSError:
+            return False
+        try:
+            try:
+                fcntl.flock(fd, fcntl.LOCK_EX | fcntl.LOCK_NB)
+            except BlockingIOError:
+                return True
+            with contextlib.suppress(OSError):
+                fcntl.flock(fd, fcntl.LOCK_UN)
+            return False
+        finally:
+            with contextlib.suppress(OSError):
+                os.close(fd)
+
+
+__all__ = ["LOCK_FORMAT_VERSION", "MigrationLock", "VaultLock"]
