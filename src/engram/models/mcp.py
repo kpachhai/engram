@@ -47,7 +47,12 @@ class Filter(BaseModel):
 
 
 class CaptureInputMetadata(BaseModel):
-    """Optional metadata override for ``capture_thought``."""
+    """Optional metadata override for ``capture_thought``.
+
+    Phase 4 adds the ``vault`` field for explicit cross-vault routing.
+    Phase 1+2+3 clients that omit this field continue to land in the
+    primary vault per pinned invariant 6 (back-compat).
+    """
 
     model_config = ConfigDict(extra="forbid")
 
@@ -55,6 +60,10 @@ class CaptureInputMetadata(BaseModel):
     portability: Portability | None = None
     source: str | None = None
     tags: list[str] | None = None
+    #: Phase 4: explicit target-vault alias. None means "no preference"
+    #: (routing rules fire if ``auto_route: true``; otherwise lands in
+    #: primary). Pinned invariant 2: explicit always wins over rules.
+    vault: str | None = None
 
 
 class CaptureInput(BaseModel):
