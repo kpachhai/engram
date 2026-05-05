@@ -32,7 +32,7 @@ from uuid import UUID
 
 from uuid_extensions import uuid7
 
-from engram.errors import VaultError
+from engram.errors import VaultError, VaultReadOnlyError
 from engram.models import Thought, ThoughtWithSimilarity
 from engram.models.frontmatter import (
     DEFAULT_PORTABILITY_BY_PREFIX,
@@ -128,12 +128,23 @@ class VaultStorage:
         embedding_dim: int = DEFAULT_EMBEDDING_DIM,
         embedding_model_name: str | None = None,
         vault_name: str = "default",
+        read_only_role: bool = False,
     ) -> None:
-        """Open the SQLite + sqlite-vec connection and ensure the thoughts dir exists."""
+        """Open the SQLite + sqlite-vec connection and ensure the thoughts dir exists.
+
+        ``read_only_role`` is the Phase 3 hard-refusal guard: when True, every
+        public write entry-point (``capture``, ``update_metadata``,
+        ``update_body``, ``delete``, ``repair_pending_embeddings``) raises
+        :class:`engram.errors.VaultReadOnlyError` rather than mutating the
+        vault. The attribute is normally set by
+        :class:`engram.multivault.registry.VaultRegistry` at mount time
+        based on the ``role:`` field; tests may pass it directly.
+        """
         self.thoughts_dir = Path(thoughts_dir).resolve()
         self.index_db_path = Path(index_db_path)
         self.vault_name = vault_name
         self.embedding_dim = embedding_dim
+        self.read_only_role = read_only_role
         self.thoughts_dir.mkdir(parents=True, exist_ok=True)
         self.conn: sqlite3.Connection = open_connection(
             self.index_db_path,
@@ -144,6 +155,23 @@ class VaultStorage:
         # via :meth:`set_sync_coordinator` so unit tests stay hermetic. When
         # this attribute is None, ``_post_capture_sync`` is a no-op.
         self._sync_coordinator: object | None = None
+
+    def _refuse_if_read_only(self, action: str) -> None:
+        """Hard-refusal gate for Phase 3 read-only-role vaults (R-H7/R-H8)."""
+        if self.read_only_role:
+            msg = (
+                f"vault {self.vault_name!r} is mounted with role=read-only; "
+                f"refusing {action} (read-only vaults expose read-path only)"
+            )
+            raise VaultReadOnlyError(msg)
+
+    def set_read_only_role(self, *, read_only: bool) -> None:
+        """Update the read-only flag after construction.
+
+        Mostly used by :class:`VaultRegistry.mount` so a single ``VaultStorage``
+        can be re-roled across mount/unmount cycles in long-running tests.
+        """
+        self.read_only_role = read_only
 
     def __enter__(self) -> VaultStorage:
         """Return self; storage opened in __init__."""
@@ -186,7 +214,10 @@ class VaultStorage:
 
         Raises:
             VaultError: if content exceeds 1 MB (Q1 default) or markdown write fails.
+            VaultReadOnlyError: if this storage is mounted with
+                ``read_only_role=True`` (Phase 3 hard refusal).
         """
+        self._refuse_if_read_only("capture")
         size_bytes = len(content.encode("utf-8"))
         if size_bytes > _CAPTURE_REJECT_BYTES:
             msg = (
@@ -360,7 +391,13 @@ class VaultStorage:
         vault: str | None = None,
         updated_at: datetime | None = None,
     ) -> bool:
-        """Patch metadata-only fields. Returns True if updated."""
+        """Patch metadata-only fields. Returns True if updated.
+
+        Raises:
+            VaultReadOnlyError: if mounted with ``read_only_role=True``
+                (Phase 3).
+        """
+        self._refuse_if_read_only("update_metadata")
         if not _q_update_metadata(
             self.conn,
             thought_id,
@@ -384,7 +421,13 @@ class VaultStorage:
         new_content: str,
         embedding: Sequence[float] | None = None,
     ) -> bool:
-        """Body changed: refresh fingerprint, advance updated_at, re-embed."""
+        """Body changed: refresh fingerprint, advance updated_at, re-embed.
+
+        Raises:
+            VaultReadOnlyError: if mounted with ``read_only_role=True``
+                (Phase 3).
+        """
+        self._refuse_if_read_only("update_body")
         existing = self.get_by_id(thought_id)
         if existing is None:
             return False
@@ -405,7 +448,13 @@ class VaultStorage:
         return True
 
     def delete(self, thought_id: UUID | str) -> bool:
-        """Remove a thought from both markdown SoT and SQLite."""
+        """Remove a thought from both markdown SoT and SQLite.
+
+        Raises:
+            VaultReadOnlyError: if mounted with ``read_only_role=True``
+                (Phase 3).
+        """
+        self._refuse_if_read_only("delete")
         existing = self.get_by_id(thought_id)
         if existing is None:
             return False
@@ -448,7 +497,13 @@ class VaultStorage:
 
         Returns the count of rows successfully repaired. Failures are logged
         and the row remains pending for a later doctor run.
+
+        Raises:
+            VaultReadOnlyError: if mounted with ``read_only_role=True``
+                (Phase 3). Doctor catches this and reports a "skipped N
+                pending embeddings on read-only vault X" INFO row.
         """
+        self._refuse_if_read_only("repair_pending_embeddings")
         pending = _q_list_thoughts_with_status(self.conn, "pending")
         repaired = 0
         for row in pending:

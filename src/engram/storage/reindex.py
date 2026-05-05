@@ -32,6 +32,7 @@ from datetime import UTC, datetime
 from pathlib import Path
 
 from engram.errors import IndexError as EngramIndexError
+from engram.errors import VaultReadOnlyError
 from engram.storage.facade import VaultStorage
 from engram.storage.markdown import FrontmatterDrift, read_thought
 from engram.storage.sqlite_queries import (
@@ -95,6 +96,14 @@ def reindex_vault(
     Returns:
         :class:`ReindexReport` summarizing the work done.
     """
+    if storage.read_only_role:
+        msg = (
+            f"vault {storage.vault_name!r} is mounted with role=read-only; "
+            f"refusing reindex (mode={mode.value}). Read-only vaults are "
+            "regenerable from the originating bundle; re-import to recover."
+        )
+        raise VaultReadOnlyError(msg)
+
     started = datetime.now(UTC)
     report = ReindexReport(mode=mode)
 
