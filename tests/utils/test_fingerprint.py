@@ -99,8 +99,17 @@ def test_appended_trailing_blank_line_does_not_change_fingerprint(content: str):
 @given(content=st.text())
 @settings(max_examples=50, deadline=None)
 def test_line_ending_swap_does_not_change_fingerprint(content: str):
-    """Spec step 2: replace CRLF and CR with LF."""
-    lf = compute_fingerprint(content.replace("\r\n", "\n").replace("\r", "\n"))
-    crlf = compute_fingerprint(content.replace("\n", "\r\n"))
-    cr = compute_fingerprint(content.replace("\n", "\r"))
+    """Spec step 2: replace CRLF and CR with LF.
+
+    Hypothesis can generate ``content`` that already contains mixed line
+    endings (e.g. ``"\r\n0"``); applying ``replace("\n", "\r\n")`` to
+    such an input doubles existing carriage returns and breaks the
+    naive three-way comparison. Normalize the input to a single
+    canonical (LF-only) form FIRST, then verify that all three
+    line-ending transforms hash to the same fingerprint.
+    """
+    canonical = content.replace("\r\n", "\n").replace("\r", "\n")
+    lf = compute_fingerprint(canonical)
+    crlf = compute_fingerprint(canonical.replace("\n", "\r\n"))
+    cr = compute_fingerprint(canonical.replace("\n", "\r"))
     assert lf == crlf == cr
