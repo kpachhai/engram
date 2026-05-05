@@ -429,12 +429,25 @@ def test_drift_has_path_and_reason():
 # === property-based: write+read round-trip preserves Thought ===
 
 
+_YAML_LINE_BREAKS = ("\n", "\r", "\x85", "\u2028", "\u2029")
+
+
+def _tag_is_yaml_safe(t: str) -> bool:
+    """Reject tag strings containing any character YAML treats as a line break.
+
+    YAML 1.2 treats LF, CR, NEL (U+0085), LINE SEPARATOR (U+2028) and PARAGRAPH
+    SEPARATOR (U+2029) as line breaks in a quoted scalar; any of them collapses
+    to a space on round-trip and breaks string equality.
+    """
+    if any(ch in t for ch in _YAML_LINE_BREAKS):
+        return False
+    return t.strip() == t and "\x00" not in t
+
+
 @given(
     body=st.text(min_size=0, max_size=5000),
     tags=st.lists(
-        st.text(min_size=1, max_size=20).filter(
-            lambda t: "\n" not in t and "\r" not in t and t.strip() == t and "\x00" not in t
-        ),
+        st.text(min_size=1, max_size=20).filter(_tag_is_yaml_safe),
         max_size=8,
     ),
 )
