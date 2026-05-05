@@ -1,13 +1,15 @@
 """TeamVaultPolicy - per-team-vault YAML config + capture-time policy gate.
 
 The team policy YAML lives at ``<vault>/.engram/team-policy.yaml`` checked
-into the team's git remote (NOT in the per-machine ``.indexes/``). Phase 4
-parses it via this Pydantic model with ``extra="forbid"`` so unknown fields
+into the team's git remote (NOT in the per-machine ``.indexes/``). It is
+parsed via this Pydantic model with ``extra="forbid"`` so unknown fields
 surface as clear validation errors.
 
 The :meth:`TeamVaultPolicy.refuse_or_pass` gate is the capture-time policy
 enforcement; the server-side ``pre-receive`` hook is the push-time twin.
-The two layers compose per Phase 4 pinned invariant 4.
+Client-side is canonical for capture-time policies; server-side is
+canonical for push-time policies. The two layers compose so a client-side
+bypass is caught by the server hook.
 """
 
 from __future__ import annotations

@@ -3,9 +3,9 @@ r"""Per-vault identity check defending against cross-vault contamination.
 The :class:`IdentityCheck` reads ``<vault>/.engram/identity.local`` (which
 is gitignored and therefore machine-local) and compares the configured
 ``expected_remote_pattern`` against the resolved ``origin`` URL. A
-mismatch is **R-H3 cross-vault contamination** - personal thoughts being
+mismatch indicates cross-vault contamination - personal thoughts being
 pushed to a work remote, or vice versa - and is one of the load-bearing
-safety mitigations from Phase 2.
+safety mitigations in the sync layer.
 
 The identity file is YAML and looks like::
 
@@ -17,7 +17,7 @@ The identity file is YAML and looks like::
 Only ``vault_id`` and ``expected_remote_pattern`` are required. The
 optional ``user_email`` / ``user_name`` are surfaced via
 :meth:`IdentityCheck.identity` so the coordinator can pass them as
-``git -c user.email=... commit`` overrides per R-M14.
+``git -c user.email=... commit`` overrides.
 """
 
 from __future__ import annotations

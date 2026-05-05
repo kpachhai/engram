@@ -1,4 +1,4 @@
-"""Phase 4 per-prefix routing dispatcher.
+"""Per-prefix routing dispatcher.
 
 Determines the target vault for a capture given:
 
@@ -11,7 +11,7 @@ Determines the target vault for a capture given:
 * and the team-policy of any candidate target (to enforce
   ``accept_sensitive`` precedence).
 
-Precedence (per Phase 4 plan Step 8):
+Precedence:
 
 1. ``portability == "block"`` -> primary (pinned invariant 1).
 2. ``portability == "sensitive"`` AND target's ``accept_sensitive=False``
@@ -23,8 +23,8 @@ Precedence (per Phase 4 plan Step 8):
    that rule's ``target_vault``.
 5. Otherwise -> primary.
 
-Multi-prefix tie-break: only the FIRST prefix participates (matches
-Phase 3 ``parse_prefix_from_content`` behavior). When multiple rules
+Multi-prefix tie-break: only the FIRST prefix participates (matches the
+``parse_prefix_from_content`` first-match behavior). When multiple rules
 match, longest-pattern-match wins; ties broken by user-config
 declaration order; remaining ties refuse with ``RoutingRuleAmbiguous``.
 """
@@ -71,7 +71,7 @@ _PREFIX_RE = re.compile(r"^\[([^\]\[\n]+)\]")
 def _first_prefix(content: str) -> str | None:
     """Extract the first ``[Prefix]`` token from ``content`` (or None).
 
-    Matches Phase 3 ``parse_prefix_from_content`` first-match behavior;
+    Matches the ``parse_prefix_from_content`` first-match behavior;
     when content begins with ``[Postmortem][Decision] body``, only
     ``Postmortem`` participates in routing.
     """

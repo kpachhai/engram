@@ -1,9 +1,9 @@
 """PersistentPushQueue - durable per-vault queue surviving engram restart.
 
-Phase 4 introduces a multi-writer team-vault scenario where remote-down /
-auth-failure / disk-full transients can occur mid-debounce. The push queue
-persists pending captures to ``<vault>/.engram/push-queue.local`` so a
-restart of engram replays them rather than silently losing them.
+Multi-writer team vaults expose remote-down / auth-failure / disk-full
+transients that can occur mid-debounce. The push queue persists pending
+captures to ``<vault>/.engram/push-queue.local`` so a restart of engram
+replays them rather than silently losing them.
 
 On-disk format (one line per pending push):
 
@@ -17,11 +17,11 @@ On-disk format (one line per pending push):
 
 Disk-full at enqueue raises ``PushQueuePersistenceFailed`` and propagates
 back to capture as a refusal so the user knows the thought was NOT
-durably enqueued (P4-H4 mitigation).
+durably enqueued.
 
 Auth-failure during push moves the affected thought file to an orphan
 tarball under ``<personal>/.engram/orphans/`` so the operator's
-``engram orphan-recover`` flow can triage them (P4-M4).
+``engram orphan-recover`` flow can triage them.
 """
 
 from __future__ import annotations
@@ -57,8 +57,9 @@ class PersistentPushQueue:
     from a SIGKILL mid-write (the partial line is dropped + a doctor
     INFO row surfaces; the prior already-fsync'd lines remain readable).
 
-    Concurrency: external file locking (the per-vault flock from Phase 2)
-    serializes enqueue / iter_pending / mark_pushed across processes.
+    Concurrency: external file locking (the per-vault flock provided by
+    the sync layer) serializes enqueue / iter_pending / mark_pushed across
+    processes.
     """
 
     def __init__(

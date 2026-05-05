@@ -1,7 +1,5 @@
 """Sync coordinator state machine.
 
-Phase 2 Steps 7-10 deliverable.
-
 The coordinator owns the post-capture queue, debounces commits, performs
 fetch/pull/push with bounded retry, detects conflicts, and exposes a
 manual ``engram sync`` entry point. State transitions are validated at
@@ -47,7 +45,7 @@ class SyncState(enum.StrEnum):
 
     The 10-element set is closed: any new state requires updating
     :data:`ALLOWED_TRANSITIONS`. ``committed_not_pushed`` is the durable
-    persisted-locally-but-not-replicated state for R-H5 resume-on-startup;
+    persisted-locally-but-not-replicated state for resume-on-startup;
     ``manual-resolution-required`` is a terminal error state (the operator
     must intervene with ``engram sync --resume`` or manual git work).
     """
@@ -636,7 +634,7 @@ class SyncCoordinator:
             )
 
     async def _reflog_gate_and_rebase(self) -> bool:
-        """Run the R-M9 reflog gate and (if safe) attempt rebase.
+        """Run the reflog gate and (if safe) attempt rebase.
 
         Returns True when rebase succeeded and the caller should retry the push.
         Returns False when the gate refused or rebase failed; the caller should

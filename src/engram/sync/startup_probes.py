@@ -1,9 +1,9 @@
-"""Pre-serve safety probes covering R-H/M risks from PHASE_2_PLAN.
+"""Pre-serve safety probes covering the sync layer's high/medium-severity risks.
 
-Phase 2 Step 11 deliverable. Each probe maps 1:1 to a doctor check code
-from :mod:`engram.diagnostics.check_codes`. The same probe logic is also
-re-used by :mod:`engram.diagnostics.doctor` (Step 13) so a single set of
-checks surfaces both at startup (FAIL refuses to serve) and under
+Each probe maps 1:1 to a doctor check code from
+:mod:`engram.diagnostics.check_codes`. The same probe logic is also
+re-used by :mod:`engram.diagnostics.doctor` so a single set of checks
+surfaces both at startup (FAIL refuses to serve) and under
 ``engram doctor`` (operator inspection).
 
 The :func:`run_startup_probes` aggregate runs every probe in a
@@ -36,9 +36,9 @@ from engram.utils.run_command import run_git
 
 _log = logging.getLogger("engram.sync.startup_probes")
 
-#: Floor for the git binary (per R-M11). Older releases lack
-#: --force-with-lease semantics + symbolic-ref refresh contracts that
-#: the coordinator depends on.
+#: Floor for the git binary. Older releases lack --force-with-lease
+#: semantics + symbolic-ref refresh contracts that the coordinator
+#: depends on.
 GIT_VERSION_FLOOR: tuple[int, int, int] = (2, 40, 0)
 
 #: Cloud-sync directory hints (case-insensitive substring match).
@@ -277,7 +277,7 @@ def probe_gitignore_indexes(vault_dir: Path, report: ProbeReport) -> None:
 
 
 def probe_cloud_sync(vault_dir: Path, report: ProbeReport) -> None:
-    """Refuse ``.git`` paths under known cloud-sync providers (R-H7)."""
+    """Refuse ``.git`` paths under known cloud-sync providers."""
     git_dir = vault_dir / ".git"
     target = git_dir.resolve() if git_dir.exists() else vault_dir.resolve()
     parts_lower = [p.lower() for p in target.parts]
@@ -338,7 +338,7 @@ async def probe_vault_identity(
     sync_config: SyncConfig,
     report: ProbeReport,
 ) -> None:
-    """Cross-vault contamination guard (R-H3) via .engram/identity.local."""
+    """Cross-vault contamination guard via .engram/identity.local."""
     actual_url = await gitops.remote_url(vault_dir, sync_config.git_remote)
     try:
         result = check_identity(vault_dir, actual_url)
@@ -373,7 +373,7 @@ async def probe_user_identity(vault_dir: Path, report: ProbeReport) -> None:
     """Warn when per-vault git identity is not set.
 
     Inheriting from global config silently leaks the user's default
-    identity into vault commits (R-M14).
+    identity into vault commits.
     """
     cp_email = await asyncio.to_thread(
         run_git,
@@ -397,7 +397,7 @@ async def probe_user_identity(vault_dir: Path, report: ProbeReport) -> None:
 
 
 async def probe_working_tree_dirty(vault_dir: Path, report: ProbeReport) -> None:
-    """Refuse startup when the working tree has uncommitted changes (R-M12)."""
+    """Refuse startup when the working tree has uncommitted changes."""
     entries = await gitops.status_porcelain(vault_dir)
     if entries:
         sample = ", ".join(e.path for e in entries[:5])

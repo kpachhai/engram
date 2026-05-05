@@ -5,9 +5,9 @@ Stdlib-only Python 3.10+. Copied to ``<bare-remote>/hooks/pre-receive``
 by the operator running ``engram team-vault setup`` (or by the platform
 admin UI for hosted forges).
 
-Hook responsibilities (per Phase 4 plan Step 13):
+Hook responsibilities:
 
-* Refuse any pushed file under ``.indexes/`` (P4-H1).
+* Refuse any pushed file under ``.indexes/``.
 * Refuse non-fast-forward / force-push.
 * Read the team policy YAML and ``members.yaml`` from the just-pushed
   tree (atomic with the push; reads from new commit's tree, NOT the

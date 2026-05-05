@@ -1,6 +1,6 @@
 """Typed async wrapper around :func:`engram.utils.run_command.run_git`.
 
-Phase 2 Step 4 deliverable. Every function in this module:
+Every function in this module:
 
 * Returns a typed dataclass (never a raw :class:`subprocess.CompletedProcess`).
 * Wraps the sync :func:`run_git` call with :func:`asyncio.to_thread` so the
@@ -332,7 +332,7 @@ async def commit_paths(
     optional ``user_email`` + ``user_name`` overrides (passed via
     ``-c user.email=...``) so the per-vault identity per
     ``.engram/identity.local`` is honored even when global git config
-    differs (R-M14).
+    differs.
 
     When ``git status --porcelain`` shows no staged changes, returns
     ``CommitResult(sha=None, nothing_to_commit=True)`` without invoking
@@ -441,8 +441,8 @@ async def verify_commit(
 
     ``git verify-commit ref`` must succeed AND the signing key fingerprint
     must be in ``allowed_keys``. Falls back to False on any error (missing
-    key, unknown key, gpg agent unreachable). The plan's R-H2 mitigation
-    is opt-in (off by default per Q2); callers that opt in must pass a
+    key, unknown key, gpg agent unreachable). Trusted-key verification
+    is opt-in (off by default); callers that opt in must pass a
     non-empty allow-list.
     """
     allowed = {k.strip().upper() for k in allowed_keys if k.strip()}

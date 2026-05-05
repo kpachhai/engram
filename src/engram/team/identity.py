@@ -1,7 +1,7 @@
-"""GPG identity wrapper for Phase 4 sender attribution.
+"""GPG identity wrapper for team-write sender attribution.
 
-Phase 4 uses the operator's GPG signing-key primary fingerprint as the
-canonical sender id (per pinned invariant 3). This module wraps the
+Team-write captures use the operator's GPG signing-key primary fingerprint
+as the canonical sender id. This module wraps the
 ``gpg --list-secret-keys --with-colons`` subprocess invocation; the
 ``--with-colons`` machine-readable output is hand-parsed (no PyGPG
 dependency) so the engram package stays stdlib-only at this surface.
@@ -42,8 +42,8 @@ class GpgError(EngramError):
 class GpgKey:
     """One GPG primary key + its subkeys.
 
-    The primary fingerprint is the canonical sender id per Phase 4
-    pinned invariant 3. Subkey fingerprints map back to the primary at
+    The primary fingerprint is the canonical sender id for team-write
+    captures. Subkey fingerprints map back to the primary at
     verify-commit time.
     """
 
