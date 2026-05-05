@@ -58,6 +58,32 @@ engram doctor
 
 Detailed install + multi-machine + air-gapped install steps live in `docs/operations.md` (coming soon; see `07-OPERATIONS.md` in the spec for now).
 
+## Local install (without PyPI)
+
+You can run engram entirely from a working copy of this repo - no PyPI required. Useful for development, pre-publish smoke tests, and air-gapped operation.
+
+```bash
+# 1. Clone + install dev deps via uv
+git clone https://github.com/kpachhai/engram
+cd engram
+uv sync --all-extras --dev
+
+# 2. Run the CLI directly (uv resolves the console script)
+uv run engram init ~/my-vault
+uv run engram doctor --download-model
+uv run engram doctor
+uv run engram serve --config ~/my-vault/engram.config.yaml
+
+# 3. (Optional) Build a wheel and install in a clean venv to validate packaging
+uv build                                                   # writes dist/engram_mcp-<version>-py3-none-any.whl
+python -m venv /tmp/engram-test-venv
+/tmp/engram-test-venv/bin/pip install dist/engram_mcp-*.whl
+/tmp/engram-test-venv/bin/engram --version
+/tmp/engram-test-venv/bin/engram doctor
+```
+
+This path validates every code-side exit criterion in `docs/PHASE_1_CODE_COMPLETE.md` and `docs/PHASE_2_CODE_COMPLETE.md` without publishing. The two-machine convergence test runs against a local bare repo - see the **"Local two-machine smoke test"** section of `docs/MULTI_MACHINE_SETUP.md`.
+
 ## Tools exposed via MCP
 
 Five tools, intentionally matching the Open Brain MCP surface so existing prompts and skills work unchanged:
@@ -95,8 +121,8 @@ uv run mypy
 
 | Phase | Scope | Status |
 |---|---|---|
-| 1 | Solo MVP + OB migration | In progress |
-| 2 | Multi-machine personal sync (git) | Designed, not built |
+| 1 | Solo MVP + OB migration | Code-complete (see `docs/PHASE_1_CODE_COMPLETE.md`); 6 operational criteria pending live deployment |
+| 2 | Multi-machine personal sync (git) | Code-complete (see `docs/PHASE_2_CODE_COMPLETE.md`); 1 operational criterion (7-day two-machine dogfood) pending |
 | 3 | Multi-vault foundation + friend-share + optional LLM features | Designed, not built |
 | 4-6 | Team / organization / enterprise | Designed, gated by adoption |
 
