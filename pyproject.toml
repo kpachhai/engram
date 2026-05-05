@@ -134,6 +134,10 @@ ignore = [
 # error_code constants name them this way. The N818 "must end in Error" rule
 # would force renames that ripple through the plan, ADRs, and error_code map.
 "src/engram/errors.py" = ["N818"]
+# engram.llm.providers methods inherit their argument names from the
+# LLMProvider Protocol; documenting each adapter's args verbatim would
+# duplicate the Protocol docs without adding signal.
+"src/engram/llm/providers.py" = ["D417"]
 
 [tool.ruff.lint.pydocstyle]
 convention = "google"
