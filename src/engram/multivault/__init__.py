@@ -1,6 +1,6 @@
-"""Phase 3 multi-vault primitives.
+"""Multi-vault primitives.
 
-This package introduces the abstractions that let one ``engram serve``
+This package provides the abstractions that let one ``engram serve``
 process surface N vaults (one ``primary`` + many ``read-only``) under
 different roles, perform cross-vault search with the portability invariant
 ``block`` NEVER leaks across vaults, and refuse writes against read-only
@@ -20,8 +20,6 @@ The major surfaces are:
 * :func:`engram.multivault.portability.assert_no_block_in_results` - the
   defense-in-depth re-filter every cross-vault read path runs before
   returning rows.
-
-Phase 3 plan reference: ``docs/PHASE_3_PLAN.md`` Layer B (Steps 4-7).
 """
 
 from __future__ import annotations

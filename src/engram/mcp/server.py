@@ -19,11 +19,13 @@ coordinators, and running the server's stdio loop.
 
 from __future__ import annotations
 
+from pathlib import Path
 from typing import TYPE_CHECKING, Any
 from uuid import UUID
 
 from fastmcp import FastMCP
 
+from engram.config.models import UserConfig
 from engram.mcp.llm_tools import (
     HandlerDeps,
     SummarizeInput,
@@ -57,6 +59,22 @@ if TYPE_CHECKING:
     from engram.embedding.protocol import EmbeddingProvider
     from engram.multivault.registry import VaultRegistry
     from engram.storage.facade import VaultStorage
+
+
+def _user_config_view_from(deps: HandlerDeps) -> UserConfig:
+    """Build a UserConfig view from EffectiveConfig for the routing dispatcher.
+
+    The dispatcher needs ``auto_route``, ``routing_rules``, and ``vaults``
+    fields; pulls them from the EffectiveConfig that ``serve`` populated
+    at startup. We reconstruct a minimal UserConfig rather than threading
+    a separate UserConfig through the call graph.
+    """
+    return UserConfig.model_construct(
+        default_user=deps.config.default_user,
+        vaults=list(deps.config.vaults) if deps.config.vaults else [],
+        auto_route=deps.config.auto_route,
+        routing_rules=list(deps.config.routing_rules),
+    )
 
 
 def build_server(
@@ -136,17 +154,20 @@ def build_multivault_server(
     default_user: str = "engram-user",
     server_name: str = "engram",
 ) -> FastMCP[Any]:
-    """Phase 3 wiring with the registry routing + LLM-mediated tools.
+    """Multi-vault MCP server with routing dispatcher + capture gate.
 
-    Phase 1 + 2 client semantics: ``capture_thought`` always targets
-    the primary; ``search_thoughts`` defaults to the primary unless
-    ``filter.vault == "*"``. Per the plan R-L2, this preserves
-    backwards compatibility with existing clients.
+    Wires the seven engram tools (``capture_thought``,
+    ``search_thoughts``, ``list_thoughts``, ``thought_stats``,
+    ``fetch``, ``summarize_thought``, ``synthesize_thoughts``) to a
+    FastMCP server backed by a :class:`VaultRegistry`. ``capture_thought``
+    consults the per-prefix routing dispatcher when no explicit ``vault:``
+    metadata is supplied, then runs the team-vault capture gate
+    (read-only refusal + member enrollment + policy refuse-or-pass +
+    captured_by stamping) before delegating to the storage layer.
 
-    Phase 3 additions: ``summarize_thought`` (wraps
-    :func:`engram.mcp.llm_tools.summarize_thought_handler`) and
-    ``synthesize_thoughts`` (wraps
-    :func:`engram.mcp.llm_tools.synthesize_thoughts_handler`).
+    Backwards compatibility: clients that omit ``meta.vault`` and run
+    against a config without ``auto_route`` see single-vault primary
+    semantics unchanged.
     """
     mcp: FastMCP[Any] = FastMCP(server_name)
 
@@ -155,19 +176,97 @@ def build_multivault_server(
         content: str,
         metadata: dict[str, Any] | None = None,
     ) -> dict[str, Any]:
-        """Write a new thought to the primary vault.
+        """Capture a thought, routing to the appropriate vault.
 
-        Phase 3: capture is always routed to the primary vault per
-        R-L2; explicit vault filters that target a read-only vault
-        are refused at the storage layer with VaultReadOnlyError.
+        Routing precedence (see :func:`engram.team.routing.resolve_target_vault`):
+
+        1. ``portability=block`` always lands in primary.
+        2. Explicit ``meta.vault`` arg wins.
+        3. If ``auto_route=true`` and a routing rule matches the first
+           prefix, the rule's target_vault wins.
+        4. Otherwise -> primary.
+
+        For team-write targets, the capture gate verifies member
+        enrollment + policy refuse-or-pass + stamps ``captured_by``
+        before the write.
         """
-        primary = registry.primary()
+        from engram.mcp.tools import resolve_capture_metadata
+        from engram.models.thought import Thought
+        from engram.team.capture_gate import gate_team_capture
+        from engram.team.routing import resolve_target_vault
+
         meta = CaptureInputMetadata.model_validate(metadata) if metadata is not None else None
         payload = CaptureInput(content=content, metadata=meta)
-        result: CaptureOutput = await capture_thought_handler(
-            primary, embedder, payload=payload, default_user=default_user
+
+        # Build a transient Thought for the routing dispatcher (it only
+        # consults portability + content-prefix; the real Thought lands
+        # below via the storage facade).
+        resolved = resolve_capture_metadata(payload, default_user=default_user)
+        from datetime import UTC, datetime
+        from uuid import uuid4
+
+        now = datetime.now(tz=UTC)
+        probe = Thought(
+            id=uuid4(),
+            schema_version=1,
+            prefix=resolved["prefix"],
+            portability=resolved["portability"],
+            source=resolved["source"],
+            created_at=now,
+            updated_at=now,
+            fingerprint="0" * 64,
+            tags=[],
+            vault="probe",
+            content=content,
+            file_path=Path("probe.md"),
         )
-        return result.model_dump(mode="json")
+
+        # Resolve the target vault.
+        target_policy_lookup = deps.team_policies if hasattr(deps, "team_policies") else {}
+        decision = resolve_target_vault(
+            thought=probe,
+            explicit_vault=meta.vault if meta is not None else None,
+            user_config=_user_config_view_from(deps),
+            registry=registry,
+            target_policy_lookup=target_policy_lookup,  # type: ignore[arg-type]
+        )
+
+        target_storage = registry.get(decision.target_vault)
+        if target_storage is None:
+            target_storage = registry.primary()
+        target_role = registry.role_of(decision.target_vault) or "primary"
+
+        # Run the capture gate (read-only refusal, member enrollment,
+        # policy refuse-or-pass, captured_by stamping).
+        team_policy = (
+            deps.team_policies.get(decision.target_vault)
+            if hasattr(deps, "team_policies")
+            else None
+        )
+        team_members = (
+            deps.team_members.get(decision.target_vault) if hasattr(deps, "team_members") else None
+        )
+        gate_team_capture(
+            thought=probe,
+            role=target_role,
+            members=team_members,  # type: ignore[arg-type]
+            policy=team_policy,  # type: ignore[arg-type]
+            gpg_identity=deps.gpg_identity,  # type: ignore[arg-type]
+        )
+
+        captured_by_value = probe.captured_by if target_role == "team-write" else None
+
+        result: CaptureOutput = await capture_thought_handler(
+            target_storage,
+            embedder,
+            payload=payload,
+            default_user=default_user,
+            captured_by=captured_by_value,
+        )
+        out = result.model_dump(mode="json")
+        out["vault_name"] = decision.target_vault
+        out["routing_reason"] = decision.reason
+        return out
 
     @mcp.tool
     async def search_thoughts(

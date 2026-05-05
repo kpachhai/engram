@@ -1,4 +1,4 @@
-"""Phase 3 optional LLM-mediated features.
+"""Optional LLM-mediated features.
 
 Surface area:
 
@@ -14,7 +14,7 @@ Surface area:
   persisted to ``<primary>/.indexes/llm_usage.json`` + token-budget
   pre-truncation respecting the per-vault floor.
 * :func:`engram.llm.citations.validate_citations` - strips hallucinated
-  thought-id citations from LLM responses (R-M8).
+  thought-id citations from LLM responses.
 
 The whole package degrades gracefully when no LLM is configured: the
 resolver returns ``None`` and the LLM tools refuse with a clear message.

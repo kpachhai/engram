@@ -1,8 +1,7 @@
 """``engram clone-vault <url> <local_path>`` - safe-clone helper.
 
-Phase 2 Step 14 deliverable. Performs ``git clone --no-checkout``,
-removes ``.git/hooks`` BEFORE the checkout phase fires them, then
-runs ``git checkout``. This is the R-H1 mitigation: a malicious
+Performs ``git clone --no-checkout``, removes ``.git/hooks`` BEFORE the
+checkout phase fires them, then runs ``git checkout``. A malicious
 ``post-checkout`` hook in the cloned repo cannot execute because the
 hooks directory is gone before the checkout runs.
 

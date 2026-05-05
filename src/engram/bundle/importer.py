@@ -1,11 +1,11 @@
-r"""Bundle importer (Phase 3 Step 10).
+r"""Bundle importer.
 
-The bundle reception gate. Per ``docs/PHASE_3_PLAN.md`` Step 10:
+The bundle reception gate:
 
 1. Read ``manifest.json`` first; refuse if ``schema_version != 1``.
 2. Walk the target vault's existing ``source: bundle:<id>`` chains; if
    ``manifest.bundle_id`` appears, refuse with
-   :class:`engram.errors.BundleCycleDetected` (R-M13).
+   :class:`engram.errors.BundleCycleDetected`.
 3. Stream the tar.gz so a 4 GB bundle never loads fully into RAM.
 4. Validate every member: under ``thoughts/``, no ``..`` segments, NFC
    normalize, ``\\`` -> ``/``, BOM strip, ``yaml.safe_load`` only,
@@ -14,17 +14,17 @@ The bundle reception gate. Per ``docs/PHASE_3_PLAN.md`` Step 10:
    ``<vault>/.indexes/import-staging-<bundle_id>/``.
 6. Pre-flight id-collision scan against ``SELECT id FROM thoughts``;
    on ANY collision, abort the bundle BEFORE merge into ``thoughts/``.
-   This is the atomic-at-pre-flight contract from SF-4 fix.
+   The bundle is atomic at the pre-flight level.
 7. On success, walk the staging directory file-by-file and copy each
    into ``thoughts/`` under its repo-relative path; update
    ``migration-report.json`` after each file write.
 8. Tag every imported thought with ``source: bundle:<id> <- ...``
    chain inherited from the manifest plus the candidate id.
 
-Crash recovery: per SF-4, the per-file copy is best-effort; if a crash
-hits mid-merge, ``migration-report.json`` records what landed and
+Crash recovery: the per-file copy is best-effort; if a crash hits
+mid-merge, ``migration-report.json`` records what landed and
 ``engram doctor`` surfaces the partial-state FAIL with operator-runnable
-resume instructions. ``engram import-resume`` is deferred to Phase 4.
+resume instructions.
 """
 
 from __future__ import annotations
@@ -211,7 +211,7 @@ class BundleImporter:
         target_tag = manifest.bundle_source_tag
         # Walk all thoughts; cheap enough for personal-scale corpora.
         # In a friendlier future we'd index on `source` and grep that
-        # index, but Phase 3 doesn't yet build that index.
+        # index, but no such index exists yet.
         offset = 0
         page_size = 500
         while True:

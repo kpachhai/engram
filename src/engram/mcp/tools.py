@@ -17,10 +17,12 @@ Per ``02-TECHNICAL_DESIGN.md`` MCP API Contract, the 5 tools are:
 from __future__ import annotations
 
 import logging
+from typing import TypedDict
 from uuid import UUID
 
 from engram.embedding.protocol import EmbeddingProvider
 from engram.errors import EmbeddingError
+from engram.models.frontmatter import Portability
 from engram.models.mcp import (
     CaptureInput,
     CaptureOutput,
@@ -33,6 +35,15 @@ from engram.models.mcp import (
     StatsOutput,
 )
 from engram.storage.facade import VaultStorage
+
+
+class ResolvedCaptureMetadata(TypedDict):
+    """Resolved prefix + portability + source for a capture probe."""
+
+    prefix: str
+    portability: Portability
+    source: str
+
 
 _log = logging.getLogger("engram.mcp.tools")
 
@@ -48,18 +59,59 @@ def _relative_file_path(storage: VaultStorage, absolute: object) -> str:
         return str(p)
 
 
+def resolve_capture_metadata(
+    payload: CaptureInput,
+    *,
+    default_user: str,
+) -> ResolvedCaptureMetadata:
+    """Resolve prefix + portability + source for a capture without writing.
+
+    Used by the routing dispatcher (which needs a transient
+    :class:`engram.models.thought.Thought` probe to consult portability +
+    first-prefix BEFORE the actual write happens). Mirrors the resolution
+    logic baked into :meth:`engram.storage.facade.VaultStorage.capture`.
+    """
+    from engram.models.frontmatter import DEFAULT_PORTABILITY_BY_PREFIX
+    from engram.storage.facade import parse_prefix_from_content
+
+    metadata = payload.metadata
+    explicit_prefix = metadata.prefix if metadata else None
+    resolved_prefix = (
+        explicit_prefix
+        if explicit_prefix is not None
+        else parse_prefix_from_content(payload.content)
+    )
+    explicit_portability = metadata.portability if metadata else None
+    resolved_portability: Portability = (
+        explicit_portability
+        if explicit_portability is not None
+        else DEFAULT_PORTABILITY_BY_PREFIX.get(resolved_prefix, "portable")  # type: ignore[assignment]
+    )
+    resolved_source = metadata.source if metadata and metadata.source else default_user
+    return ResolvedCaptureMetadata(
+        prefix=resolved_prefix,
+        portability=resolved_portability,
+        source=resolved_source,
+    )
+
+
 async def capture_thought_handler(
     storage: VaultStorage,
     embedder: EmbeddingProvider,
     *,
     payload: CaptureInput,
     default_user: str = "engram-user",
+    captured_by: str | None = None,
 ) -> CaptureOutput:
     """Handle the ``capture_thought`` MCP tool.
 
     Embedding failure is non-fatal: if the embedder raises, the thought is
     still captured with ``embedding_status='pending'`` and the next
     ``engram doctor --repair`` regenerates the vector.
+
+    When the target is a team-write vault, ``captured_by`` carries the
+    operator's GPG primary fingerprint (40 hex; canonical upper-case)
+    set by the team-vault capture gate before this handler runs.
     """
     embedding = None
     try:
@@ -75,6 +127,7 @@ async def capture_thought_handler(
         source=(metadata.source if metadata and metadata.source else default_user),
         tags=metadata.tags if metadata else None,
         embedding=embedding,
+        captured_by=captured_by,
     )
     return CaptureOutput(
         id=thought.id,

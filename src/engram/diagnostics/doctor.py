@@ -378,7 +378,7 @@ def _maybe_repair(
         )
 
 
-# === Phase 2 sync checks (Step 13) ===
+# === Sync checks ===
 
 
 _PROBE_CODE_TO_STATUS_DEFAULT: dict[str, CheckStatus] = {
@@ -432,7 +432,7 @@ def run_sync_diagnostics(
     report: DoctorReport,
     config: EffectiveConfig,
 ) -> None:
-    """Append the 14 Phase 2 sync checks to ``report``.
+    """Append the 14 sync checks to ``report``.
 
     Most checks reuse the probe logic from
     :mod:`engram.sync.startup_probes`. The ``conflict_markers_present``
@@ -524,8 +524,8 @@ def run_diagnostics(
         embedder_factory: Optional override that returns an :class:`EmbeddingProvider`
             given the config. Defaults to building a :class:`FastEmbedProvider`.
             Tests inject a stub here.
-        skip_sync_checks: If True, skip the Phase 2 sync diagnostics. Useful
-            for unit tests that target Phase 1 behavior on non-git vaults.
+        skip_sync_checks: If True, skip the sync diagnostics. Useful for
+            unit tests that target single-vault behavior on non-git vaults.
 
     Returns:
         :class:`DoctorReport` with one :class:`CheckResult` per check and an

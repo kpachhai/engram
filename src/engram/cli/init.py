@@ -35,7 +35,7 @@ _GITIGNORE_BODY = """\
 *.swp
 *.swo
 .DS_Store
-# Per-vault identity is machine-local (Phase 2 R-H3 cross-vault contamination guard).
+# Per-vault identity is machine-local (cross-vault contamination guard).
 .engram/identity.local
 """
 

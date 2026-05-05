@@ -140,6 +140,22 @@ class HandlerDeps:
     budget: LLMBudget
     per_vault_llm: dict[str, LLMConfig | None] = field(default_factory=dict)
     provider_override: LLMProvider | None = None
+    #: Per-team-vault policy lookup (alias -> TeamVaultPolicy). Populated
+    #: at serve startup from each team-write vault's
+    #: ``.engram/team-policy.yaml``. Empty when no team-write vaults are
+    #: mounted; the routing dispatcher and capture gate consult this
+    #: map for ``accept_sensitive`` and allowlist enforcement.
+    team_policies: dict[str, object] = field(default_factory=dict)
+    #: Per-team-vault members lookup (alias -> MembersList). Populated
+    #: at serve startup from each team-write vault's
+    #: ``.engram/members.yaml``. Empty when no team-write vaults are
+    #: mounted; the capture gate consults this map for the
+    #: ``assert_member_enrolled`` check.
+    team_members: dict[str, object] = field(default_factory=dict)
+    #: GPG identity wrapper used to discover the operator's primary
+    #: signing fingerprint for ``captured_by`` stamping. None when no
+    #: team-write vaults are mounted (no need for GPG without team work).
+    gpg_identity: object | None = None
 
 
 def _wrap_thought_for_prompt(t: ThoughtWithSimilarity) -> str:

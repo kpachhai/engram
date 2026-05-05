@@ -1,4 +1,4 @@
-"""Stable string identifiers for Phase 2 doctor checks.
+"""Stable string identifiers for engram doctor checks.
 
 Each constant names exactly one row in ``engram doctor`` output AND one
 probe in :mod:`engram.sync.startup_probes`. The 1:1 mapping is deliberate:
@@ -9,6 +9,10 @@ the serve loop).
 Constants are plain strings - they appear in user-facing CLI output and in
 test assertions, so changing one is a user-visible breaking change. Do not
 re-letter or rename without bumping a CHANGELOG entry.
+
+The ``ALL_PHASE_N_CHECK_CODES`` constants are part of the public API; the
+naming reflects how the check set was rolled out historically and is
+preserved for compatibility.
 """
 
 from __future__ import annotations
@@ -50,7 +54,7 @@ ALL_PHASE_2_CHECK_CODES: Final[tuple[str, ...]] = (
 )
 
 
-# Phase 3 additions ---------------------------------------------------------
+# Multi-vault check codes ---------------------------------------------------
 
 #: At most one vault may declare role=primary. FAIL when count > 1.
 MULTIPLE_PRIMARY_VAULTS: Final[str] = "multiple_primary_vaults"
@@ -66,14 +70,14 @@ LLM_PROVIDER_REACHABLE: Final[str] = "llm_provider_reachable"
 #: WARN at >=80% of the daily cost cap, per vault that has consumed budget.
 LLM_DAILY_COST_CAP_APPROACHED: Final[str] = "llm_daily_cost_cap_approached"
 #: WARN when a read-only-role vault declares a per-vault LLM block; the
-#: resolver ignores it (R-M2) but operator should know the config is dead.
+#: resolver ignores it but operator should know the config is dead.
 READ_ONLY_VAULT_DECLARES_LLM: Final[str] = "read_only_vault_declares_llm"
 #: FAIL when a friend-imported (read-only) vault carries a portability=block
 #: thought; refuse to mount that vault.
 FRIEND_VAULT_BLOCK_THOUGHT_PRESENT: Final[str] = "friend_vault_block_thought_present"
 
-#: Canonical Phase 3 superset; tests iterate this to assert all 22 codes
-#: are unique non-empty snake_case strings.
+#: Canonical multi-vault superset; tests iterate this to assert all 22
+#: codes are unique non-empty snake_case strings.
 ALL_PHASE_3_CHECK_CODES: Final[tuple[str, ...]] = (
     *ALL_PHASE_2_CHECK_CODES,
     MULTIPLE_PRIMARY_VAULTS,
@@ -87,7 +91,7 @@ ALL_PHASE_3_CHECK_CODES: Final[tuple[str, ...]] = (
 )
 
 
-# Phase 4 additions ---------------------------------------------------------
+# Team-vault check codes ----------------------------------------------------
 
 #: INFO row counting team-write mounts. Always present; informational.
 MULTIPLE_TEAM_WRITE_VAULTS_OK: Final[str] = "multiple_team_write_vaults_ok"
@@ -110,9 +114,12 @@ ROUTING_RULE_PRIORITY_COLLISION: Final[str] = "routing_rule_priority_collision"
 #: WARN when a team-write vault's ``required_embedding_model`` differs
 #: from the local engram's configured model.
 TEAM_VAULT_EMBEDDING_MISMATCH: Final[str] = "team_vault_embedding_mismatch"
+#: WARN when a vault's git branch HEAD has changed since mount time
+#: (someone ran ``git checkout`` outside engram's awareness).
+GIT_BRANCH_DRIFTED: Final[str] = "git_branch_drifted"
 
-#: Canonical Phase 4 superset; tests iterate this to assert all 30 codes
-#: are unique non-empty snake_case strings.
+#: Canonical team-vault superset; tests iterate this to assert all 31
+#: codes are unique non-empty snake_case strings.
 ALL_PHASE_4_CHECK_CODES: Final[tuple[str, ...]] = (
     *ALL_PHASE_3_CHECK_CODES,
     MULTIPLE_TEAM_WRITE_VAULTS_OK,
@@ -123,6 +130,7 @@ ALL_PHASE_4_CHECK_CODES: Final[tuple[str, ...]] = (
     SERVE_CONFIG_STALE,
     ROUTING_RULE_PRIORITY_COLLISION,
     TEAM_VAULT_EMBEDDING_MISMATCH,
+    GIT_BRANCH_DRIFTED,
 )
 
 
@@ -138,6 +146,7 @@ __all__ = [
     "EMBEDDING_MODEL_MISMATCH_ACROSS_VAULTS",
     "FRIEND_VAULT_BLOCK_THOUGHT_PRESENT",
     "GITIGNORE_INDEXES",
+    "GIT_BRANCH_DRIFTED",
     "GIT_VERSION_FLOOR",
     "GPG_AGENT_REACHABLE",
     "LFS_DRIFT",

@@ -151,10 +151,15 @@ class VaultStorage:
             embedding_dim=embedding_dim,
             embedding_model_name=embedding_model_name,
         )
-        # Phase 2 wiring point: ``engram serve`` injects the SyncCoordinator
-        # via :meth:`set_sync_coordinator` so unit tests stay hermetic. When
+        # ``engram serve`` injects the SyncCoordinator via
+        # :meth:`set_sync_coordinator` so unit tests stay hermetic. When
         # this attribute is None, ``_post_capture_sync`` is a no-op.
         self._sync_coordinator: object | None = None
+        # Branch-drift monitor: snapshot the current branch HEAD at mount
+        # time so a side-channel ``git checkout`` between mount and read
+        # surfaces as a doctor row rather than silently shifting the
+        # vault's view of disk. Best-effort; non-git-repo dirs return None.
+        self._mounted_branch_at_init: str | None = self._read_current_branch()
 
     def _refuse_if_read_only(self, action: str) -> None:
         """Hard-refusal gate for Phase 3 read-only-role vaults (R-H7/R-H8)."""
@@ -172,6 +177,47 @@ class VaultStorage:
         can be re-roled across mount/unmount cycles in long-running tests.
         """
         self.read_only_role = read_only
+
+    def _read_current_branch(self) -> str | None:
+        """Read the current branch HEAD via ``git symbolic-ref``.
+
+        Returns ``None`` if the thoughts dir is not under a git repo or
+        if the branch cannot be resolved (e.g. detached HEAD, missing git
+        binary). The storage layer cannot prevent a side-channel
+        ``git checkout``; this method is the read-path snapshot used by
+        the branch-drift doctor probe.
+        """
+        try:
+            import subprocess
+
+            result = subprocess.run(  # noqa: S603
+                ["git", "-C", str(self.thoughts_dir), "symbolic-ref", "--short", "HEAD"],  # noqa: S607
+                capture_output=True,
+                text=True,
+                check=False,
+                timeout=2.0,
+            )
+            if result.returncode != 0:
+                return None
+            branch = result.stdout.strip()
+            return branch or None
+        except (OSError, ValueError):
+            return None
+
+    def current_branch_drifted(self) -> tuple[bool, str | None, str | None]:
+        """Check whether the branch HEAD has changed since mount time.
+
+        Returns ``(drifted, mounted_at, current)`` so the doctor probe
+        can surface both values for the operator. ``drifted`` is False
+        when the storage was not mounted under a git repo (no comparison
+        is possible).
+        """
+        if self._mounted_branch_at_init is None:
+            return False, None, None
+        current = self._read_current_branch()
+        if current is None:
+            return False, self._mounted_branch_at_init, None
+        return current != self._mounted_branch_at_init, self._mounted_branch_at_init, current
 
     def __enter__(self) -> VaultStorage:
         """Return self; storage opened in __init__."""

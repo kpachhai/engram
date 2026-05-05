@@ -1,11 +1,11 @@
 """``engram serve`` CLI command - launches the FastMCP stdio server.
 
-Phase 2 Step 17 lifecycle:
+Lifecycle:
 
 1. Load resolved configuration.
 2. Run :func:`engram.sync.startup_probes.run_startup_probes`. On any FAIL,
    exit 2 with a serialized failure list (refuse to serve).
-3. Detect cloud-sync vault paths and warn (Q10 default).
+3. Detect cloud-sync vault paths and warn.
 4. Acquire the per-vault advisory lock.
 5. If ``sync.auto_pull_on_startup``, run :func:`maybe_startup_pull`.
 6. Scan markdown for conflict markers; if found, enter degraded mode
@@ -47,7 +47,7 @@ from engram.utils.lock import MigrationLock, VaultLock
 _log = logging.getLogger("engram.cli.serve")
 
 # Common consumer cloud-sync directory roots. SQLite + flock semantics on these
-# providers are unreliable (Risk R9 / Open Question Q10); WARN on detect.
+# providers are unreliable; WARN on detect.
 _CLOUD_SYNC_PATH_HINTS = (
     "Dropbox",
     "iCloud Drive",
@@ -90,7 +90,7 @@ def _build_multivault_server_for(
     embedder: object,
     primary_coordinator: object | None,
 ) -> FastMCP[Any]:
-    """Build a Phase 3 multi-vault FastMCP server.
+    """Build a multi-vault FastMCP server.
 
     Mounts the primary storage (already opened upstream) into a fresh
     registry, then opens a read-only-mounted storage for every other
@@ -184,7 +184,7 @@ def register(app: typer.Typer) -> None:
         skip_probes: bool = typer.Option(
             False,
             "--skip-probes",
-            help="Skip Phase 2 startup probes (debugging only).",
+            help="Skip startup probes (debugging only).",
         ),
     ) -> None:
         """Start the engram MCP server (stdio) for the configured vault."""
@@ -200,7 +200,7 @@ def register(app: typer.Typer) -> None:
 
         configure_logging(level=config.log_level, log_format=config.log_format)
 
-        # Step 2: startup probes BEFORE acquiring lock (per Step 17).
+        # Step 2: startup probes BEFORE acquiring lock.
         if not skip_probes and (config.vault_path / ".git").exists():
             probe_report = asyncio.run(
                 startup_probes.run_startup_probes(
@@ -283,11 +283,11 @@ def register(app: typer.Typer) -> None:
             # event loop. We start it lazily on first enqueue via storage.
 
         try:
-            # Phase 3: when the per-user config has more than one vault
-            # entry, the serve command builds the multi-vault server with
-            # a registry routing across all configured vaults (one
-            # primary + zero-or-many read-only). Otherwise it uses the
-            # Phase 1 single-vault server unchanged.
+            # When the per-user config has more than one vault entry,
+            # the serve command builds the multi-vault server with a
+            # registry routing across all configured vaults (one primary
+            # + zero-or-many read-only). Otherwise it uses the
+            # single-vault server.
             extra_vaults = [v for v in (config.vaults or []) if v.name != config.vault_name]
             if extra_vaults:
                 server = _build_multivault_server_for(

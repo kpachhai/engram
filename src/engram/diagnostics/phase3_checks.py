@@ -1,7 +1,7 @@
-"""Phase 3 doctor extensions (Step 18).
+"""Multi-vault doctor extensions.
 
-These are the eight per-vault / cross-vault checks the Phase 3 plan
-adds on top of the Phase 1+2 doctor surface:
+These are the eight per-vault / cross-vault checks layered on top of
+the single-vault doctor surface:
 
 * :func:`check_multiple_primary_vaults` - FAIL when ``UserConfig.vaults``
   lists more than one ``role: primary`` entry.
@@ -22,7 +22,7 @@ adds on top of the Phase 1+2 doctor surface:
 
 Each check appends a :class:`engram.diagnostics.doctor.CheckResult` to
 the supplied :class:`DoctorReport`. Callers chain these from the
-extended ``run_diagnostics`` after the Phase 1+2 sync checks land.
+extended ``run_diagnostics`` after the single-vault sync checks land.
 """
 
 from __future__ import annotations
@@ -242,9 +242,8 @@ def check_read_only_vault_declares_llm(
 ) -> None:
     """WARN when a read-only vault declares its own LLM block.
 
-    The resolver drops this config (SF-13 / R-M2); the warning makes
-    operators aware that the friend's per-vault LLM choice is dead
-    code.
+    The resolver drops this config; the warning makes operators aware
+    that the friend's per-vault LLM choice is dead code.
     """
     offenders: list[str] = []
     for mount in user_config.vaults:
@@ -278,11 +277,11 @@ def check_friend_vault_block_thought_present(
 ) -> None:
     """FAIL when a read-only vault carries a ``portability=block`` thought.
 
-    The bundle importer filters block at import time (Step 10) and the
-    aggregator never returns block across vaults, but this check
-    re-asserts the invariant against the live SQLite state in case a
-    friend-imported vault somehow contains block content (e.g.
-    out-of-band manual modification).
+    The bundle importer filters block at import time and the aggregator
+    never returns block across vaults, but this check re-asserts the
+    invariant against the live SQLite state in case a friend-imported
+    vault somehow contains block content (e.g. out-of-band manual
+    modification).
     """
     offenders: list[str] = []
     for name, storage, role in registry.iter_storages():
@@ -323,7 +322,7 @@ def run_phase3_checks(
     per_vault_llm: dict[str, LLMConfig | None] | None = None,
     force_sequential: bool = False,
 ) -> None:
-    """Run all eight Phase 3 checks against ``registry``.
+    """Run all eight multi-vault checks against ``registry``.
 
     Convenience for the doctor CLI command; tests typically call
     individual check functions to assert specific scenarios.

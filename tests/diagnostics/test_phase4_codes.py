@@ -8,6 +8,7 @@ from engram.diagnostics.check_codes import (
     ALL_PHASE_2_CHECK_CODES,
     ALL_PHASE_3_CHECK_CODES,
     ALL_PHASE_4_CHECK_CODES,
+    GIT_BRANCH_DRIFTED,
     MULTIPLE_TEAM_WRITE_VAULTS_OK,
     ROUTING_RULE_PRIORITY_COLLISION,
     SERVE_CONFIG_STALE,
@@ -27,6 +28,7 @@ PHASE_4_NEW_CODES = (
     SERVE_CONFIG_STALE,
     ROUTING_RULE_PRIORITY_COLLISION,
     TEAM_VAULT_EMBEDDING_MISMATCH,
+    GIT_BRANCH_DRIFTED,
 )
 
 
@@ -41,7 +43,7 @@ def test_phase_4_codes_are_unique() -> None:
     assert len(ALL_PHASE_4_CHECK_CODES) == len(set(ALL_PHASE_4_CHECK_CODES))
 
 
-def test_phase_4_adds_eight_new_codes() -> None:
+def test_phase_4_adds_nine_new_codes() -> None:
     new_codes = set(ALL_PHASE_4_CHECK_CODES) - set(ALL_PHASE_3_CHECK_CODES)
     assert new_codes == set(PHASE_4_NEW_CODES)
 

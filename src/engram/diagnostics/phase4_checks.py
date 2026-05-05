@@ -1,8 +1,8 @@
-"""Phase 4 doctor probe implementations.
+"""Team-vault doctor probe implementations.
 
 Each ``_check_*`` function returns a list of ``DoctorRow`` objects so the
-top-level ``engram doctor`` command can fold them into the Phase 1+2+3
-output. Per the Phase 4 plan Step 18, the new check codes are:
+top-level ``engram doctor`` command can fold them into its output. The
+team-vault check codes are:
 
 * ``multiple_team_write_vaults_ok`` (INFO)
 * ``team_member_not_enrolled`` (FAIL)
@@ -27,6 +27,7 @@ from pathlib import Path
 from typing import TYPE_CHECKING, Literal
 
 from engram.diagnostics.check_codes import (
+    GIT_BRANCH_DRIFTED,
     MULTIPLE_TEAM_WRITE_VAULTS_OK,
     ROUTING_RULE_PRIORITY_COLLISION,
     SERVE_CONFIG_STALE,
@@ -47,10 +48,11 @@ DoctorStatus = Literal["OK", "INFO", "WARN", "FAIL"]
 
 @dataclass(frozen=True)
 class Phase4DoctorRow:
-    """One row in the Phase 4 portion of the doctor report.
+    """One row in the team-vault portion of the doctor report.
 
-    Mirrors the Phase 2/3 row shape so the top-level doctor command can
-    fold all rows into a uniform output.
+    Mirrors the single-vault and multi-vault row shape so the top-level
+    doctor command can fold all rows into a uniform output. The class
+    name is part of the public API.
     """
 
     code: str
@@ -239,9 +241,40 @@ def check_routing_rule_priority_collision(config: UserConfig) -> list[Phase4Doct
     return rows
 
 
+def check_branch_drift(
+    *,
+    storages: dict[str, object],
+) -> list[Phase4DoctorRow]:
+    """WARN when any vault's branch HEAD differs from mount-time HEAD.
+
+    Args:
+        storages: Map of vault-name -> VaultStorage (or any object with
+            a ``current_branch_drifted()`` method that returns
+            ``(drifted, mounted_at, current)``).
+    """
+    rows: list[Phase4DoctorRow] = []
+    for vault_name, storage in storages.items():
+        if not hasattr(storage, "current_branch_drifted"):
+            continue
+        drifted, mounted_at, current = storage.current_branch_drifted()
+        if drifted:
+            rows.append(
+                Phase4DoctorRow(
+                    code=GIT_BRANCH_DRIFTED,
+                    status="WARN",
+                    detail=(
+                        f"vault {vault_name!r}: branch was {mounted_at!r} at mount, "
+                        f"is now {current!r}; engram's view of disk may be stale"
+                    ),
+                ),
+            )
+    return rows
+
+
 __all__ = [
     "DoctorStatus",
     "Phase4DoctorRow",
+    "check_branch_drift",
     "check_multiple_team_write_vaults",
     "check_orphan_quarantine",
     "check_pending_pushes",

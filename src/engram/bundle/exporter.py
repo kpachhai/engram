@@ -1,7 +1,7 @@
-"""Bundle exporter (Phase 3 Step 9).
+"""Bundle exporter.
 
 Streams a tar.gz archive of a vault's thoughts plus a ``manifest.json`` to
-disk. Per the Phase 3 plan:
+disk:
 
 * Each thought file's bytes-on-disk are checked against
   :data:`engram.bundle.format.MAX_PER_FILE_BYTES` (1 MB) and refused
@@ -11,7 +11,7 @@ disk. Per the Phase 3 plan:
   aborts before the next file write.
 * Only thoughts whose ``portability`` is in the requested filter list
   are included. The default filter is ``["portable"]``; the CLI
-  command exposes a repeatable ``--portability`` flag (Plan NH-5).
+  command exposes a repeatable ``--portability`` flag.
 * Atomic via temp-then-rename: writes go to ``<output>.tmp``; on
   successful close the temp file is renamed onto ``<output>``.
 * The manifest is written LAST inside the tar so a partial bundle
@@ -20,8 +20,8 @@ disk. Per the Phase 3 plan:
   opening any other member.
 
 This skips git-related side effects entirely - a bundle is a
-point-in-time snapshot. Live updates use ``engram clone-vault`` (Phase
-2 deliverable) plus pull, not bundle re-export.
+point-in-time snapshot. Live updates use ``engram clone-vault`` plus
+pull, not bundle re-export.
 """
 
 from __future__ import annotations

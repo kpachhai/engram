@@ -41,7 +41,7 @@ def _root(
         help="Show engram version and exit.",
     ),
 ) -> None:
-    """Root callback. Subcommands attach below as Phase 1 lands them."""
+    """Root callback. Subcommands attach below from sibling modules."""
     del version  # consumed via callback
 
 
@@ -53,6 +53,7 @@ from engram.cli import clone as _clone_cmd  # noqa: E402
 from engram.cli import doctor as _doctor_cmd  # noqa: E402
 from engram.cli import init as _init_cmd  # noqa: E402
 from engram.cli import migrate as _migrate_cmd  # noqa: E402
+from engram.cli import move_thought as _move_thought_cmd  # noqa: E402
 from engram.cli import reindex as _reindex_cmd  # noqa: E402
 from engram.cli import serve as _serve_cmd  # noqa: E402
 from engram.cli import sync as _sync_cmd  # noqa: E402
@@ -67,6 +68,8 @@ _clone_cmd.register(app)
 _sync_cmd.register(app)
 _bundle_cmd.register(app)
 _team_vault_cmd.register(app)
+if hasattr(_move_thought_cmd, "register"):
+    _move_thought_cmd.register(app)
 
 
 __all__ = ["app"]

@@ -108,15 +108,14 @@ class FastEmbedProvider:
     def verify_model_files(self) -> None:
         """Verify each cached model file matches its pinned SHA-256 hash.
 
-        Phase 1: the hash manifests in :mod:`engram.embedding.model_hashes` are
-        empty placeholders; this method logs a single WARNING and returns. Real
-        hashes will be pinned in Phase 1.1.
+        When the hash manifests in :mod:`engram.embedding.model_hashes` are
+        empty placeholders, this method logs a single WARNING and returns.
         """
         manifest = KNOWN_MODEL_HASHES.get(self._model_name)
         if not manifest:
             _log.warning(
                 "model %s has no pinned SHA-256 manifest; skipping hash verification "
-                "(Phase 1 known-gap; populate engram/embedding/model_hashes.py at release)",
+                "(populate engram/embedding/model_hashes.py to enable verification)",
                 self._model_name,
             )
             return

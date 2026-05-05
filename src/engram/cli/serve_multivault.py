@@ -1,14 +1,13 @@
-"""Multi-vault ``engram serve`` startup helpers (Phase 3 Step 17).
+"""Multi-vault ``engram serve`` startup helpers.
 
-The startup-ordering rules from ``docs/PHASE_3_PLAN.md`` Step 17 are:
+Startup-ordering rules:
 
 1. Load resolved per-user config; build :class:`VaultRegistry`.
 2. For each vault in ``config.vaults``: run startup probes against
    THAT vault. Aggregate FAILs across vaults; on any FAIL, exit 2.
 3. Embedding-model compatibility check across all mounted vaults.
 4. Acquire per-vault ``VaultLock`` for each in iteration order
-   (deterministic; cross-vault deadlock is a Phase 4 concern when
-   ``engram move-thought`` ships).
+   (deterministic).
 5. Per-vault startup pull (primary + read-only mounted via clone or
    import).
 6. Per-vault conflict-marker scan; vaults with markers are skipped

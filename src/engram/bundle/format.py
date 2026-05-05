@@ -1,4 +1,4 @@
-"""Bundle format Pydantic model + on-disk constants (Phase 3 Step 8).
+"""Bundle format Pydantic model + on-disk constants.
 
 The on-disk format is a single ``.tar.gz`` containing:
 
@@ -22,10 +22,8 @@ Per ``06-SECURITY.md`` lines 31-44, the bundle reception gate enforces:
   exporter shouldn't include them but a malicious / mistaken friend
   push by hand still gets filtered here).
 
-Schema version forwards-compat: per Open Question Q6 default, Phase 3
-ships ``schema_version=1`` only. Phase 4 will introduce v2 for
-capability-token bundles; the v1 importer refuses anything other than v1
-(forward-incompatible by design).
+The bundle format is currently ``schema_version=1`` only; the importer
+refuses anything else (forward-incompatible by design).
 """
 
 from __future__ import annotations
@@ -54,7 +52,7 @@ BUNDLE_SCHEMA_VERSION: int = 1
 
 
 class BundleManifest(BaseModel):
-    """Top-level metadata for a Phase 3 bundle.
+    """Top-level metadata for a bundle.
 
     Stable shape for the v1 lifetime; field additions are non-breaking.
     """
@@ -64,7 +62,7 @@ class BundleManifest(BaseModel):
     schema_version: Literal[1] = 1
     #: Logical user identifier on the export side. Used for provenance,
     #: not for cycle detection (cycles are detected by ``bundle_id``
-    #: chain - per SF-5 fix - so multi-machine same-user imports work).
+    #: chain so multi-machine same-user imports work).
     source_user: str = Field(min_length=1)
     #: Vault name on the export side (provenance only).
     source_vault: str = Field(min_length=1)

@@ -1,8 +1,7 @@
 """``engram sync`` - explicit sync operations outside the auto loop.
 
-Phase 2 Steps 15 + 16 deliverable. Refuses to run while
-``engram serve`` holds the vault lock; instead the operator either
-stops the serve loop or relies on its automatic sync.
+Refuses to run while ``engram serve`` holds the vault lock; instead the
+operator either stops the serve loop or relies on its automatic sync.
 
 Subcommand surface:
 

@@ -1,18 +1,15 @@
-"""``engram export`` and ``engram import`` CLI commands (Phase 3 Step 11).
-
-Per ``docs/PHASE_3_PLAN.md`` Step 11:
+"""``engram export`` and ``engram import`` CLI commands.
 
 * ``engram export --vault <name> --portability portable [--portability sensitive]
   --output <path>`` builds a bundle from the named vault. The
-  ``--portability`` flag is repeatable (Plan NH-5); default is
-  ``["portable"]``.
+  ``--portability`` flag is repeatable; default is ``["portable"]``.
 * ``engram import <bundle> --vault <target>`` ingests a bundle into a
   target vault. Refuses if the target is mounted read-only unless the
   operator passes ``--allow-read-only``.
 
 Both commands resolve the vault from the per-user config (NOT from a
-running serve loop's :class:`VaultRegistry`, per SF-14): the CLI must
-work offline, including when ``engram serve`` is not running.
+running serve loop's :class:`VaultRegistry`): the CLI must work offline,
+including when ``engram serve`` is not running.
 
 While ``engram serve`` holds the vault lock, export refuses with a
 clear message; the operator stops serve before exporting.

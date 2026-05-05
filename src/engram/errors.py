@@ -72,7 +72,7 @@ class MigrationError(EngramError):
     error_code: str = "migration_error"
 
 
-# Phase 3 additions ---------------------------------------------------------
+# Multi-vault errors --------------------------------------------------------
 
 
 class VaultReadOnlyError(VaultError):
@@ -81,8 +81,8 @@ class VaultReadOnlyError(VaultError):
     Raised at the storage-layer write boundary (``update_metadata``,
     ``update_body``, ``delete``, ``write_thought``, ``_q_upsert_embedding``,
     ``_q_mark_embedding_status``, ``reindex_vault``,
-    ``_repair_pending_embeddings``) to enforce R-H7/R-H8 from the Phase 3
-    plan as a hard refusal rather than a soft skip.
+    ``_repair_pending_embeddings``) as a hard refusal rather than a soft
+    skip.
     """
 
     error_code: str = "vault_read_only"
@@ -91,7 +91,7 @@ class VaultReadOnlyError(VaultError):
 class VaultPathCollision(VaultError):
     """Two configured vaults resolve to the same on-disk path after ``realpath``.
 
-    Canonical enforcement point per R-M9: raised by ``VaultRegistry.__init__``
+    Canonical enforcement point: raised by ``VaultRegistry.__init__``
     after every storage's ``vault_path`` is resolved through ``realpath``;
     advisory enforcement also exists at config-load time but symlinks may
     change between load and registry init.
@@ -116,7 +116,7 @@ class EmbeddingModelMismatch(EmbeddingError):
 
     Cross-vault similarity scores are not comparable across embedding
     models, so the multi-vault aggregator refuses cross-vault search rather
-    than returning rankings the user cannot reason about (R-M11).
+    than returning rankings the user cannot reason about.
     """
 
     error_code: str = "embedding_model_mismatch"
@@ -139,8 +139,8 @@ class BundleCycleDetected(BundleImportError):
 
     Walks every existing thought's ``source: bundle:<id> <- ...`` chain
     looking for the candidate ``manifest.bundle_id``; if found, the bundle
-    is refused (R-M13 cycle detection). Multi-machine same-user imports are
-    not cycles because each export gets a distinct ``bundle_id`` UUID-v7.
+    is refused. Multi-machine same-user imports are not cycles because
+    each export gets a distinct ``bundle_id`` UUID-v7.
     """
 
     error_code: str = "bundle_cycle_detected"
@@ -149,10 +149,10 @@ class BundleCycleDetected(BundleImportError):
 class BlockThoughtLLMDisallowed(EngramError):
     """A thought with ``portability: block`` reached an LLM call site.
 
-    The absolute floor of the LLM portability gate (R-H10): no flag,
-    config, or provider locality overrides this refusal. Raised by the
-    resolver and re-asserted as defense-in-depth at the portability gate
-    (Step 6) and at every LLM tool entry point (Step 14).
+    The absolute floor of the LLM portability gate: no flag, config, or
+    provider locality overrides this refusal. Raised by the resolver and
+    re-asserted as defense-in-depth at the portability gate and at every
+    LLM tool entry point.
     """
 
     error_code: str = "block_thought_llm_disallowed"
@@ -173,7 +173,7 @@ class LLMProviderError(EngramError):
     error_code: str = "llm_provider_error"
 
 
-# Phase 4 additions ---------------------------------------------------------
+# Team-vault errors ---------------------------------------------------------
 
 
 class TeamMemberNotEnrolled(VaultError):
@@ -222,10 +222,10 @@ class RoutingTargetNotMounted(ConfigError):
 class BlockThoughtInTeamVaultDisallowed(VaultError):
     """A ``portability: block`` thought reached a team-write vault.
 
-    Refusal is structural per pinned invariant 1: ``block`` portability
-    ALWAYS lands in personal-primary. Defense-in-depth: the routing
-    dispatcher catches this upstream; this error fires only if a future
-    code path bypasses routing.
+    Refusal is structural: ``block`` portability ALWAYS lands in
+    personal-primary. Defense-in-depth: the routing dispatcher catches
+    this upstream; this error fires only if a future code path bypasses
+    routing.
     """
 
     error_code: str = "block_thought_in_team_vault_disallowed"
@@ -257,9 +257,9 @@ class TeamMembershipRevoked(VaultError):
 class AttributionCommitterMismatch(SyncError):
     """A pushed thought's ``captured_by:`` does not match the signed committer fingerprint.
 
-    Raised by the server-side ``pre-receive`` hook. Defends against
-    attribution forgery (P4-H5). The whole push is refused; the rejection
-    message lists every offending file.
+    Raised by the server-side ``pre-receive`` hook to defend against
+    attribution forgery. The whole push is refused; the rejection message
+    lists every offending file.
     """
 
     error_code: str = "attribution_committer_mismatch"
@@ -268,7 +268,7 @@ class AttributionCommitterMismatch(SyncError):
 class TeamWriteRequiresRemote(ConfigError):
     """A vault declared ``role: team-write`` without a ``remote_url``.
 
-    The whole Phase 4 trust model presumes a remote where the
+    The team-vault trust model presumes a remote where the
     ``pre-receive`` hook lives; a team-write vault without a remote is
     structurally meaningless and refused at config-load.
     """

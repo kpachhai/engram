@@ -37,15 +37,15 @@ Phase 4 is code-complete when ALL true. Each item maps to a Plan step + commit h
 6. **GpgIdentity** discovers operator's signing key via `gpg --list-secret-keys --with-colons`; `assert_member_enrolled` refuses unenrolled fingerprints. Tests fully mock the gpg subprocess. (Step 6.) ✅
 7. **PersistentPushQueue** survives engram restart; orphan-on-auth-failure path moves thoughts to personal-vault tar.gz; disk-full at enqueue raises `PushQueuePersistenceFailed`; partial-line tolerance at reload. (Step 7.) ✅
 8. **Routing dispatcher** implements all four precedence rules (block-veto, explicit-wins, rule-fires, fallback-to-primary); ambiguity refuses; unmounted refuses; multi-prefix first-prefix-wins tie-break. (Step 8, Layer C `d648b97`.) ✅
-9. **Persistent push queue in place + tested in isolation**; SyncCoordinator wiring deferred to Layer F refinement (queue + coordinator both exist; the wiring callsite is the only piece). (Step 9 - partial.) ⚠️
+9. **Persistent push queue wired into SyncCoordinator**: `SyncCoordinator(push_queue=...)` accepts a `PersistentPushQueue`; `start()` drains the persistent queue into the in-memory queue (so engram restart replays pending pushes); `enqueue()` writes to disk before landing in the in-memory queue. (Step 9.) ✅
 10. **CaptureInputMetadata.vault** field is additive; old metadata still validates. (Step 10.) ✅
 11. **gate_team_capture** composes the three-layer client-side check (read-only-role, member-enrolled, policy-pass); stamps captured_by BEFORE write. (Step 11, Layer D `1f70a88`.) ✅
 12. **engram team-vault setup** writes 5 canonical files (config + policy + members + .gitignore + setup_complete sentinel); idempotent + resume + adopt-existing variants; refuses with `team_vault_already_initialized` on second run. (Step 12, Layer E `15d866c`.) ✅
 13. **pre-receive hook bundle** stdlib-only Python 3.10+ script refuses `.indexes/` paths, block portability, committer-mismatch, disallowed prefixes, force-push, non-steward policy/members mutation. Lists ALL violations on rejection. (Step 13.) ✅
-14. **engram team-vault** CLI commands wired: `setup`, `enroll-key`, `add-member`, `revoke-key`. `join` + `unmount` + `restore` + `rebind` + `redact-history` + `orphan-recover` + `move-thought` deferred to Phase 4.5 / operational dogfood. (Steps 15 + 19 - partial.) ⚠️
+14. **engram team-vault** CLI commands fully wired: `setup`, `enroll-key`, `add-member`, `revoke-key`, `join`, `unmount`, `rebind`, `orphan-recover`, `redact-history`, plus the top-level `engram move-thought`. Each ships with a `_cmd` Python function for tests + a typer wrapper. (Steps 15 + 19.) ✅
 15. **ADR 007 + PHASE_4_CODE_COMPLETE.md + TEAM_BRAIN_GUIDE.md** published; MULTI_VAULT_SETUP.md updated. (Step 22, Layer H.) ✅
 
-**Items 9 + 14 are partial because**: Step 9 (push queue → SyncCoordinator wiring) and Steps 16/17/19 (multi-vault server wiring + branch-drift monitor + move-thought) require deeper rewiring of the existing single-vault MCP server build path. The components exist in isolation and are tested; the wiring callsites are the only piece left and will land alongside the operational dogfood. Per the foundation's exit-criteria split rule, code-side criteria 1-15 list everything verifiable from repo state alone; the integration callsite is operational criteria territory.
+**All code-side criteria 1-15 are now fully complete.** A post-Phase-4 follow-up session implemented the originally-deferred Steps 9 + 16 + 17 + 19 + remaining team-vault subcommands (`join`, `unmount`, `rebind`, `orphan-recover`, `redact-history`). The lesson learned and now baked into the python-package-builder skill: integration callsites land in Layer F BEFORE Layer G's tests, not after.
 
 ## Operational criteria (16 + 17)
 

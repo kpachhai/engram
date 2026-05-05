@@ -14,15 +14,15 @@ depends on that resolution. This breaks the chicken-and-egg between "the
 per-vault config is keyed on vault path" and "the vault path is in the
 per-user config".
 
-Environment variable mapping (Phase 1 minimal set):
+Environment variable mapping:
 
 * ``ENGRAM_LOG_LEVEL`` -> ``log_level``
 * ``ENGRAM_LOG_FORMAT`` -> ``log_format``
 * ``ENGRAM_DEFAULT_USER`` -> ``default_user``
 * ``ENGRAM_EMBEDDING_MODEL`` -> ``embedding_model``
 
-Additional env vars can be added in later phases without breaking change;
-this loader silently ignores ``ENGRAM_*`` env vars it does not yet recognize.
+Additional env vars can be added without breaking change; this loader
+silently ignores ``ENGRAM_*`` env vars it does not yet recognize.
 """
 
 from __future__ import annotations
@@ -55,7 +55,7 @@ _USER_CONFIG_DIR_MODE = 0o700
 
 
 class _EnvOverrides(BaseSettings):
-    """Pydantic-settings shim that captures the Phase 1 ``ENGRAM_*`` env vars."""
+    """Pydantic-settings shim that captures the ``ENGRAM_*`` env vars."""
 
     model_config = SettingsConfigDict(
         env_prefix="ENGRAM_",
@@ -297,6 +297,8 @@ def load_config(
 
     aggregator = user_config.aggregator if user_config is not None else AggregatorConfig()
     effective_vaults = list(user_config.vaults) if user_config is not None else []
+    auto_route = user_config.auto_route if user_config is not None else False
+    routing_rules = list(user_config.routing_rules) if user_config is not None else []
 
     try:
         return EffectiveConfig(
@@ -310,6 +312,8 @@ def load_config(
             llm=effective_llm,
             aggregator=aggregator,
             vaults=effective_vaults,
+            auto_route=auto_route,
+            routing_rules=routing_rules,
             log_level=log_level,
             log_format=log_format,
         )

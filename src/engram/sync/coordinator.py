@@ -196,8 +196,20 @@ class SyncCoordinator:
         *,
         repo_dir: Path,
         config: CoordinatorConfig,
+        push_queue: object | None = None,
     ) -> None:
-        """Construct a coordinator bound to ``repo_dir``."""
+        """Construct a coordinator bound to ``repo_dir``.
+
+        Args:
+            repo_dir: Vault root containing the ``.git/`` directory.
+            config: Coordinator config.
+            push_queue: Optional :class:`engram.team.push_queue.PersistentPushQueue`.
+                When supplied, the coordinator uses it for durable
+                enqueue (so an engram restart replays pending pushes)
+                + orphans on auth-failure. Personal vaults typically
+                pass None; team-write vaults pass a queue rooted at
+                ``<vault>/.engram/push-queue.local``.
+        """
         self.repo_dir = repo_dir
         self.config = config
         self._state: SyncState = SyncState.IDLE
@@ -210,6 +222,11 @@ class SyncCoordinator:
         self._loop_task: asyncio.Task[None] | None = None
         self._stopped = asyncio.Event()
         self._wake_event = asyncio.Event()
+        self._push_queue = push_queue
+        # Drain any persistent queue from a prior process at construction;
+        # the actual replay into the in-memory queue happens at start()
+        # so the coordinator's logging is fully wired.
+        self._needs_replay = push_queue is not None
 
     # === public API ===
 
@@ -228,13 +245,27 @@ class SyncCoordinator:
         """Snapshot of the ring buffer for doctor inspection."""
         return tuple(self._events)
 
-    def enqueue(self, path: Path) -> None:
+    def enqueue(self, path: Path, *, thought_id: str | None = None) -> None:
         """Append ``path`` to the commit queue and arm the debounce timer.
 
         Synchronous so :meth:`engram.storage.facade.VaultStorage.capture`
         can call from a non-async context. The actual commit work happens
         on the loop tick driven by :meth:`run`.
+
+        When a persistent push queue is configured (team-write vaults),
+        the path is written to disk BEFORE landing in the in-memory queue
+        so a crash between capture and push doesn't silently drop work.
         """
+        if self._push_queue is not None:
+            try:
+                relative = path.relative_to(self.repo_dir) if path.is_absolute() else path
+            except ValueError:
+                relative = path
+            tid = thought_id or str(relative)
+            # Method probe is duck-typed so unit tests can pass a stub.
+            enqueue_method = getattr(self._push_queue, "enqueue", None)
+            if enqueue_method is not None:
+                enqueue_method(tid, str(relative))
         self._queue.put_nowait(path)
         if self._first_enqueue_at is None:
             self._first_enqueue_at = time.monotonic()
@@ -252,10 +283,31 @@ class SyncCoordinator:
         self._wake_event.set()
 
     async def start(self) -> None:
-        """Spawn the background task; idempotent."""
+        """Spawn the background task; idempotent.
+
+        On first start, drain any prior process's persistent push queue
+        (when one is configured) so a restart replays pending pushes
+        rather than silently dropping them.
+        """
         if self._loop_task is not None and not self._loop_task.done():
             return
         self._stopped.clear()
+        if self._needs_replay and self._push_queue is not None:
+            try:
+                iter_method = getattr(self._push_queue, "iter_pending", None)
+                if iter_method is not None:
+                    pending = iter_method()
+                    for entry in pending:
+                        # Re-enqueue into the in-memory queue (without
+                        # re-writing the persistent file).
+                        rel = getattr(entry, "relative_path", None)
+                        if rel is not None:
+                            absolute = (self.repo_dir / rel).resolve()
+                            self._queue.put_nowait(absolute)
+                            if self._first_enqueue_at is None:
+                                self._first_enqueue_at = time.monotonic()
+            finally:
+                self._needs_replay = False
         self._loop_task = asyncio.create_task(self._run())
 
     async def stop(self) -> None:

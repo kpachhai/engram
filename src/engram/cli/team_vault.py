@@ -1,4 +1,4 @@
-"""``engram team-vault`` - Phase 4 team-vault commands.
+"""``engram team-vault`` - team-vault commands.
 
 Subcommands:
 
@@ -7,12 +7,11 @@ Subcommands:
   ``.engram/team-policy.yaml``, ``.engram/members.yaml``, ``.gitignore``)
   + a ``.engram/setup_complete`` sentinel.
 * ``join <name> [--as <local-alias>]`` - join an existing team vault remote.
-  (Layer F.)
 * ``add-member <fingerprint> [--display-name <name>]`` - steward command
-  to enroll a new member fingerprint. (Layer F.)
+  to enroll a new member fingerprint.
 * ``unmount [--remove-local] <name>`` - detach a vault from this user's
-  config. (Layer F.)
-* ``enroll-key`` - first-time GPG signing key bootstrap. (Step 6.5.)
+  config.
+* ``enroll-key`` - first-time GPG signing key bootstrap.
 * ``rotate-member-key <old-fp> <new-fp>`` - steward-only key rotation.
 * ``revoke-key <fp> [--reason <text>]`` - steward-only revocation.
 
@@ -57,7 +56,7 @@ _TEAM_GITIGNORE = """\
 *.swp
 *.swo
 .DS_Store
-# Phase 4 team-vault local-only artifacts.
+# team-vault local-only artifacts.
 .engram/identity.local
 .engram/push-queue.local
 .engram/orphans/
@@ -71,8 +70,8 @@ _DEFAULT_TEAM_POLICY_TEMPLATE = """\
 allowed_prefixes: null
 # allowed_sources: null = "any"; [] = explicit deny-all.
 allowed_sources: null
-# accept_sensitive: default False per pinned invariant 1. Flip to True
-# only if the team has explicitly agreed to share sensitive thoughts.
+# accept_sensitive: default False. Flip to True only if the team has
+# explicitly agreed to share sensitive thoughts.
 accept_sensitive: false
 # required_embedding_model: every member's local engram MUST match.
 required_embedding_model: BAAI/bge-small-en-v1.5
@@ -280,7 +279,7 @@ def add_member_cmd(
     members.members.append(new_member)
 
     # Write back as canonical bare-string-or-mapping YAML so line-level
-    # merges stay clean (P4-M20).
+    # merges stay clean.
     lines = ["members:"]
     for m in members.members:
         if m.display_name is not None:
@@ -354,11 +353,305 @@ def revoke_key_cmd(
     return members
 
 
+def join_cmd(
+    target_path: Path,
+    *,
+    remote_url: str,
+    local_alias: str | None = None,
+    expected_embedding_model: str | None = None,
+    skip_clone: bool = False,
+) -> dict[str, Path | str]:
+    """Join an existing team vault remote into the local user's vaults.
+
+    Args:
+        target_path: Local checkout path. The remote will be cloned here
+            unless ``skip_clone`` is True (used by tests / pre-cloned setups).
+        remote_url: Team vault remote URL.
+        local_alias: Optional alias for the user's config. Default
+            derived from the target dir basename.
+        expected_embedding_model: Optional expected embedding model
+            from the team policy. When the local engram's configured
+            model differs, the join refuses with
+            :class:`engram.errors.TeamVaultEmbeddingMismatch`.
+        skip_clone: When True, ``target_path`` is assumed to already
+            contain the team vault clone (used by tests / for already-
+            cloned remotes).
+
+    Returns:
+        A dict with the join outcome: ``target_path``, ``alias``,
+        ``vault_id``, ``remote_url``.
+
+    Raises:
+        VaultError: when the target path is non-empty and not already
+            an engram team vault.
+        TeamVaultEmbeddingMismatch: when the local embedding model
+            differs from the team's required model.
+    """
+    import subprocess
+
+    from engram.config.models import derive_vault_id
+    from engram.errors import TeamVaultEmbeddingMismatch
+
+    target_path = Path(target_path)
+    alias = local_alias or target_path.name
+    vault_id = derive_vault_id(remote_url)
+
+    if not skip_clone:
+        if target_path.exists() and any(target_path.iterdir()):
+            msg = (
+                f"target {target_path} already exists and is non-empty; "
+                f"either pass --skip-clone or choose a fresh path"
+            )
+            raise VaultError(msg)
+        target_path.parent.mkdir(parents=True, exist_ok=True)
+        result = subprocess.run(  # noqa: S603
+            ["git", "clone", remote_url, str(target_path)],  # noqa: S607
+            capture_output=True,
+            text=True,
+            check=False,
+        )
+        if result.returncode != 0:
+            msg = f"git clone failed: {result.stderr.strip() or result.stdout.strip()}"
+            raise VaultError(msg)
+
+    # Verify canonical files are present.
+    config_yaml = target_path / "engram.config.yaml"
+    if not config_yaml.exists():
+        msg = (
+            f"target {target_path} has no engram.config.yaml; remote may not be "
+            f"a team-vault. Run 'engram team-vault setup' on the steward's machine first."
+        )
+        raise VaultError(msg)
+
+    # Optional embedding-model compat check.
+    if expected_embedding_model is not None:
+        from ruamel.yaml import YAML
+
+        yaml_safe = YAML(typ="safe", pure=True)
+        cfg = yaml_safe.load(config_yaml.read_text(encoding="utf-8")) or {}
+        team_model = cfg.get("embedding_model")
+        if team_model and team_model != expected_embedding_model:
+            msg = (
+                f"team_vault_embedding_mismatch: team requires "
+                f"{team_model!r} but local engram is configured with "
+                f"{expected_embedding_model!r}; either match the team or "
+                f"configure a separate engram instance"
+            )
+            raise TeamVaultEmbeddingMismatch(msg)
+
+    return {
+        "target_path": target_path,
+        "alias": alias,
+        "vault_id": vault_id,
+        "remote_url": remote_url,
+    }
+
+
+def unmount_cmd(
+    *,
+    vault_alias: str,
+    user_config_path: Path,
+    remove_local: bool = False,
+    local_path: Path | None = None,
+) -> dict[str, str]:
+    """Detach a vault from the user's engram config.
+
+    Args:
+        vault_alias: The alias to remove from ``vaults:``.
+        user_config_path: Path to ``~/.config/engram/config.yaml``.
+        remove_local: When True, also delete the on-disk clone at
+            ``local_path``. The operator opt-in safety: the default
+            preserves the local files.
+        local_path: Required when ``remove_local`` is True.
+
+    Returns:
+        A dict describing the outcome: ``alias``, ``removed_local``.
+    """
+    import shutil
+
+    from ruamel.yaml import YAML
+
+    if not user_config_path.exists():
+        msg = f"user config {user_config_path} not found"
+        raise VaultError(msg)
+    yaml_rt = YAML(typ="rt")
+    yaml_rt.preserve_quotes = True
+    data = yaml_rt.load(user_config_path.read_text(encoding="utf-8")) or {}
+    raw_vaults = data.get("vaults", []) or []
+    new_vaults = [v for v in raw_vaults if v.get("name") != vault_alias]
+    if len(new_vaults) == len(raw_vaults):
+        msg = f"vault alias {vault_alias!r} not found in {user_config_path}"
+        raise VaultError(msg)
+    data["vaults"] = new_vaults
+    import io
+
+    buf = io.StringIO()
+    yaml_rt.dump(data, buf)
+    user_config_path.write_text(buf.getvalue(), encoding="utf-8")
+
+    removed_local = False
+    if remove_local:
+        if local_path is None:
+            msg = "remove_local requires local_path"
+            raise VaultError(msg)
+        if local_path.exists():
+            shutil.rmtree(local_path)
+            removed_local = True
+    return {
+        "alias": vault_alias,
+        "removed_local": "yes" if removed_local else "no",
+    }
+
+
+def rebind_cmd(
+    *,
+    vault_alias: str,
+    user_config_path: Path,
+    new_remote_url: str,
+    local_clone_path: Path | None = None,
+) -> dict[str, str]:
+    """Update the remote URL for an existing team-vault mount.
+
+    Used by team members after a steward has run ``restore`` against a
+    new remote. Updates both ``~/.config/engram/config.yaml`` AND (when
+    ``local_clone_path`` is supplied) the local clone's ``origin``
+    remote via ``git remote set-url``.
+    """
+    import subprocess
+
+    from ruamel.yaml import YAML
+
+    if not user_config_path.exists():
+        msg = f"user config {user_config_path} not found"
+        raise VaultError(msg)
+    yaml_rt = YAML(typ="rt")
+    data = yaml_rt.load(user_config_path.read_text(encoding="utf-8")) or {}
+    vaults = data.get("vaults", []) or []
+    found = False
+    for v in vaults:
+        if v.get("name") == vault_alias:
+            v["remote_url"] = new_remote_url
+            found = True
+            break
+    if not found:
+        msg = f"vault alias {vault_alias!r} not found in {user_config_path}"
+        raise VaultError(msg)
+    import io
+
+    buf = io.StringIO()
+    yaml_rt.dump(data, buf)
+    user_config_path.write_text(buf.getvalue(), encoding="utf-8")
+
+    if local_clone_path is not None and local_clone_path.exists():
+        result = subprocess.run(  # noqa: S603
+            ["git", "-C", str(local_clone_path), "remote", "set-url", "origin", new_remote_url],  # noqa: S607
+            capture_output=True,
+            text=True,
+            check=False,
+        )
+        if result.returncode != 0:
+            msg = f"git remote set-url failed: {result.stderr.strip()}"
+            raise VaultError(msg)
+    return {"alias": vault_alias, "new_remote_url": new_remote_url}
+
+
+def orphan_recover_cmd(
+    *,
+    orphan_path: Path,
+    discard: bool = False,
+    target_vault_path: Path | None = None,
+) -> dict[str, object]:
+    """Walk an orphan tarball and either re-capture into a target or discard.
+
+    Args:
+        orphan_path: Path to a ``team-vault-orphan-*.tar.gz`` tarball
+            from ``<personal>/.engram/orphans/``.
+        discard: If True, deletes the tarball without recovering. If
+            False, ``target_vault_path`` is required.
+        target_vault_path: Target vault root for recovered thoughts.
+
+    Returns:
+        A dict with ``recovered_files``, ``discarded`` (bool).
+    """
+    import tarfile
+
+    if not orphan_path.exists():
+        msg = f"orphan tarball {orphan_path} not found"
+        raise VaultError(msg)
+    if discard:
+        orphan_path.unlink()
+        return {"recovered_files": [], "discarded": True}
+    if target_vault_path is None:
+        msg = "non-discard recovery requires target_vault_path"
+        raise VaultError(msg)
+    target_thoughts = target_vault_path / "thoughts"
+    target_thoughts.mkdir(parents=True, exist_ok=True)
+    recovered: list[str] = []
+    with tarfile.open(orphan_path) as tar:
+        for member in tar.getmembers():
+            if member.isfile():
+                # Refuse path-traversal: tarfile names must be relative + no '..'.
+                if member.name.startswith(("/", "..")) or ".." in Path(member.name).parts:
+                    continue
+                tar.extract(member, target_thoughts, filter="data")
+                recovered.append(member.name)
+    return {"recovered_files": recovered, "discarded": False}
+
+
+def redact_history_cmd(
+    *,
+    vault_path: Path,
+    caller_fingerprint: str,
+    stewards: list[str],
+    reason: str,
+    confirm_history_rewrite: bool = False,
+) -> dict[str, str]:
+    """Rewrite team-vault history to remove a committed secret. Steward-only.
+
+    This is a documented escape hatch only - the actual history-rewrite
+    step is intentionally NOT a wrapper around `git filter-repo` because
+    the operator must understand they are doing this. Returns the
+    audit-log path the steward should append to. The actual
+    `git filter-repo` invocation lives in TEAM_BRAIN_GUIDE.md.
+    """
+    caller_norm = normalize_fingerprint(caller_fingerprint)
+    stewards_norm = {normalize_fingerprint(s) for s in stewards}
+    if caller_norm not in stewards_norm:
+        msg = f"caller {caller_fingerprint!r} is not a steward; redact-history is steward-only"
+        raise TeamMemberNotEnrolled(msg)
+    if not confirm_history_rewrite:
+        msg = (
+            "redact-history rewrites the team's git history; pass "
+            "confirm_history_rewrite=True to acknowledge. The operator "
+            "must coordinate with the team out-of-band before running."
+        )
+        raise VaultError(msg)
+    log_path = vault_path / ".engram" / "redaction-log.md"
+    log_path.parent.mkdir(parents=True, exist_ok=True)
+    from datetime import UTC, datetime
+
+    timestamp = datetime.now(tz=UTC).isoformat()
+    entry = f"\n## {timestamp}\n- Steward: {caller_fingerprint}\n- Reason: {reason}\n\n"
+    if log_path.exists():
+        existing = log_path.read_text(encoding="utf-8")
+    else:
+        existing = "# engram team-vault redaction log\n"
+    log_path.write_text(existing + entry, encoding="utf-8")
+    return {
+        "log_path": str(log_path),
+        "next_step": (
+            "Run 'git filter-repo --strip-blobs-bigger-than 1M' or the "
+            "appropriate redaction command (see TEAM_BRAIN_GUIDE.md), then "
+            "force-push the rewritten history. Notify the team out-of-band."
+        ),
+    }
+
+
 def register(app: typer.Typer) -> None:
     """Wire the team-vault subcommand group into the engram Typer app."""
     team_vault_app = typer.Typer(
         name="team-vault",
-        help="Phase 4 team-vault commands.",
+        help="Team-vault commands.",
         no_args_is_help=True,
     )
 
@@ -543,7 +836,191 @@ def register(app: typer.Typer) -> None:
         if reason:
             typer.echo(f"reason: {reason}")
 
+    @team_vault_app.command("join")
+    def join(
+        target_path: Path = typer.Argument(  # noqa: B008
+            ...,
+            help="Local checkout path (cloned from --remote unless --skip-clone).",
+        ),
+        remote: str = typer.Option(..., "--remote", help="Team vault remote URL."),
+        local_alias: str | None = typer.Option(
+            None,
+            "--as",
+            help="Local alias (default: target dir basename).",
+        ),
+        skip_clone: bool = typer.Option(
+            False,
+            "--skip-clone",
+            help="Assume target_path already contains the team vault clone.",
+        ),
+        expected_embedding_model: str | None = typer.Option(
+            None,
+            "--expected-embedding-model",
+            help="Expected embedding model from the team policy (refuses on mismatch).",
+        ),
+    ) -> None:
+        """Join an existing team vault remote."""
+        try:
+            outcome = join_cmd(
+                target_path,
+                remote_url=remote,
+                local_alias=local_alias,
+                expected_embedding_model=expected_embedding_model,
+                skip_clone=skip_clone,
+            )
+        except VaultError as exc:
+            typer.echo(f"error: {exc}", err=True)
+            raise typer.Exit(code=1) from exc
+        typer.echo(f"joined team-vault: alias={outcome['alias']} vault_id={outcome['vault_id']}")
+        typer.echo(
+            "Add to ~/.config/engram/config.yaml under vaults: + restart engram serve.",
+        )
+
+    @team_vault_app.command("unmount")
+    def unmount(
+        vault_alias: str = typer.Argument(..., help="The alias to remove."),
+        user_config: Path = typer.Option(  # noqa: B008
+            ...,
+            "--user-config",
+            help="Path to ~/.config/engram/config.yaml.",
+        ),
+        remove_local: bool = typer.Option(
+            False,
+            "--remove-local",
+            help="Also delete the on-disk clone (operator opt-in).",
+        ),
+        local_path: Path | None = typer.Option(  # noqa: B008
+            None,
+            "--local-path",
+            help="Required when --remove-local is set.",
+        ),
+    ) -> None:
+        """Detach a vault from the user's engram config."""
+        try:
+            outcome = unmount_cmd(
+                vault_alias=vault_alias,
+                user_config_path=user_config,
+                remove_local=remove_local,
+                local_path=local_path,
+            )
+        except VaultError as exc:
+            typer.echo(f"error: {exc}", err=True)
+            raise typer.Exit(code=1) from exc
+        typer.echo(f"unmounted {outcome['alias']}; removed_local={outcome['removed_local']}")
+
+    @team_vault_app.command("rebind")
+    def rebind(
+        vault_alias: str = typer.Argument(..., help="The alias to rebind."),
+        user_config: Path = typer.Option(  # noqa: B008
+            ...,
+            "--user-config",
+            help="Path to ~/.config/engram/config.yaml.",
+        ),
+        new_remote: str = typer.Option(..., "--remote", help="New remote URL."),
+        local_clone: Path | None = typer.Option(  # noqa: B008
+            None,
+            "--local-clone",
+            help="If set, also runs git remote set-url on the local clone.",
+        ),
+    ) -> None:
+        """Update the remote URL for an existing team-vault mount."""
+        try:
+            outcome = rebind_cmd(
+                vault_alias=vault_alias,
+                user_config_path=user_config,
+                new_remote_url=new_remote,
+                local_clone_path=local_clone,
+            )
+        except VaultError as exc:
+            typer.echo(f"error: {exc}", err=True)
+            raise typer.Exit(code=1) from exc
+        typer.echo(f"rebound {outcome['alias']} -> {outcome['new_remote_url']}")
+
+    @team_vault_app.command("orphan-recover")
+    def orphan_recover(
+        orphan: Path = typer.Argument(  # noqa: B008
+            ...,
+            help="Path to a team-vault-orphan-*.tar.gz tarball.",
+        ),
+        target_vault_path: Path | None = typer.Option(  # noqa: B008
+            None,
+            "--target-vault",
+            help="Target vault root for recovered thoughts (required unless --discard).",
+        ),
+        discard: bool = typer.Option(
+            False,
+            "--discard",
+            help="Delete the tarball without recovering.",
+        ),
+    ) -> None:
+        """Walk an orphan tarball; either re-capture into a target vault or discard."""
+        try:
+            outcome = orphan_recover_cmd(
+                orphan_path=orphan,
+                discard=discard,
+                target_vault_path=target_vault_path,
+            )
+        except VaultError as exc:
+            typer.echo(f"error: {exc}", err=True)
+            raise typer.Exit(code=1) from exc
+        if outcome["discarded"]:
+            typer.echo(f"discarded orphan: {orphan}")
+        else:
+            files = outcome["recovered_files"]
+            count = len(files) if isinstance(files, list) else 0
+            typer.echo(f"recovered {count} file(s) from {orphan}")
+
+    @team_vault_app.command("redact-history")
+    def redact_history(
+        vault_path: Path = typer.Argument(  # noqa: B008
+            ...,
+            help="Team vault local checkout root.",
+        ),
+        policy_yaml: Path = typer.Option(..., "--policy-yaml"),  # noqa: B008
+        reason: str = typer.Option(..., "--reason"),
+        i_know_this_rewrites_history: bool = typer.Option(
+            False,
+            "--i-know-this-rewrites-history",
+            help="Required acknowledgment that history rewrite is intended.",
+        ),
+        gpg_binary: str = typer.Option("gpg", "--gpg-binary", hidden=True),
+    ) -> None:
+        """Steward-only escape hatch for redacting accidentally-committed secrets."""
+        from ruamel.yaml import YAML
+
+        identity = GpgIdentity(gpg_binary=gpg_binary)
+        caller_fp = identity.primary_fingerprint()
+        if caller_fp is None:
+            typer.echo("error: no GPG signing key found", err=True)
+            raise typer.Exit(code=2)
+        yaml_safe = YAML(typ="safe", pure=True)
+        policy_data = yaml_safe.load(policy_yaml.read_text(encoding="utf-8")) or {}
+        stewards = policy_data.get("stewards") or []
+        try:
+            outcome = redact_history_cmd(
+                vault_path=vault_path,
+                caller_fingerprint=caller_fp,
+                stewards=stewards,
+                reason=reason,
+                confirm_history_rewrite=i_know_this_rewrites_history,
+            )
+        except (TeamMemberNotEnrolled, VaultError) as exc:
+            typer.echo(f"error: {exc}", err=True)
+            raise typer.Exit(code=1) from exc
+        typer.echo(f"recorded redaction in {outcome['log_path']}")
+        typer.echo(f"next: {outcome['next_step']}")
+
     app.add_typer(team_vault_app, name="team-vault")
 
 
-__all__ = ["add_member_cmd", "register", "revoke_key_cmd", "setup_cmd"]
+__all__ = [
+    "add_member_cmd",
+    "join_cmd",
+    "orphan_recover_cmd",
+    "rebind_cmd",
+    "redact_history_cmd",
+    "register",
+    "revoke_key_cmd",
+    "setup_cmd",
+    "unmount_cmd",
+]

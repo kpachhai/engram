@@ -1,6 +1,6 @@
-"""engram.team - Phase 4 team-vault primitives.
+"""engram.team - team-vault primitives.
 
-This package houses the team-vault-specific concerns introduced in Phase 4:
+This package houses the team-vault-specific concerns:
 
 * :mod:`engram.team.policy` - Pydantic ``TeamVaultPolicy`` model + the
   capture-time policy refusal gate.
@@ -16,7 +16,7 @@ This package houses the team-vault-specific concerns introduced in Phase 4:
 * :mod:`engram.team.server_hooks` - Python 3.10+ stdlib-only ``pre-receive``
   hook bundled by ``engram team-vault setup``.
 
-Phase 4 design: see ``docs/PHASE_4_PLAN.md`` and ``docs/adr/007-team-brain.md``.
+Team-vault design: see ``docs/adr/007-team-brain.md``.
 """
 
 from __future__ import annotations
