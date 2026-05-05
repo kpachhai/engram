@@ -48,6 +48,7 @@ def _root(
 # Register subcommands. Each module exposes a `register(app)` function so we
 # can keep this top-level file as the single integration point and avoid
 # circular imports.
+from engram.cli import bundle as _bundle_cmd  # noqa: E402
 from engram.cli import clone as _clone_cmd  # noqa: E402
 from engram.cli import doctor as _doctor_cmd  # noqa: E402
 from engram.cli import init as _init_cmd  # noqa: E402
@@ -63,6 +64,7 @@ _serve_cmd.register(app)
 _migrate_cmd.register(app)
 _clone_cmd.register(app)
 _sync_cmd.register(app)
+_bundle_cmd.register(app)
 
 
 __all__ = ["app"]
