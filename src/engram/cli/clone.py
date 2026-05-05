@@ -100,7 +100,13 @@ def register(app: typer.Typer) -> None:
             )
             raise typer.Exit(2)
 
-        # Step 4: write the identity-template so the operator can tag the vault.
+        # Step 4: ensure the on-disk skeleton engram doctor expects (.indexes/
+        # and thoughts/ get re-created if absent so the cloned vault is
+        # immediately usable; the markdown SoT files came in via checkout).
+        (local_path / ".indexes").mkdir(parents=True, exist_ok=True)
+        (local_path / "thoughts").mkdir(parents=True, exist_ok=True)
+
+        # Step 5: write the identity-template so the operator can tag the vault.
         identity_dir = local_path / ".engram"
         identity_dir.mkdir(parents=True, exist_ok=True)
         identity_path = identity_dir / "identity.local"

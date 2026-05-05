@@ -28,10 +28,15 @@ _log = logging.getLogger("engram.cli.init")
 _GITIGNORE_BODY = """\
 # engram-managed; do not commit the regenerable index or transient files.
 .indexes/
+*.sqlite
+*.sqlite-wal
+*.sqlite-shm
 *.tmp
 *.swp
 *.swo
 .DS_Store
+# Per-vault identity is machine-local (Phase 2 R-H3 cross-vault contamination guard).
+.engram/identity.local
 """
 
 _README_STUB = """\
