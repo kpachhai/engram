@@ -51,6 +51,110 @@ Each clone has:
 The git remote has only the `thoughts/` markdown files. The SQLite
 index is gitignored and rebuilt locally on each machine via reindex.
 
+## Local two-machine smoke test (no PyPI, no second physical machine)
+
+Before going through the full setup on real hardware, you can validate the
+entire Phase 2 convergence loop on ONE machine using two directories that
+share a local bare repo. This exercises the same code paths as a real
+two-machine deployment.
+
+```bash
+# Working from the source repo so we can call uv run engram directly.
+cd ~/repos/github.com/kpachhai/engram
+
+# 1. Bare repo standing in for "github".
+git init --bare ~/smoke-engram-remote.git
+
+# 2. Vault A (machine 1 stand-in).
+uv run engram init ~/smoke-vault-a
+cd ~/smoke-vault-a
+git remote add origin ~/smoke-engram-remote.git
+cat > .gitignore <<EOF
+.indexes/
+*.sqlite
+*.sqlite-wal
+*.sqlite-shm
+EOF
+cat > .gitattributes <<EOF
+*.md text eol=lf
+EOF
+mkdir -p .engram
+cat > .engram/identity.local <<EOF
+vault_id: smoke-test
+expected_remote_pattern: '^.*smoke-engram-remote\.git$'
+user_email: smoke@example.com
+user_name: Smoke Test
+EOF
+git config user.email smoke@example.com
+git config user.name 'Smoke Test'
+git config commit.gpgsign false
+git add .
+git commit -m "smoke baseline"
+git push -u origin main
+cd -
+
+# 3. Verify A is healthy.
+uv run engram doctor --config ~/smoke-vault-a/engram.config.yaml
+
+# 4. Vault B (machine 2 stand-in) - clone via engram clone-vault, NOT plain git clone.
+uv run engram clone-vault ~/smoke-engram-remote.git ~/smoke-vault-b
+cd ~/smoke-vault-b
+# Re-create the per-vault identity (NOT carried by the clone since it's gitignored).
+cat > .engram/identity.local <<EOF
+vault_id: smoke-test
+expected_remote_pattern: '^.*smoke-engram-remote\.git$'
+user_email: smoke@example.com
+user_name: Smoke Test
+EOF
+# engram init writes engram.config.yaml; clone-vault does NOT, so do it now if missing.
+test -f engram.config.yaml || cat > engram.config.yaml <<EOF
+vault_name: primary
+thoughts_dir: $(pwd)/thoughts
+sync:
+  git_remote: origin
+  git_branch: main
+EOF
+git config user.email smoke@example.com
+git config user.name 'Smoke Test'
+git config commit.gpgsign false
+mkdir -p thoughts
+cd -
+
+# 5. Verify B is healthy.
+uv run engram doctor --config ~/smoke-vault-b/engram.config.yaml
+
+# 6. Drive the convergence: capture on A, sync, B pulls and sees it.
+echo '[Lesson] smoke test convergence' > ~/smoke-vault-a/thoughts/test.md
+cd ~/smoke-vault-a
+git add thoughts/test.md && git commit -m "smoke capture from A"
+cd -
+uv run engram sync --config ~/smoke-vault-a/engram.config.yaml --push
+uv run engram sync --config ~/smoke-vault-b/engram.config.yaml --pull
+ls ~/smoke-vault-b/thoughts/test.md && echo "CONVERGED"
+
+# 7. Cleanup.
+rm -rf ~/smoke-vault-a ~/smoke-vault-b ~/smoke-engram-remote.git
+```
+
+If you see `CONVERGED` at step 6, every code path the dogfood window
+exercises has been validated end-to-end. The pending operational
+criterion (7 consecutive days across two physical machines) is then a
+question of duration and real workload, not of whether the code works.
+
+### What this smoke test does NOT validate
+
+* PyPI `pip install` (use the README "Local install" section + `uv build`
+  to validate the wheel separately).
+* Real network transports (SSH, HTTPS to GitHub). Local file remotes
+  exercise the same gitops + state-machine paths but skip network error
+  classification (`AUTH`, `NETWORK_TRANSIENT` retries). `tests/sync/test_gitops.py`
+  + `tests/sync/test_gitops_real_git_smoke.py` cover those mock + real
+  cases.
+* MCP integration with Claude Code. Wire engram into
+  `~/.config/claude-code/mcp.json` and exercise the five tools
+  (capture / search / list / stats / fetch) in a real chat session
+  to close that gap.
+
 ## Step-by-step
 
 ### 1. Create the bare remote
