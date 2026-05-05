@@ -82,8 +82,8 @@ Seven tools — five core (deterministic, no LLM calls), two optional LLM-mediat
 - `list_thoughts(limit?, offset?, filter?, sort?)` — filtered + sorted + paginated
 - `thought_stats()` — aggregate counts
 - `fetch(id)` — lookup by id
-- `summarize_thought(id)` — LLM-mediated single-thought summary (opt-in)
-- `synthesize_thoughts(query, k, filter)` — LLM-mediated cross-vault RAG (opt-in)
+- `summarize_thought(id)` — LLM-mediated single-thought summary (opt-in; also exposed as `engram summarize <id>` CLI)
+- `synthesize_thoughts(query, k, filter)` — LLM-mediated cross-vault RAG (opt-in; also exposed as `engram synthesize "<query>"` CLI)
 
 The five-tool core surface is stable for the v1.x lifetime; LLM tools follow the same stability commitment.
 

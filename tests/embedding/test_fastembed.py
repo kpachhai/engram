@@ -133,10 +133,26 @@ def test_dimension_mismatch_raises(fake_fastembed_dim_mismatch):
 # === hash verification ===
 
 
+def _make_hf_snapshot_dir(cache_dir: Path) -> Path:
+    """Create a fake HuggingFace cache layout under ``cache_dir``.
+
+    Returns the snapshot directory inside which test files should be
+    written. Layout: ``<cache>/models--qdrant--bge-small-en-v1.5-onnx-q/snapshots/<sha>/``.
+    """
+    snapshot = cache_dir / "models--test--repo" / "snapshots" / "abc123"
+    snapshot.mkdir(parents=True)
+    return snapshot
+
+
 def test_verify_model_files_with_empty_manifest_warns_only(
-    fake_fastembed_module, caplog: pytest.LogCaptureFixture
+    fake_fastembed_module,
+    monkeypatch: pytest.MonkeyPatch,
+    caplog: pytest.LogCaptureFixture,
 ):
+    """When KNOWN_MODEL_HASHES has no entry for the model, verify warns + returns."""
     del fake_fastembed_module
+    # Override the module-level constant to simulate an unpinned model.
+    monkeypatch.setattr("engram.embedding.fastembed.KNOWN_MODEL_HASHES", {})
     provider = FastEmbedProvider()
     with caplog.at_level("WARNING", logger="engram.embedding.fastembed"):
         provider.verify_model_files()
@@ -153,7 +169,8 @@ def test_verify_model_files_with_populated_manifest_detects_mismatch(
 
     cache_dir = tmp_path / "fastembed-cache"
     cache_dir.mkdir()
-    (cache_dir / "model.onnx").write_bytes(b"actual content of model")
+    snapshot = _make_hf_snapshot_dir(cache_dir)
+    (snapshot / "model.onnx").write_bytes(b"actual content of model")
 
     fake_manifest = {"BAAI/bge-small-en-v1.5": {"model.onnx": "f" * 64}}
     monkeypatch.setattr("engram.embedding.fastembed.KNOWN_MODEL_HASHES", fake_manifest)
@@ -171,9 +188,10 @@ def test_verify_model_files_with_populated_manifest_accepts_match(
     del fake_fastembed_module
     cache_dir = tmp_path / "fastembed-cache"
     cache_dir.mkdir()
+    snapshot = _make_hf_snapshot_dir(cache_dir)
     content = b"actual content of model file"
-    (cache_dir / "model.onnx").write_bytes(content)
-    real_hash = _sha256_of_file(cache_dir / "model.onnx")
+    (snapshot / "model.onnx").write_bytes(content)
+    real_hash = _sha256_of_file(snapshot / "model.onnx")
 
     fake_manifest = {"BAAI/bge-small-en-v1.5": {"model.onnx": real_hash}}
     monkeypatch.setattr("engram.embedding.fastembed.KNOWN_MODEL_HASHES", fake_manifest)
@@ -191,6 +209,7 @@ def test_verify_model_files_missing_file_warns_only(
     del fake_fastembed_module
     cache_dir = tmp_path / "fastembed-cache"
     cache_dir.mkdir()
+    _make_hf_snapshot_dir(cache_dir)  # snapshot exists but no model.onnx in it
     fake_manifest = {"BAAI/bge-small-en-v1.5": {"model.onnx": "0" * 64}}
     monkeypatch.setattr("engram.embedding.fastembed.KNOWN_MODEL_HASHES", fake_manifest)
 
@@ -198,6 +217,26 @@ def test_verify_model_files_missing_file_warns_only(
     with caplog.at_level("WARNING", logger="engram.embedding.fastembed"):
         provider.verify_model_files()
     assert any("missing in" in rec.message for rec in caplog.records)
+
+
+def test_list_cached_files_returns_snapshot_files(tmp_path: Path):
+    """list_cached_files surfaces the snapshot dir's files (used by --print-hashes)."""
+    cache_dir = tmp_path / "fastembed-cache"
+    cache_dir.mkdir()
+    snapshot = _make_hf_snapshot_dir(cache_dir)
+    (snapshot / "model.onnx").write_bytes(b"x")
+    (snapshot / "tokenizer.json").write_bytes(b"y")
+    provider = FastEmbedProvider(cache_dir=cache_dir)
+    files = provider.list_cached_files()
+    assert "model.onnx" in files
+    assert "tokenizer.json" in files
+
+
+def test_list_cached_files_returns_empty_when_no_snapshot(tmp_path: Path):
+    cache_dir = tmp_path / "empty-cache"
+    cache_dir.mkdir()
+    provider = FastEmbedProvider(cache_dir=cache_dir)
+    assert provider.list_cached_files() == {}
 
 
 # === sha256 helper ===

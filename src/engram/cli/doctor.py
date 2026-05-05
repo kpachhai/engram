@@ -56,6 +56,15 @@ def register(app: typer.Typer) -> None:
             "--remove-orphans",
             help="With --repair: also delete SQLite rows whose markdown is missing.",
         ),
+        print_hashes: bool = typer.Option(
+            False,
+            "--print-hashes",
+            help=(
+                "After --download-model, print SHA-256 hashes of the cached "
+                "model files in manifest-ready format and exit. Used by "
+                "maintainers to populate engram/embedding/model_hashes.py."
+            ),
+        ),
     ) -> None:
         """Run health checks against the configured vault."""
         try:
@@ -66,6 +75,10 @@ def register(app: typer.Typer) -> None:
         except ConfigError as exc:
             typer.secho(f"engram doctor: {exc}", fg=typer.colors.RED, err=True)
             raise typer.Exit(2) from exc
+
+        if print_hashes:
+            _print_model_hashes(config)
+            raise typer.Exit(0)
 
         report = run_diagnostics(
             config,
@@ -159,6 +172,48 @@ def _append_phase3_rows(*, report: DoctorReport, user_config: object) -> None:
         for storage in reversed(storages):
             with contextlib.suppress(Exception):
                 storage.close()
+
+
+def _print_model_hashes(config: object) -> None:
+    """Compute + print SHA-256 hashes of cached model files (maintainer helper).
+
+    Used by ``engram doctor --download-model --print-hashes`` after a
+    model upgrade to recompute the manifest pinned in
+    :mod:`engram.embedding.model_hashes`.
+    """
+    import hashlib
+
+    from engram.embedding.fastembed import FastEmbedProvider
+
+    embedding_model = getattr(config, "embedding_model", "BAAI/bge-small-en-v1.5")
+    index_dir = getattr(config, "index_dir", None)
+    cache_dir = index_dir / "fastembed" if index_dir is not None else None
+    provider = FastEmbedProvider(
+        model_name=embedding_model,
+        cache_dir=cache_dir,
+    )
+    # Force load so the cache is populated.
+    provider.embed("hash-manifest probe")
+    files = provider.list_cached_files()
+    if not files:
+        typer.secho(
+            "no cached model files found; run with --download-model and "
+            "ensure the model downloaded successfully",
+            fg=typer.colors.RED,
+            err=True,
+        )
+        raise typer.Exit(1)
+
+    typer.echo(f"# SHA-256 manifest for {embedding_model!r}")
+    typer.echo("# Paste into engram/embedding/model_hashes.py")
+    typer.echo("{")
+    for name in sorted(files):
+        path = files[name].resolve()
+        if not path.is_file():
+            continue
+        digest = hashlib.sha256(path.read_bytes()).hexdigest()
+        typer.echo(f'    "{name}": "{digest}",')
+    typer.echo("}")
 
 
 __all__ = ["register"]

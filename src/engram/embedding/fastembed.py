@@ -110,6 +110,11 @@ class FastEmbedProvider:
 
         When the hash manifests in :mod:`engram.embedding.model_hashes` are
         empty placeholders, this method logs a single WARNING and returns.
+
+        FastEmbed downloads models into the HuggingFace cache layout
+        (``<cache>/models--<org>--<repo>/snapshots/<commit>/<file>``).
+        We resolve the most-recent snapshot directory and verify each
+        manifest entry against the file at that path.
         """
         manifest = KNOWN_MODEL_HASHES.get(self._model_name)
         if not manifest:
@@ -127,16 +132,26 @@ class FastEmbedProvider:
             )
             return
 
+        snapshot_dir = self._resolve_snapshot_dir()
+        if snapshot_dir is None:
+            _log.warning(
+                "no model snapshot found under %s; FastEmbed will download on next call",
+                self._cache_dir,
+            )
+            return
+
         for filename, expected_hash in manifest.items():
-            file_path = self._cache_dir / filename
+            file_path = snapshot_dir / filename
             if not file_path.exists():
                 _log.warning(
                     "model file %s missing in %s; FastEmbed will download",
                     filename,
-                    self._cache_dir,
+                    snapshot_dir,
                 )
                 continue
-            actual = _sha256_of_file(file_path)
+            # Resolve symlinks (HF stores blobs separately + symlinks them).
+            real = file_path.resolve()
+            actual = _sha256_of_file(real)
             if actual != expected_hash:
                 from engram.errors import EmbeddingError
 
@@ -146,6 +161,36 @@ class FastEmbedProvider:
                     f"download or pre-stage from a trusted source."
                 )
                 raise EmbeddingError(msg)
+
+    def _resolve_snapshot_dir(self) -> Path | None:
+        """Locate the snapshot directory under the HuggingFace cache layout.
+
+        Returns the most-recently-modified snapshot directory, or None if
+        no snapshots exist under the cache. The HF layout is
+        ``<cache>/models--<org>--<repo>/snapshots/<commit>/``.
+        """
+        if self._cache_dir is None:
+            return None
+        snapshots: list[Path] = []
+        for repo_dir in self._cache_dir.glob("models--*"):
+            snap_root = repo_dir / "snapshots"
+            if snap_root.exists():
+                snapshots.extend(d for d in snap_root.iterdir() if d.is_dir())
+        if not snapshots:
+            return None
+        return max(snapshots, key=lambda d: d.stat().st_mtime)
+
+    def list_cached_files(self) -> dict[str, Path]:
+        """Return ``{filename: path}`` for the currently cached model files.
+
+        Used by ``engram doctor --print-hashes`` to compute and print the
+        hashes of the cached files in a manifest-ready format. Returns an
+        empty dict when no cache snapshot exists.
+        """
+        snapshot = self._resolve_snapshot_dir()
+        if snapshot is None:
+            return {}
+        return {f.name: f for f in snapshot.iterdir() if f.is_file() or f.is_symlink()}
 
     def embed(self, text: str) -> list[float]:
         """Embed a single string; loads the model lazily on first call."""

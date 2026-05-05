@@ -20,7 +20,7 @@ the exit-criteria suite; Layer H shipped the docs.
 |---|---|---|---|
 | Tests | 872 | 1111 | +239 |
 | Source files (mypy) | 152 | 180 | +28 |
-| Doctor check codes | 22 (Phase 3) | 30 (Phase 4) | +8 |
+| Doctor check codes | 22 (Phase 3) | 31 (Phase 4) | +9 |
 | ADRs | 6 | 7 | +1 |
 | Errors | 16 | 27 | +11 |
 | New CLI subcommands | 8 (init, serve, etc.) | 12 | +4 (`team-vault setup`, `enroll-key`, `add-member`, `revoke-key`) |
@@ -77,7 +77,7 @@ they require multi-human + multi-machine + real-git-remote dogfood.
 | C | 8 + 10 | `d648b97` | routing dispatcher + capture metadata vault field |
 | D | 11 | `1f70a88` | capture-time gate composition |
 | E | 12-14 | `15d866c` | team-vault setup CLI + pre-receive hook (stdlib-only Python 3.10+) |
-| F | 15 + 18 | `8cdd28b` | team-vault member CLI + Phase 4 doctor checks (8 new codes) |
+| F | 15 + 18 | `8cdd28b` | team-vault member CLI + team-vault doctor checks (8 new codes; `git_branch_drifted` added later in Layer F refinement = 9 total) |
 | G | 21 | `46539b6` | exit-criteria integration suite (23 hermetic scenarios) |
 | H | 22 | _this commit_ | ADR 007 + PHASE_4_CODE_COMPLETE + TEAM_BRAIN_GUIDE + CHANGELOG |
 

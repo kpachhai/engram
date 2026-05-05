@@ -159,6 +159,38 @@ def test_engram_init_writes_canonical_files(tmp_path: Path) -> None:
     assert (vault_path / ".gitignore").exists()
 
 
+def test_engram_summarize_help() -> None:
+    """`engram summarize --help` advertises the LLM-mediated summary command."""
+    result = _run(["summarize", "--help"])
+    assert "--config" in result.stdout
+    assert "--vault" in result.stdout
+    assert "--json" in result.stdout
+
+
+def test_engram_synthesize_help() -> None:
+    """`engram synthesize --help` runs cleanly + advertises the command."""
+    result = _run(["synthesize", "--help"])
+    # typer wraps help columns at terminal width; just verify the command
+    # is registered + exits cleanly with a non-empty help payload.
+    assert "synthesize" in result.stdout.lower()
+    assert "--help" in result.stdout
+
+
+def test_engram_summarize_refuses_invalid_uuid() -> None:
+    """Invalid UUID input refuses cleanly with non-zero exit."""
+    result = _run(
+        ["summarize", "not-a-uuid"],
+        expect_zero=False,
+    )
+    assert result.returncode != 0
+
+
+def test_engram_doctor_print_hashes_help() -> None:
+    """--print-hashes flag is registered + shows up in --help."""
+    result = _run(["doctor", "--help"])
+    assert "--print-hashes" in result.stdout
+
+
 def test_engram_team_vault_setup_writes_canonical_files_with_real_setup(tmp_path: Path) -> None:
     """End-to-end: invoke setup_cmd directly via Python (the wiring is the same)."""
     # We don't have a real GPG key in CI; exercise setup_cmd directly.

@@ -9,6 +9,27 @@ The MCP tool surface is committed-stable for the v1.x lifetime per the API stabi
 
 ## [Unreleased]
 
+### Added (public-release polish)
+
+- **`engram summarize <thought-id>`** CLI — wraps the `summarize_thought`
+  MCP handler so operators can invoke single-thought summarization from
+  a terminal (per `01-PRODUCT_SPEC.md` F11). Honors the same provider
+  resolution + portability gate + cost cap as the MCP tool.
+- **`engram synthesize "<query>"`** CLI — wraps the `synthesize_thoughts`
+  MCP handler with `--k`, `--vault-filter`, `--include-sensitive`,
+  `--include-friend-vaults`, and `--json` flags.
+- **`engram doctor --print-hashes`** maintainer flag — recomputes the
+  cached FastEmbed model file hashes in manifest-ready format. Used
+  after a model upgrade to refresh `engram/embedding/model_hashes.py`.
+- **FastEmbed model integrity verification** is now active. The
+  `BAAI/bge-small-en-v1.5` hash manifest is populated; mismatched
+  files raise `EmbeddingError` and refuse to load. Empty manifests
+  (for unpinned models) keep the original trust-on-first-use behavior
+  with a single WARNING log.
+- **`FastEmbedProvider.list_cached_files()`** + `_resolve_snapshot_dir`
+  helper — handles HuggingFace's `models--<org>--<repo>/snapshots/<sha>/`
+  cache layout so verification + hash printing find the actual files.
+
 ### Added (Phase 4 - Team Brain)
 
 - **`team-write` role** for `VaultMount.role` joining `primary` and
@@ -62,12 +83,12 @@ The MCP tool surface is committed-stable for the v1.x lifetime per the API stabi
   and non-steward mutation of policy/members. Lists ALL violations
   on rejection (not just the first). Hand-rolled restricted YAML
   parser (no PyYAML dep).
-- **Phase 4 doctor codes** (8 new): `multiple_team_write_vaults_ok`,
+- **Phase 4 doctor codes** (9 new): `multiple_team_write_vaults_ok`,
   `team_member_not_enrolled`, `team_pending_pushes`,
   `team_membership_revoked`, `team_policy_violation_quarantined`,
   `serve_config_stale`, `routing_rule_priority_collision`,
-  `team_vault_embedding_mismatch`. `ALL_PHASE_4_CHECK_CODES` superset
-  has 30 codes total.
+  `team_vault_embedding_mismatch`, `git_branch_drifted`.
+  `ALL_PHASE_4_CHECK_CODES` superset has 31 codes total.
 - **11 new errors**: `TeamMemberNotEnrolled`, `TeamPolicyViolation`,
   `RoutingRuleAmbiguous`, `RoutingTargetNotMounted`,
   `BlockThoughtInTeamVaultDisallowed`, `TeamVaultEmbeddingMismatch`,
