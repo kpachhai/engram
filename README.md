@@ -6,7 +6,12 @@
 
 ## Status
 
-Pre-1.0. Phase 1 (solo MVP + Open Brain migration) is in active development. The pinned spec lives at `docs/superpowers/specs/2026-05-04-engram/` in the maintainer's planning repo.
+Pre-1.0. Phase 1 (solo MVP + Open Brain migration) and Phase 2 (multi-machine
+personal sync via git transport) are code-complete. See
+`docs/PHASE_1_CODE_COMPLETE.md` and `docs/PHASE_2_CODE_COMPLETE.md` for the
+exit-criteria validation. Multi-machine setup guide:
+`docs/MULTI_MACHINE_SETUP.md`. The pinned spec lives at
+`docs/superpowers/specs/2026-05-04-engram/` in the maintainer's planning repo.
 
 ## Why
 
