@@ -82,6 +82,18 @@ These are the load-bearing properties that every change must preserve:
 6. **MCP wire format is stable for v1.x.** Only non-breaking additions (new optional fields, new tools) are permitted. Breaking changes warrant v2.0.
 7. **Forward-compatible markdown.** Files written by today's engram MUST be readable by every future version. New schema versions add fields with safe defaults; existing fields are never removed.
 
+## PII Discipline
+
+This repo is publicly forkable. Follow the global PII rules in `~/.claude/CLAUDE.md` ("PII Discipline (publishable repos)" + "Pre-Write Checklist for Publishable Repos") plus these engram-specific notes:
+
+- **`pyproject.toml` `authors` field** is the only place a real maintainer name is permitted in committed content (project-attribution exception, parallel to `package.json` `"author"` in idea-forge).
+- **No employer or company brand names** in source, tests, docs, ADRs, or commit messages. The pinned-invariants list, the spec, and the migration guide should all be readable by any forker without context about who built engram.
+- **No hardcoded `/Users/<name>/` paths.** Examples in docs use `~/.local/share/engram/personal` or similar generic paths; tests use `tmp_path` fixtures.
+- **No companion-repo paths bearing the maintainer's GitHub username.** Cross-references to other repos use generic terms (`your dotfiles`, `your meta-stack repo`, `your persistent-memory MCP`) — except for the spec back-reference in `## Repository layout`, which IS the maintainer's planning repo and is acknowledged as such.
+- **No GPG fingerprints, API keys, MCP URLs with secrets, or test fixtures derived from real keys** in committed content. Test GPG keys are generated in `tmp_path` per-test; OB1 migration secrets live in `~/.config/devkit/references.json` (machine-local, gitignored).
+
+Run the Pre-Write Checklist before writing or editing any file in this repo. If candidate PII slips in, flag it before staging - active guidance over silent rewrites.
+
 ## Coding conventions
 
 Follow the global rules in `~/.claude/CLAUDE.md` (use hyphens or semicolons instead of em-dashes, no emojis unless asked, fail-fast error handling, descriptive names, surgical changes only). Engram-specific additions:
