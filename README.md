@@ -27,10 +27,19 @@ pip install engram-mcp
 # 2. Scaffold a vault
 engram init ~/.local/share/engram/personal
 
-# 3. Health check
+# 3. Tell engram where to find the vault
+mkdir -p ~/.config/engram && cat > ~/.config/engram/config.yaml <<'EOF'
+default_user: <your-username>
+vaults:
+  - name: personal
+    path: ~/.local/share/engram/personal
+    role: primary
+EOF
+
+# 4. Health check
 engram doctor
 
-# 4. Wire into Claude Code (or any MCP client)
+# 5. Wire into Claude Code (or any MCP client)
 # Add to ~/.claude/mcp_servers.json:
 # {
 #   "mcpServers": {
@@ -122,6 +131,13 @@ uv sync --all-extras --dev
 
 # Run the CLI directly
 uv run engram init ~/.local/share/engram/personal
+mkdir -p ~/.config/engram && cat > ~/.config/engram/config.yaml <<'EOF'
+default_user: <your-username>
+vaults:
+  - name: personal
+    path: ~/.local/share/engram/personal
+    role: primary
+EOF
 uv run engram doctor --download-model
 uv run engram doctor
 uv run engram serve

@@ -54,15 +54,46 @@ This creates:
 └── README.md                  # stub
 ```
 
-## Step 3: Run a health check
+## Step 3: Tell engram where to find the vault
+
+`engram init` scaffolds the vault directory + writes a per-vault `engram.config.yaml` INSIDE it. But `engram doctor` and `engram serve` need a separate USER-level config at `~/.config/engram/config.yaml` to know which vault(s) to mount on this machine. Two different files; both are required.
+
+Create the user-level config:
+
+```bash
+mkdir -p ~/.config/engram
+cat > ~/.config/engram/config.yaml <<'EOF'
+default_user: <your-username>
+vaults:
+  - name: personal
+    path: ~/.local/share/engram/personal
+    role: primary
+log_level: INFO
+log_format: text
+EOF
+```
+
+What each field does:
+
+- `default_user` — stamped as `source` on captures that don't carry an explicit one. Falls back to `~/.config/devkit/identity.json` `github_username` if unset, but explicit-in-the-config is more discoverable. Use your GitHub handle or any identifier you'll recognize later.
+- `vaults` — list of vaults this machine has access to. The path can be absolute or `~`-prefixed; `engram` expands it. The `name` is a stable handle used in CLI commands and frontmatter; the `role` is one of `primary` / `read-only` / `team-write`.
+- `log_level` / `log_format` — operational defaults; tweak as needed.
+
+Multi-vault setups (friend-imported corpus, team-shared vault) add additional rows here. See `docs/MULTI_VAULT_SETUP.md`.
+
+## Step 4: Run a health check
 
 ```bash
 engram doctor
 ```
 
-Expected: a list of green check rows. If anything is RED, the message tells you how to fix it.
+Expected: a list of green check rows. If anything is RED, the message tells you how to fix it. Common first-time issues:
 
-## Step 4: Wire engram into your MCP client
+- **`config_missing`** — you skipped Step 3.
+- **`vault_path_missing`** — the `path` in `config.yaml` doesn't point at the vault `engram init` created.
+- **`embedding_model_missing`** — the FastEmbed model isn't downloaded yet. Run `engram doctor --download-model` (one-shot, ~130 MB).
+
+## Step 5: Wire engram into your MCP client
 
 ### Claude Code
 
@@ -89,7 +120,7 @@ Same as Claude Code but the config lives at `~/Library/Application Support/Claud
 
 Engram speaks stdio MCP. Any client that can launch a subprocess and speak the MCP protocol over stdin/stdout will work. Point it at `engram serve`.
 
-## Step 5: Capture your first thought
+## Step 6: Capture your first thought
 
 From inside an MCP client, ask the AI to capture something:
 
@@ -105,7 +136,7 @@ echo "[Lesson] First capture from the CLI." | engram capture-stdin  # (if you wi
 
 (Most users capture via the MCP tool — the AI is the natural capture surface.)
 
-## Step 6: Search your memory
+## Step 7: Search your memory
 
 > "Search my thoughts for things I've learned about installing engram."
 
