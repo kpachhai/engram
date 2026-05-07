@@ -128,15 +128,17 @@ the LLM cites that wasn't in the actually-retrieved set. This is
 a ratchet, not a guarantee: indirect prompt injection is unsolved
 at the model layer in Phase 3.
 
-## Limitations (deferred to Phase 4)
+## Limitations (candidate future features)
 
-* `engram import-resume <bundle-id>` after a partial-merge crash.
-  Phase 3 surfaces the partial state via `engram doctor` FAIL with
-  operator-runnable resume instructions; you remove the
-  half-imported files manually and retry.
-* Live git-pull from a friend's remote (D3 in ADR 006).
-* Capability-token bundles (schema_version=2) - Phase 3 ships v1
-  only; v1 importer refuses anything else by design.
+* No `engram import-resume` subcommand exists today. Recovery from a
+  partial-merge crash is manual: `engram doctor` surfaces the partial
+  state with operator-runnable resume instructions; you remove the
+  half-imported files in `<vault>/.indexes/import-staging-<bundle_id>/`
+  manually and re-run `engram import` against the same bundle.
+* Live git-pull from a friend's remote (D3 in ADR 006). Today's flow
+  is one-shot bundle export + bundle import.
+* Capability-token bundles (schema_version=2) - the v1 importer
+  refuses anything else by design.
 
 ## See also
 

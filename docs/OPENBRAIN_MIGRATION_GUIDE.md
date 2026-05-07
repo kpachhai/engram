@@ -102,12 +102,16 @@ Or rely on the devkit identity convention: if `~/.config/devkit/identity.json` e
 ### Dry-run first (recommended)
 
 ```bash
+# Set the access key in env (preferred over --key for ps-aux safety).
+export OPEN_BRAIN_KEY='<your-OB-access-key>'
+
 engram migrate-from-open-brain \
   --url 'https://<ref>.supabase.co/functions/v1/open-brain-mcp' \
-  --key '<your-OB-access-key>' \
-  --output-vault ~/.local/share/engram/personal \
+  --vault personal \
   --dry-run
 ```
+
+`--vault personal` references a vault you've configured in `~/.config/engram/config.yaml` `vaults:` list (NOT a path — engram resolves the path from the vault's name).
 
 What `--dry-run` does:
 - Connects to Open Brain.
@@ -123,13 +127,12 @@ Inspect the report before the real run. Look for:
 
 ### Real run
 
-When the dry-run looks good:
+When the dry-run looks good (assuming `OPEN_BRAIN_KEY` is still set in your environment):
 
 ```bash
 engram migrate-from-open-brain \
   --url 'https://<ref>.supabase.co/functions/v1/open-brain-mcp' \
-  --key '<your-OB-access-key>' \
-  --output-vault ~/.local/share/engram/personal \
+  --vault personal \
   --confirm-supabase-snapshot-taken
 ```
 
@@ -141,7 +144,7 @@ If `~/.config/devkit/references.json` has an `open_brain_mcp_url` field (the mai
 
 ```bash
 engram migrate-from-open-brain \
-  --output-vault ~/.local/share/engram/personal \
+  --vault personal \
   --confirm-supabase-snapshot-taken
 ```
 
@@ -151,9 +154,10 @@ engram migrate-from-open-brain \
 |---|---|
 | `--dry-run` | Always; run before the real migration. |
 | `--limit <N>` | Test the pipeline on the first N thoughts. |
-| `--append` | Resume a partial migration; skips already-migrated thoughts via `(fingerprint, source, created_at)` triple-match. Default behavior — flag is for clarity. |
 | `--prefer-legacy-id-match` | Re-migrate after edits in Open Brain. Matches by `(legacy_id, source)` and updates existing engram thoughts in place rather than creating duplicates. |
 | `--report-path <path>` | Write the report to a non-default location. Default: `<vault>/migration-report.json`. |
+
+**Resume after partial failure:** there is no separate `--resume` or `--append` flag. The migration is idempotent — already-imported thoughts are skipped via `(fingerprint, source, created_at)` triple-match on every run. Just re-run the same command after a partial failure.
 
 ## Performance expectations
 
@@ -164,7 +168,7 @@ For a typical Open Brain corpus (~2000 thoughts, ~5MB total content):
 - Validation sample (10 thoughts): under 10 seconds.
 - **Total: 30-60 minutes on a 2024-era laptop.**
 
-For larger corpora (10K+), expect proportionally longer runtimes. Migration is designed to run unattended; you can leave it overnight. Network interruption during enumeration: re-run with `--append`; idempotency ensures no duplicates.
+For larger corpora (10K+), expect proportionally longer runtimes. Migration is designed to run unattended; you can leave it overnight. Network interruption during enumeration: re-run the same command — idempotency via `(fingerprint, source, created_at)` triple-match ensures no duplicates.
 
 ## Validate the migration
 

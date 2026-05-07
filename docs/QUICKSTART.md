@@ -185,11 +185,13 @@ Restart the client after adding the server config. Run `engram serve` directly i
 If you have an existing Open Brain (OB1) deployment on Supabase:
 
 ```bash
+# Set the access key in env (preferred over --key for ps-aux safety).
+export OPEN_BRAIN_KEY=<YOUR_OB_MCP_KEY>
+
 engram migrate-from-open-brain \
   --url https://your-ob.supabase.co/functions/v1 \
-  --key <YOUR_OB_MCP_KEY> \
-  --output-vault ~/.local/share/engram/personal \
+  --vault personal \
   --confirm-supabase-snapshot-taken
 ```
 
-The migrator paginates through every thought, generates UUID-v7 ids, computes fingerprints, and writes one markdown file per thought to the vault. A `migration-report.json` lands at the vault root. Migration is idempotent — re-running matches existing thoughts on `(fingerprint, source, created_at)`.
+`--vault personal` references the vault you set up in Step 3 (`name: personal` in your `~/.config/engram/config.yaml`). The migrator paginates through every thought, generates UUID-v7 ids, computes fingerprints, and writes one markdown file per thought to that vault. A `migration-report.json` lands at the vault root. Migration is idempotent — re-running matches existing thoughts on `(fingerprint, source, created_at)`.

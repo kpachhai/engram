@@ -223,26 +223,41 @@ git push
 The revoked member's exit ramp:
 
 ```bash
-engram team-vault unmount --remove-local team-x
+engram team-vault unmount team-x \
+  --user-config ~/.config/engram/config.yaml \
+  --remove-local \
+  --local-path ~/team-vaults/team-x
 ```
 
-This removes the entry from their engram config and deletes the
-local clone.
+This removes the `team-x` entry from the member's `~/.config/engram/config.yaml`.
+The `--remove-local` + `--local-path` pair also deletes the on-disk
+clone (operator opt-in; omit both to keep the local files for archival).
 
 ## Disaster recovery
 
 If the team-vault remote is permanently lost (host outage, account
-compromise, etc.), any steward can restore from a local clone:
+compromise, etc.), there is no `engram team-vault restore` subcommand —
+disaster recovery is plain git plus the existing `team-vault rebind`
+ceremony:
 
 ```bash
-# Steward has a local clone at ~/team-vaults/team-x.
-engram team-vault restore --from-local ~/team-vaults/team-x \
-  --new-remote git@new-host:org/team-vault.git
+# 1. Any steward with a healthy local clone repoints it at a new remote
+#    and pushes the full history.
+cd ~/team-vaults/team-x
+git remote set-url origin git@new-host:org/team-vault.git
+git push -u origin main
 
-# Other members re-point their local clones:
+# 2. Each member re-points their local clone via team-vault rebind.
 engram team-vault rebind team-x \
-  --remote git@new-host:org/team-vault.git
+  --user-config ~/.config/engram/config.yaml \
+  --remote git@new-host:org/team-vault.git \
+  --local-clone ~/team-vaults/team-x
 ```
+
+`team-vault rebind` updates the member's `~/.config/engram/config.yaml`
+entry for `team-x` AND (when `--local-clone` is set) runs
+`git remote set-url` on the local checkout so subsequent `engram serve`
+syncs against the new remote.
 
 ## Troubleshooting
 

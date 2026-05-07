@@ -116,16 +116,18 @@ The sharer:
 ```bash
 engram export \
   --output ~/share/hedera-notes.tar.gz \
-  --portability portable \
-  --filter '[Pattern]|[Decision]'   # only the relevant prefixes
+  --portability portable
 ```
+
+(Engram's exporter currently filters by portability tier only; per-prefix filtering at export is a candidate future feature. The receiver can inspect the bundle's `manifest.json` and filenames before importing if they want a narrower set.)
 
 The receiver:
 
 ```bash
 engram import \
   ~/share/hedera-notes.tar.gz \
-  --as alice-hedera-shared
+  --vault alice-hedera-shared \
+  --allow-read-only
 ```
 
 Now the imported thoughts are mounted as a `read-only` vault alongside the receiver's primary vault. Searches span both, with vault attribution preserved. Captures still target the receiver's primary vault (the friend's vault is read-only).

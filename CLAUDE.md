@@ -136,8 +136,8 @@ uv run engram serve
 # Health check (run after any config change or migration)
 uv run engram doctor
 
-# Migrate from Open Brain (one-time)
-uv run engram migrate-from-open-brain --output-vault ~/.local/share/engram/personal --confirm-supabase-snapshot-taken
+# Migrate from Open Brain (one-time; assumes OPEN_BRAIN_KEY in env + a configured vault named "personal")
+uv run engram migrate-from-open-brain --vault personal --confirm-supabase-snapshot-taken
 
 # Rebuild the index from markdown
 uv run engram reindex --full
@@ -146,7 +146,7 @@ uv run engram reindex --full
 uv run engram export --output ~/share/bundle.tar.gz --portability portable
 
 # Import a friend's bundle
-uv run engram import ~/share/bundle.tar.gz --as friend-vault
+uv run engram import ~/share/bundle.tar.gz --vault friend-vault --allow-read-only
 
 # Bootstrap a team vault (steward)
 uv run engram team-vault setup ~/team-vaults/postmortems --remote git@github.com:org/team-postmortems.git

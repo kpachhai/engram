@@ -167,12 +167,16 @@ The test suite (1100+ tests) covers unit, integration, and hermetic CLI smoke ag
 Existing Open Brain (OB1) corpus migrates in one command:
 
 ```bash
+# Set the access key in env (preferred over --key for ps-aux safety).
+export OPEN_BRAIN_KEY=<YOUR_OB_MCP_KEY>
+
 engram migrate-from-open-brain \
   --url https://your-ob.supabase.co/functions/v1 \
-  --key <YOUR_OB_MCP_KEY> \
-  --output-vault ~/.local/share/engram/personal \
+  --vault personal \
   --confirm-supabase-snapshot-taken
 ```
+
+`--vault` takes the **name** of a vault from your `~/.config/engram/config.yaml` `vaults:` list (the one created in Step 3 of the Quickstart above), NOT a path. The migration reads the OB1 URL from `~/.config/devkit/references.json` automatically if present, so `--url` can also be omitted.
 
 Idempotent (re-run safely; matches existing thoughts on `(fingerprint, source, created_at)`). Generates `migration-report.json` with counts + 10-thought round-trip sample.
 
