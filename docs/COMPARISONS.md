@@ -82,7 +82,37 @@ A clear-eyed look at what makes engram different — and when other tools are th
 - You want markdown SoT — Open Brain's data lives in Postgres rows you can't read in any editor.
 - You want git history of every capture/edit/delete (Open Brain has none).
 
-**Why engram is the natural successor:** Open Brain proved the MCP-tool-surface design but the SaaS architecture is the wrong shape for personal AI memory. Engram preserves the API surface (drop-in compatibility for existing Open Brain consumers) while replacing the substrate. The included `engram migrate-from-open-brain` command paginates through your existing corpus and writes one markdown file per thought.
+**Why engram is a thesis-driven alternative:** Open Brain proved the MCP-tool-surface design but the SaaS architecture is the wrong shape for personal AI memory. Engram inherits the core tool shape (`capture_thought` + semantic `search_thoughts` + `list_thoughts` + `fetch` + `thought_stats` follow the same shape across both) while replacing the substrate. The included `engram migrate-from-open-brain` command paginates through your existing corpus and writes one markdown file per thought.
+
+Crucially, **engram is not a drop-in feature replacement for Open Brain.** Engram was scoped to its own thesis (markdown SoT + git sync + MCP) from day 1, not to clone every Open Brain feature. The two systems are feature-overlapping with divergence in both directions.
+
+**Feature gap matrix (as of v0.4.0, 2026-05-07):**
+
+engram has, Open Brain doesn't:
+
+| Feature | What it does |
+|---|---|
+| Markdown source of truth | Every thought lives as a readable markdown file in `<vault>/thoughts/<prefix>/`; SQLite is a regenerable index |
+| Git transport sync | `git push`/`pull` between machines; no cloud database dependency |
+| Multi-vault | Personal + friend-imported (read-only) + team-shared (write) vaults composed at search time |
+| Friend-share bundles | Portable export/import flow (`engram export` / `engram import`) for sharing curated subsets with portability tag enforcement |
+| Team Brain | Shared writable vault with GPG-bound sender attribution + server-side pre-receive hook for two-layer security enforcement |
+| LLM tools | `summarize_thought` and `synthesize_thoughts` for thoughtful summarization with citation and portability gate |
+| Two-layer security boundary | Capture-time client gate AND push-time server hook; single-bypass doesn't breach the boundary |
+
+Open Brain has, engram doesn't (yet):
+
+| Feature | What it does | Status in engram |
+|---|---|---|
+| Keyword / full-text `search` | Lexical retrieval distinct from semantic `search_thoughts` | Not implemented; engram has only semantic search via FastEmbed + sqlite-vec |
+| Hybrid search | BM25 + vector blend ranking (Open Brain migration 004) | Not implemented; candidate to backport |
+| Typed reasoning edges | Relationship modeling between thoughts (Open Brain migration 003) | Not implemented; usage-driven decision |
+| Work-operating-model schema | 5-layer elicitation interviewer + structured operating-model storage (Open Brain migration 005) + companion MCP | Not implemented; engram could either integrate the schema natively or remain composable with the separate work-operating-model MCP |
+| Upstream maintainer activity | Features ship from the upstream Open Brain repo without you authoring them | n/a — engram is a separate thesis with its own roadmap |
+
+**Implication for adopters:** if you're considering migrating, decide whether the engram-only features are worth more than the Open Brain-only features for your usage. Most personal-stack users will find the trade favorable (markdown SoT + git sync + multi-vault + team-brain are big), but some workflows depend on hybrid search or typed reasoning edges and should weigh the gap.
+
+**Implication for dual-stack runners** (those keeping both Open Brain and engram active during a comparison period): the gaps go in both directions, so neither store is strictly a superset of the other. Use the dual-stack period to decide which Open Brain-only features are worth backporting into engram.
 
 ### vs Obsidian + Smart Connections
 
