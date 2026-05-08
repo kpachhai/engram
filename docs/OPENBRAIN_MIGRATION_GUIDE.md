@@ -6,9 +6,19 @@
 
 **The migration is idempotent.** A failed or partial run can be resumed safely. The migration NEVER mutates your Open Brain database.
 
+## ⚠️ Important: the MCP-based migration command does not work against current OB1
+
+Engram ships an `engram migrate-from-open-brain` CLI that paginates through OB1's MCP `list_thoughts` tool and imports each result into your engram vault. **This command is currently broken against any reasonably-recent OB1 deployment**, because OB1's MCP tools (`search`, `fetch`, `search_thoughts`, `list_thoughts`, `thought_stats`, `capture_thought`) all return human-readable text content blocks rather than structured records with ids that engram can import. Even `list_thoughts` only emits a date + type + first-line preview; there is no per-thought id field for engram to enumerate.
+
+**Migrate via direct Postgres access instead.** OB1 stores all data in a Supabase Postgres `thoughts` table with a simple schema (`id uuid, content text, embedding vector(1536), metadata jsonb, created_at timestamptz, updated_at timestamptz`). Reading directly from Postgres bypasses every MCP transport-format concern and uses engram's existing thought-to-markdown machinery for the actual import.
+
+The "What the migration does" section below is preserved as the long-term design intent. The "Run the migration" section uses the direct-Postgres path until OB1 grows a structured-data tool (or engram grows a `--postgres-url` mode natively).
+
+A reference Postgres-direct migration script lives at `<your-memex-or-companion-repo>/scripts/migrate_thoughts_to_engram.py` (the maintainer's; copy and adapt to your setup). The script imports engram as a library, opens your target vault via the per-user `~/.config/engram/config.yaml`, iterates `SELECT * FROM thoughts ORDER BY created_at`, and feeds each row through engram's `_migrate_one` exactly as the MCP path would have. Idempotency, prefix parsing, fingerprinting, atomic writes, and embedding generation all reuse engram's existing code.
+
 ## What the migration does
 
-`engram migrate-from-open-brain` paginates through every thought in your Open Brain MCP endpoint, generates a fresh UUID-v7 for each (preserving the original Open Brain ID in the `legacy_id` frontmatter field), parses prefixes, computes engram-canonical fingerprints, generates embeddings locally with FastEmbed, and writes one markdown file per thought to your engram vault. A `migration-report.json` lands at the vault root with full evidence.
+The migration pipeline (whether via MCP or direct Postgres) generates a fresh UUID-v7 for each OB1 thought (preserving the original OB1 ID in the `legacy_id` frontmatter field), parses prefixes, computes engram-canonical fingerprints, generates embeddings locally with FastEmbed, and writes one markdown file per thought to your engram vault. A `migration-report.json` lands at the vault root with full evidence.
 
 After migration:
 - Your Open Brain corpus is untouched.
@@ -25,8 +35,11 @@ This is your rollback safety net. Even if both Open Brain AND engram end up in a
 
 In the Supabase dashboard for your Open Brain project:
 
-* Database → Backups → "Create backup" (or use the project's automatic-backup retention if it covers the migration window).
-* Alternatively, table-level export: SQL Editor → `COPY public.thoughts TO STDOUT WITH CSV HEADER` redirected to a local file.
+* **Pro tier:** Database → Backups → "Create backup" (or use the project's automatic-backup retention if it covers the migration window).
+* **Free tier (Backups dashboard not available):** three good alternatives:
+  * **Dashboard CSV export** (easiest, two minutes, zero CLI): Table Editor → `thoughts` table → "Export" button → download CSV. Captures the data; not the schema, but the schema lives in your `<memex-or-OB1-repo>/open-brain/schema.sql`.
+  * **`pg_dump` to a local file** (most thorough): Project Settings → Database → Connection string → copy. Then locally: `pg_dump --no-owner --no-acl "$OB1_POSTGRES_URL" | gzip > openbrain-backup-$(date +%F).sql.gz`. Full schema + data; restorable via `psql` to any Postgres.
+  * **Skip if you're running dual-stack**: if you plan to keep OB1 alive alongside engram (the dual-stack pattern documented elsewhere), the migration is read-only against OB1, OB1 stays as the canonical source, and the backup risk is low. A best-effort CSV export from the Dashboard satisfies the `--confirm-supabase-snapshot-taken` requirement honestly.
 
 Confirm the snapshot exists and is non-empty before proceeding. Without it, the `--confirm-supabase-snapshot-taken` flag is dishonest.
 
@@ -99,65 +112,72 @@ Or rely on the devkit identity convention: if `~/.config/devkit/identity.json` e
 
 ## Run the migration
 
-### Dry-run first (recommended)
+### Recommended path: direct Postgres (works against current OB1)
+
+This is the path that actually works today. A reference script at `<your-companion-repo>/scripts/migrate_thoughts_to_engram.py` (the maintainer's lives at `kpachhai/memex/scripts/`) imports engram as a library and reads the Supabase Postgres `thoughts` table directly. Copy the script into your own setup repo and adapt as needed.
+
+The script's high-level shape:
+
+1. Imports `engram.config.loader.load_config`, `engram.embedding.fastembed.FastEmbedProvider`, `engram.storage.facade.VaultStorage`, `engram.migration.open_brain.{MigrationConfig, MigrationReport, OpenBrainThought, _migrate_one}`.
+2. Connects to Postgres via `psycopg` using `OB1_POSTGRES_URL` (the connection string from Supabase Dashboard → Project Settings → Database → Connection string).
+3. Iterates `SELECT id, content, metadata, created_at, updated_at FROM thoughts ORDER BY created_at`.
+4. For each row, builds an `OpenBrainThought` and calls engram's `_migrate_one` — same code path the MCP migration was supposed to use, just fed by Postgres rows instead of MCP responses.
+
+Get your connection string + run the script:
 
 ```bash
-# Set the access key in env (preferred over --key for ps-aux safety).
-export OPEN_BRAIN_KEY='<your-OB-access-key>'
+# 1. From Supabase Dashboard → Project Settings → Database → Connection string ('URI' form).
+export OB1_POSTGRES_URL='postgresql://postgres.<ref>:<pass>@<host>:<port>/postgres'
 
-engram migrate-from-open-brain \
-  --url 'https://<ref>.supabase.co/functions/v1/open-brain-mcp' \
-  --vault personal \
-  --dry-run
+# 2. Run from inside the engram source repo so engram is importable.
+cd ~/repos/github.com/<your-username>/engram
+
+# Dry-run first - reports what WOULD happen, writes nothing.
+uv run --with 'psycopg[binary]' python <path/to/script>/migrate_thoughts_to_engram.py \
+  --dry-run --vault personal
+
+# Real run.
+uv run --with 'psycopg[binary]' python <path/to/script>/migrate_thoughts_to_engram.py \
+  --vault personal
 ```
 
 `--vault personal` references a vault you've configured in `~/.config/engram/config.yaml` `vaults:` list (NOT a path — engram resolves the path from the vault's name).
 
 What `--dry-run` does:
-- Connects to Open Brain.
-- Pages through every thought.
-- Parses, transforms, and validates each thought.
+- Connects to Postgres.
+- Reads every thought row.
+- Parses, transforms, and validates each thought via engram's existing pipeline.
 - Writes NOTHING to disk.
-- Generates `migration-report.json` showing what WOULD have been migrated.
+- Reports counts (enumerated / migrated / skipped_existing / errors / by_prefix / by_portability).
 
-Inspect the report before the real run. Look for:
-- `totals.enumerated` — does the count match what you expect from Open Brain?
-- `errors[]` — any thoughts that failed to parse? Investigate before proceeding.
-- `fallback_assignments` — how many thoughts got the default `Note` prefix because no `[Prefix]` was found? If the count is high, your Open Brain corpus may have non-standard prefixes; review the migration report to decide whether to accept or fix.
+Inspect the dry-run output before the real run. Look for:
+- `enumerated` — does the count match what you expect from Open Brain?
+- `errors` — any thoughts that failed to parse? Investigate before proceeding.
+- `by_prefix` — how many thoughts got each prefix? A high `Note` count means your Open Brain corpus had non-standard prefixes.
 
-### Real run
+The migration is **idempotent** — re-running the script is safe because engram's `_migrate_one` skips already-imported thoughts via `(fingerprint, source, created_at)` triple-match. Network blip, partial failure, or a re-run after additional OB1 captures all just work.
 
-When the dry-run looks good (assuming `OPEN_BRAIN_KEY` is still set in your environment):
+### Legacy path: MCP-based (does not currently work; preserved for future)
 
-```bash
-engram migrate-from-open-brain \
-  --url 'https://<ref>.supabase.co/functions/v1/open-brain-mcp' \
-  --vault personal \
-  --confirm-supabase-snapshot-taken
-```
-
-The `--confirm-supabase-snapshot-taken` flag is REQUIRED for the real run. Without it, the migration refuses to start unless `--dry-run` is also set.
-
-### Devkit references shortcut
-
-If `~/.config/devkit/references.json` has an `open_brain_mcp_url` field (the maintainer's dotfiles convention), the `--url` and `--key` are read from there:
+The original design was an MCP-based migration:
 
 ```bash
-engram migrate-from-open-brain \
-  --vault personal \
-  --confirm-supabase-snapshot-taken
+engram migrate-from-open-brain --vault personal --confirm-supabase-snapshot-taken
 ```
 
-### Useful flags
+This is the long-term ideal: portable across any OB1-compatible MCP server, no DB credentials needed. Today it does not work because OB1's MCP tools return human-readable text rather than structured records (see the warning at the top of this guide). When OB1 grows a `raw_thoughts` / `dump_thoughts` / `tools/structured_dump` tool, OR when engram's own `migrate-from-open-brain` grows a `--postgres-url` mode, this path becomes viable. Tracked as a candidate future feature.
+
+### Useful flags (Postgres-direct script)
 
 | Flag | When to use |
 |---|---|
 | `--dry-run` | Always; run before the real migration. |
 | `--limit <N>` | Test the pipeline on the first N thoughts. |
-| `--prefer-legacy-id-match` | Re-migrate after edits in Open Brain. Matches by `(legacy_id, source)` and updates existing engram thoughts in place rather than creating duplicates. |
+| `--vault <NAME>` | Target vault from `~/.config/engram/config.yaml` `vaults:` list. Default: `memex`. |
 | `--report-path <path>` | Write the report to a non-default location. Default: `<vault>/migration-report.json`. |
+| `--default-user <handle>` | Override the engram-side `default_user` for thoughts that lack a `metadata.source` field. |
 
-**Resume after partial failure:** there is no separate `--resume` or `--append` flag. The migration is idempotent — already-imported thoughts are skipped via `(fingerprint, source, created_at)` triple-match on every run. Just re-run the same command after a partial failure.
+**Resume after partial failure:** just re-run the same command. Idempotency via `(fingerprint, source, created_at)` triple-match.
 
 ## Performance expectations
 

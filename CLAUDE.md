@@ -136,8 +136,11 @@ uv run engram serve
 # Health check (run after any config change or migration)
 uv run engram doctor
 
-# Migrate from Open Brain (one-time; assumes OPEN_BRAIN_KEY in env + a configured vault named "personal")
-uv run engram migrate-from-open-brain --vault personal --confirm-supabase-snapshot-taken
+# Migrate from Open Brain (one-time)
+# WARNING: the MCP-based `migrate-from-open-brain` CLI is currently broken against
+# real OB1 (OB1's MCP tools return human-readable text, not structured records).
+# Use the Postgres-direct path instead - see docs/OPENBRAIN_MIGRATION_GUIDE.md
+# for the reference script + walkthrough.
 
 # Rebuild the index from markdown
 uv run engram reindex --full

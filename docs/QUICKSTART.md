@@ -184,14 +184,17 @@ Restart the client after adding the server config. Run `engram serve` directly i
 
 If you have an existing Open Brain (OB1) deployment on Supabase:
 
-```bash
-# Set the access key in env (preferred over --key for ps-aux safety).
-export OPEN_BRAIN_KEY=<YOUR_OB_MCP_KEY>
+**Important:** the built-in `engram migrate-from-open-brain` MCP-based command does NOT work against any reasonably-recent OB1 deployment. OB1's MCP tools (`list_thoughts`, `fetch`, etc.) return human-readable text content, not structured records that engram can import — there's no per-thought id field to enumerate. The recommended path today is direct Postgres access against OB1's Supabase `thoughts` table.
 
-engram migrate-from-open-brain \
-  --url https://your-ob.supabase.co/functions/v1 \
-  --vault personal \
-  --confirm-supabase-snapshot-taken
+See `docs/OPENBRAIN_MIGRATION_GUIDE.md` for the full walkthrough including the reference Postgres-direct migration script. Brief shape:
+
+```bash
+# 1. Get the Postgres connection string from Supabase Dashboard → Project Settings → Database.
+export OB1_POSTGRES_URL='postgresql://postgres.<ref>:<pass>@<host>:<port>/postgres'
+
+# 2. Run the reference script from the engram source repo so engram is importable.
+cd ~/repos/github.com/<your-username>/engram
+uv run --with 'psycopg[binary]' python <path/to/script>/migrate_thoughts_to_engram.py --vault personal --dry-run
 ```
 
-`--vault personal` references the vault you set up in Step 3 (`name: personal` in your `~/.config/engram/config.yaml`). The migrator paginates through every thought, generates UUID-v7 ids, computes fingerprints, and writes one markdown file per thought to that vault. A `migration-report.json` lands at the vault root. Migration is idempotent — re-running matches existing thoughts on `(fingerprint, source, created_at)`.
+The script reuses engram's existing `_migrate_one` pipeline (prefix parsing, fingerprint, atomic write, FastEmbed embedding). It's idempotent — re-running matches existing thoughts on `(fingerprint, source, created_at)` so a partial failure is safe to re-run.

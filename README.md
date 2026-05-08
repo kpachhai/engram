@@ -166,19 +166,13 @@ The test suite (1100+ tests) covers unit, integration, and hermetic CLI smoke ag
 
 Existing Open Brain (OB1) corpus migrates in one command:
 
-```bash
-# Set the access key in env (preferred over --key for ps-aux safety).
-export OPEN_BRAIN_KEY=<YOUR_OB_MCP_KEY>
+**Important:** the built-in `engram migrate-from-open-brain` MCP-based command does NOT work against any reasonably-recent OB1 deployment. OB1's MCP tools return human-readable text content, not structured records that engram can import. The recommended path today is direct Postgres access against OB1's Supabase `thoughts` table. See `docs/OPENBRAIN_MIGRATION_GUIDE.md` for a reference script + full walkthrough.
 
-engram migrate-from-open-brain \
-  --url https://your-ob.supabase.co/functions/v1 \
-  --vault personal \
-  --confirm-supabase-snapshot-taken
-```
-
-`--vault` takes the **name** of a vault from your `~/.config/engram/config.yaml` `vaults:` list (the one created in Step 3 of the Quickstart above), NOT a path. The migration reads the OB1 URL from `~/.config/devkit/references.json` automatically if present, so `--url` can also be omitted.
-
-Idempotent (re-run safely; matches existing thoughts on `(fingerprint, source, created_at)`). Generates `migration-report.json` with counts + 10-thought round-trip sample.
+The migration:
+- Bypasses MCP; reads the Supabase Postgres `thoughts` table directly.
+- Reuses engram's existing `_migrate_one` pipeline (prefix parsing, fingerprint, atomic write, embedding).
+- Is idempotent (re-run safely; matches existing thoughts on `(fingerprint, source, created_at)`).
+- Generates `migration-report.json` with counts.
 
 ## Contributing
 
