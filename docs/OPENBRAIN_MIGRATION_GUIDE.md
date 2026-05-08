@@ -125,11 +125,41 @@ The script's high-level shape:
 
 Get your connection string + run the script:
 
-```bash
-# 1. From Supabase Dashboard → Project Settings → Database → Connection string ('URI' form).
-export OB1_POSTGRES_URL='postgresql://postgres.<ref>:<pass>@<host>:<port>/postgres'
+#### Step 1: get the Postgres connection URL
 
-# 2. Run from inside the engram source repo so engram is importable.
+Supabase exposes the connection string via the **"Connect"** button at the top of the project Dashboard (the icon was moved out of `Settings → Database` to the project header in mid-2025). Click it; copy the **Session pooler** URI form. Shape:
+
+```
+postgresql://postgres.<project-ref>:<DB-password>@aws-X-<region>.pooler.supabase.com:5432/postgres
+```
+
+Where to find each piece if you can't reach the Dashboard:
+
+* `<project-ref>` — the subdomain of your `OB1_SUPABASE_URL` (e.g. `https://abc123.supabase.co` → ref is `abc123`).
+* `<DB-password>` — your Supabase database password. The maintainer keeps this in `memex/.env` as `OB1_SUPABASE_DB_PASS`. URL-encode it if it has any of `@:#/?` characters (use `python3 -c 'import urllib.parse, os; print(urllib.parse.quote(os.environ["OB1_SUPABASE_DB_PASS"], safe=""))'`).
+* `<region>` — the AWS region your project lives in. Visible only via the Dashboard's "Connect" modal. If you genuinely can't reach the Dashboard, brute-force the common ones: `us-east-1`, `us-east-2`, `us-west-1`, `eu-central-1`, `ap-southeast-1`. There are only ~6.
+
+**You may also be able to use the direct-connection endpoint** at `db.<project-ref>.supabase.co:5432` — this is simpler (no region needed) but disabled by default for newer Supabase projects (post-mid-2024). Try direct first; if DNS fails to resolve `db.<ref>.supabase.co`, fall back to the pooler.
+
+```bash
+# Try direct first (works on older projects).
+export OB_REF=$(echo "$OB1_SUPABASE_URL" | sed -E 's|https?://([^.]+)\.supabase\.co.*|\1|')
+export OB1_POSTGRES_URL="postgresql://postgres:${OB1_SUPABASE_DB_PASS}@db.${OB_REF}.supabase.co:5432/postgres"
+
+# Quick connectivity test.
+uv run --with 'psycopg[binary]' python -c "import os, psycopg; c=psycopg.connect(os.environ['OB1_POSTGRES_URL']); cur=c.cursor(); cur.execute('SELECT count(*) FROM thoughts'); print('thoughts:', cur.fetchone()[0]); c.close()"
+
+# If you get 'failed to resolve host db.<ref>.supabase.co', direct is disabled
+# for this project. Switch to the pooler (replace <region> with what the
+# Dashboard shows, or brute-force the common regions):
+export OB1_POSTGRES_URL="postgresql://postgres.${OB_REF}:${OB1_SUPABASE_DB_PASS}@aws-1-us-east-1.pooler.supabase.com:5432/postgres"
+# Re-run the connectivity test.
+```
+
+#### Step 2: run the script
+
+```bash
+# Run from inside the engram source repo so engram is importable.
 cd ~/repos/github.com/<your-username>/engram
 
 # Dry-run first - reports what WOULD happen, writes nothing.
@@ -166,6 +196,20 @@ engram migrate-from-open-brain --vault personal --confirm-supabase-snapshot-take
 ```
 
 This is the long-term ideal: portable across any OB1-compatible MCP server, no DB credentials needed. Today it does not work because OB1's MCP tools return human-readable text rather than structured records (see the warning at the top of this guide). When OB1 grows a `raw_thoughts` / `dump_thoughts` / `tools/structured_dump` tool, OR when engram's own `migrate-from-open-brain` grows a `--postgres-url` mode, this path becomes viable. Tracked as a candidate future feature.
+
+### Common errors
+
+Errors observed in real migrations + their fixes:
+
+| Error | Cause | Fix |
+|---|---|---|
+| `psycopg.OperationalError: failed to resolve host 'db.<ref>.supabase.co'` | Direct-connection endpoint disabled (newer Supabase projects pooler-only). | Switch to the pooler URL form (`aws-X-<region>.pooler.supabase.com:5432`). |
+| `connection failed: ... password authentication failed` | DB password didn't transit cleanly because it contains URL-unsafe chars (`@:#/?`). | URL-encode the password before substituting into the connection string. |
+| `ModuleNotFoundError: No module named 'psycopg'` | Bare `python` invocation instead of `uv run --with 'psycopg[binary]' python`. | Always invoke via the uv wrapper; the script's `--help` output tells you the canonical form. |
+| `engram migrate failed: Open Brain probe failed (does the endpoint accept sort=created_at_asc?): Open Brain returned HTTP 401` | You ran the OLD MCP-based `engram migrate-from-open-brain` CLI; the OB1 MCP path doesn't work. | Switch to the Postgres-direct script per "Recommended path" above. |
+| `engram migrate failed: Open Brain response was not valid JSON: Expecting value: line 1 column 1` | Same as above; OB1 returned SSE (`event: message\ndata: {...}`) and engram's MCP HTTP client expects plain JSON. | Switch to the Postgres-direct script. |
+| `MigrationReport.__init__() missing 2 required positional arguments` | Stale copy of the migration script that pre-dates the `migration_id`/`source_url` fix. | Update to the latest script. |
+| `engram doctor` reports `config_missing` after `engram init` | You skipped writing `~/.config/engram/config.yaml`. | See `docs/QUICKSTART.md` Step 3. The per-vault config inside the vault directory is NOT enough; the user-level config is what tells doctor and serve which vaults to mount. |
 
 ### Useful flags (Postgres-direct script)
 
