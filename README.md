@@ -149,6 +149,47 @@ python -m venv /tmp/engram-test-venv
 /tmp/engram-test-venv/bin/engram --version
 ```
 
+## Updating engram
+
+Pick the section that matches how you installed.
+
+### Installed via PyPI
+
+```bash
+uv tool upgrade engram-mcp     # or: pip install --upgrade engram-mcp
+engram doctor                  # surface any vault / schema drift
+# Restart your MCP client (Claude Code, Claude Desktop, etc.)
+```
+
+### Installed editable from source (`uv tool install --editable .`)
+
+Editable installs link the binary's venv back to your source clone via a `.pth` file, so Python-level source changes are picked up the next time `engram` runs — no reinstall needed. **But** new entries in `pyproject.toml` `[project.dependencies]` live in the tool's venv, not the source dir, so a dependency bump requires a reinstall.
+
+The safe defensive workflow that covers both cases:
+
+```bash
+cd <your-engram-source-clone>
+git pull origin main
+
+# Idempotent if no dep changes; cheap insurance if there were.
+uv tool install --editable . --reinstall
+
+# Surface any schema / config drift.
+engram doctor
+
+# Restart your MCP client - new sessions pick up the new code.
+```
+
+You can skip the `--reinstall` step if `git diff HEAD@{1} HEAD -- pyproject.toml uv.lock` is empty (no dependency changes). Running it unconditionally is the "just run it" habit that avoids the "did pyproject.toml change? I forgot to check" failure mode.
+
+### What about the running engram serve process?
+
+There isn't one — engram is a stdio MCP launched as a subprocess by your MCP client (Claude Code, etc.) on each session start, terminated when the client exits. No daemon to restart manually. New client session = new `engram serve` process = fresh code.
+
+### Schema migrations
+
+For most updates, `engram doctor` post-update is the catch-all: if any check is RED, the message tells you the remediation command. Watch for `embedding_model_changed` (run `engram reindex --full --model <new-model>`) or `schema_version_mismatch` (engram surfaces an explicit migration path). Skip the restart of your MCP client until doctor is all-green.
+
 ## Development
 
 ```bash
