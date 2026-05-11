@@ -128,11 +128,12 @@ ignore = [
 "tests/**/*.py" = ["S101", "S105", "S106", "S107", "S108", "ANN", "D"]
 "bench/**/*.py" = ["S101", "ANN", "D"]
 "docs/**/*.py" = ["S101", "ANN", "D"]
-# engram.errors deliberately uses noun-form names for some Phase 3 exception
-# classes (BlockThoughtLLMDisallowed, BundleCycleDetected, EmbeddingModelMismatch,
-# DuplicateVaultName, VaultPathCollision) because the Phase 3 plan and the MCP
-# error_code constants name them this way. The N818 "must end in Error" rule
-# would force renames that ripple through the plan, ADRs, and error_code map.
+# engram.errors deliberately uses noun-form names for some multi-vault / LLM
+# exception classes (BlockThoughtLLMDisallowed, BundleCycleDetected,
+# EmbeddingModelMismatch, DuplicateVaultName, VaultPathCollision) because the
+# error_code map (part of the public MCP wire format) names them this way.
+# The N818 "must end in Error" rule would force renames that ripple through
+# the ADRs, the error_code map, and any downstream client parsing.
 "src/engram/errors.py" = ["N818"]
 # engram.llm.providers methods inherit their argument names from the
 # LLMProvider Protocol; documenting each adapter's args verbatim would

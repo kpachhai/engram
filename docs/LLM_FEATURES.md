@@ -1,6 +1,6 @@
 # LLM features
 
-Phase 3 adds two optional MCP tools - `summarize_thought` and
+Engram ships two optional MCP tools - `summarize_thought` and
 `synthesize_thoughts` - backed by a configurable LLM provider. The
 LLM machinery degrades gracefully: if no provider is configured,
 the tools refuse with a clear message and the rest of engram works
@@ -136,8 +136,8 @@ assembly. To opt in, pass `include_friend_vaults=true`:
 ```
 
 The opt-in is a deliberate trade-off: friend-share content is
-useful in synthesis but carries a higher injection risk. The B-4
-fix in the Phase 3 plan documents this as the explicit user choice.
+useful in synthesis but carries a higher injection risk. The
+explicit user-choice gate is documented in `docs/adr/006-multi-vault-and-llm.md`.
 
 ## Cross-provider synthesis refused
 

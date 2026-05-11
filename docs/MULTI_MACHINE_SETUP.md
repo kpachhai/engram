@@ -13,9 +13,10 @@ companion document to ADR 005 (sync coordinator state machine).
 
 ## When NOT to use this
 
-- You only use one machine. Phase 1 is enough; skip this guide.
-- You want shared editing across MANY users. Phase 2 is single-author
-  multi-machine; team / org editing is Phase 4+.
+- You only use one machine. Single-machine engram is enough; skip this guide.
+- You want shared editing across MANY users. This guide covers
+  single-author multi-machine sync; team / org editing is covered
+  by `TEAM_BRAIN_GUIDE.md`.
 - Your `.git/` directory lives under a consumer cloud-sync provider
   (Dropbox, iCloud, Google Drive, OneDrive). engram FAILs at startup
   on those - SQLite + cloud-sync semantics are unreliable. Use a
@@ -54,7 +55,7 @@ index is gitignored and rebuilt locally on each machine via reindex.
 ## Local two-machine smoke test (no PyPI, no second physical machine)
 
 Before going through the full setup on real hardware, you can validate the
-entire Phase 2 convergence loop on ONE machine using two directories that
+entire convergence loop on ONE machine using two directories that
 share a local bare repo. This exercises the same code paths as a real
 two-machine deployment.
 
@@ -233,7 +234,7 @@ git config commit.gpgsign false   # or true if you have GPG infra
 engram doctor --config ~/engram-personal/engram.config.yaml
 ```
 
-This runs all 9 Phase 1 checks plus the 14 Phase 2 sync checks. Every
+This runs all 9 base health checks plus the 14 sync-specific checks. Every
 row should be OK or WARN; FAILs must be resolved before serving.
 
 ### 5. Start the server

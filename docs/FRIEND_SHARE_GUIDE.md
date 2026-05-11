@@ -1,6 +1,6 @@
 # Friend-share guide (bundle export / import)
 
-Phase 3 ships friend-share as point-in-time snapshots, NOT live
+Engram ships friend-share as point-in-time snapshots, NOT live
 git-pull from a friend's vault. The rationale is documented in
 [ADR 006](./adr/006-multi-vault-and-llm.md) D3: a friend's git
 history is attacker-influenceable, and the bundle import gate is
@@ -45,7 +45,7 @@ contains:
   `thought_count`, `portability_filter`, and `embedding_model`.
 * `thoughts/<rel-path>.md` for each exported thought.
 
-There's no encryption layer in Phase 3 - the bundle is plain
+There's no encryption layer - the bundle is plain
 markdown. Encrypt the transport channel if the contents warrant it.
 
 ### 3. Import into the recipient's vault
@@ -77,7 +77,7 @@ recipient never directly captures into the friend's vault).
 
 ## What the importer enforces
 
-Per the Phase 3 plan Step 10 + ADR 006:
+Per ADR 006:
 
 * Refuses if `manifest.schema_version != 1`
   (`bundle_import_error: schema_version_unsupported`).
@@ -125,8 +125,8 @@ When opted in, prompt assembly wraps each retrieved thought in
 delimiters and the system prompt instructs the model to ignore
 in-content directives. The citation post-validator strips any UUID
 the LLM cites that wasn't in the actually-retrieved set. This is
-a ratchet, not a guarantee: indirect prompt injection is unsolved
-at the model layer in Phase 3.
+a ratchet, not a guarantee: indirect prompt injection remains
+unsolved at the model layer.
 
 ## Limitations (candidate future features)
 

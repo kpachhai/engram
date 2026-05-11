@@ -50,7 +50,7 @@ Look at the changes since the last release:
 - Did you add a new tool / CLI subcommand / doctor code / optional field? → MINOR.
 - Bug fixes / docs only? → PATCH.
 
-For Phase 4 → first public release, the right cut is **v0.4.0** (MINOR — Team Brain is a new feature set; `CaptureInputMetadata.vault` and the seven-tool surface are additive).
+The first public release shipped at **v0.4.0** (MINOR — the Team Brain feature set was additive: new `team-write` role, GPG-bound sender attribution, server-side `pre-receive` hook, `CaptureInputMetadata.vault` field, and a seven-tool MCP surface). Subsequent releases follow SemVer the same way.
 
 ### 2. Update version + CHANGELOG
 

@@ -1,11 +1,11 @@
 # Multi-vault setup
 
-Phase 3 introduces multi-vault hosting: one `engram serve` process
-serves N vaults under different roles. Phase 4 adds the
-`team-write` role for shared team vaults. This guide covers the
-per-user config layout, role semantics, and the offline-preparation
-flow (so you don't get caught downloading an embedding model the
-first time you try to capture a thought without network).
+Engram supports multi-vault hosting: one `engram serve` process
+serves N vaults under different roles, including a `team-write`
+role for shared team vaults. This guide covers the per-user config
+layout, role semantics, and the offline-preparation flow (so you
+don't get caught downloading an embedding model the first time
+you try to capture a thought without network).
 
 ## Concepts
 
@@ -14,7 +14,7 @@ first time you try to capture a thought without network).
 * **Read-only vault**: a mirror of someone else's vault, imported
   via `engram import`. Search includes it (with attribution); writes
   refuse with `VaultReadOnlyError`.
-* **Team-write vault** (Phase 4): a shared team vault that accepts
+* **Team-write vault**: a shared team vault that accepts
   writes from multiple operators after passing a capture-time
   client-side gate (member-enrollment + policy refuse-or-pass) AND
   a push-time server-side `pre-receive` hook. Requires `remote_url`.
@@ -26,11 +26,11 @@ first time you try to capture a thought without network).
 
 ## Role taxonomy
 
-| Role | Writes? | Cross-vault search? | LLM tools? | Phase |
-|------|---------|---------------------|-------------|-------|
-| `primary` | yes (default capture target) | yes (own only) | yes | 1+ |
-| `read-only` | refused with VaultReadOnlyError | yes (with attribution) | yes (per portability gate) | 3+ |
-| `team-write` | yes (after capture gate + push hook) | yes (with attribution) | yes (per portability gate) | 4+ |
+| Role | Writes? | Cross-vault search? | LLM tools? |
+|------|---------|---------------------|-------------|
+| `primary` | yes (default capture target) | yes (own only) | yes |
+| `read-only` | refused with VaultReadOnlyError | yes (with attribution) | yes (per portability gate) |
+| `team-write` | yes (after capture gate + push hook) | yes (with attribution) | yes (per portability gate) |
 
 ## Per-user config layout
 
@@ -98,8 +98,8 @@ Two flows exist:
    import gate enforces path-traversal refusal, per-file 1 MB cap,
    per-bundle 4 GB streaming, YAML safe-load, and
    `portability=block` filtering.
-2. **`engram clone-vault <url> <local-path>`** (Phase 2 deliverable).
-   This runs `git clone --no-checkout` then removes
+2. **`engram clone-vault <url> <local-path>`**. This runs
+   `git clone --no-checkout` then removes
    `.git/hooks/` before the checkout phase fires them. After
    cloning, register the vault in `~/.config/engram/config.yaml`
    under `role: read-only`.
@@ -133,7 +133,7 @@ ranking.
 
 ## Doctor checks the multi-vault config
 
-`engram doctor` runs the eight Phase 3 checks per `docs/adr/006-multi-vault-and-llm.md`:
+`engram doctor` runs the eight multi-vault checks per `docs/adr/006-multi-vault-and-llm.md`:
 
 | Code | When it fires |
 |---|---|
@@ -148,14 +148,13 @@ ranking.
 
 ## Local two-machine smoke test
 
-Phase 2's local-two-machine smoke test (clone the same source vault
-into two directories, run `engram serve` against each, exchange
-captures via git push/pull) extends naturally to Phase 3: configure
-both machines with the same `vaults:` list, where one machine's
-primary is the other machine's read-only mirror. Captures still
-flow through git; the only Phase 3 addition is that doctor and
-search now see the read-only mirror as a separate vault with
-attribution.
+The single-machine smoke test (clone the same source vault into
+two directories, run `engram serve` against each, exchange captures
+via git push/pull) extends naturally to the multi-vault case:
+configure both machines with the same `vaults:` list, where one
+machine's primary is the other machine's read-only mirror. Captures
+still flow through git; multi-vault adds that doctor and search now
+see the read-only mirror as a separate vault with attribution.
 
 ## See also
 
@@ -163,5 +162,5 @@ attribution.
 * [`FRIEND_SHARE_GUIDE.md`](./FRIEND_SHARE_GUIDE.md) - bundle export
   / import workflow.
 * [`LLM_FEATURES.md`](./LLM_FEATURES.md) - LLM-mediated tools.
-* [`MULTI_MACHINE_SETUP.md`](./MULTI_MACHINE_SETUP.md) - Phase 2
-  baseline this builds on.
+* [`MULTI_MACHINE_SETUP.md`](./MULTI_MACHINE_SETUP.md) - single-vault
+  multi-machine sync baseline this builds on.

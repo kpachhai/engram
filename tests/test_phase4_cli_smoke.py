@@ -14,6 +14,7 @@ work, and this gate prevents the same recurrence.
 
 from __future__ import annotations
 
+import os
 import shutil
 import subprocess
 from pathlib import Path
@@ -31,6 +32,24 @@ def _engram_bin() -> str:
     return binary
 
 
+def _smoke_env() -> dict[str, str]:
+    """Return a deterministic env for subprocess invocations.
+
+    Rich / Typer render ``--help`` output differently depending on terminal
+    width and color-detection. In CI (GitHub Actions runners), narrow defaults
+    + forced color can split short flag names across ANSI tokens, breaking
+    naive substring assertions like ``"--remote" in result.stdout``. Locking
+    COLUMNS + NO_COLOR + TERM makes the captured help output deterministic
+    regardless of where the suite runs.
+    """
+    return {
+        **os.environ,
+        "COLUMNS": "200",
+        "NO_COLOR": "1",
+        "TERM": "dumb",
+    }
+
+
 def _run(
     args: list[str],
     *,
@@ -45,6 +64,7 @@ def _run(
         text=True,
         check=False,
         timeout=60.0,
+        env=_smoke_env(),
     )
     if expect_zero and result.returncode != 0:
         msg = (

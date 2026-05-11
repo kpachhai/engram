@@ -80,7 +80,7 @@ These pieces of the engram ecosystem live remotely:
 
 None of these are engram itself. Engram is the local binary.
 
-## When you might want a hosted engram (Phase 5+)
+## When you might want a hosted engram (future, conditional)
 
 The architecture deliberately leaves room for a future enterprise tier:
 
