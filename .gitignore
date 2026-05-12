@@ -60,3 +60,5 @@ Thumbs.db
 # Local development scratch
 scratch/
 *.local.*
+
+docs/superpowers
