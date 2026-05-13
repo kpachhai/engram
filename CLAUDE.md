@@ -176,7 +176,7 @@ uv run engram doctor --download-model --print-hashes
 - **Embedding model:** `BAAI/bge-small-en-v1.5` is pinned. The hash manifest in `src/engram/embedding/model_hashes.py` is populated; mismatched files raise `EmbeddingError`. Recompute via `engram doctor --download-model --print-hashes` after any model upgrade.
 - **Index location:** `<vault>/.indexes/engram.db` (gitignored).
 - **Locks + state:** `<vault>/.engram/` holds per-machine state (identity, push queue, orphan tarballs); always gitignored.
-- **MCP server:** stdio only. No HTTP. No network listener. No telemetry.
+- **MCP server:** stdio at the client boundary. No HTTP. No network listener. No telemetry. In Phase 5+ (daemon mode, v0.5.0), a per-vault Unix Domain Socket sits between the ``engram serve`` proxy and the daemon process that owns the vault — UDS is local IPC, not a network listener. Filesystem perms (0o600) plus ``SO_PEERCRED``/``getpeereid`` enforce same-UID access.
 - **CI matrix:** Python 3.11 + 3.12, macOS + Ubuntu. ruff + ruff-format + mypy + pytest + coverage all gate the merge.
 
 ## See also
@@ -184,6 +184,7 @@ uv run engram doctor --download-model --print-hashes
 - `docs/ARCHITECTURE.md` — components, flows, two-layer security boundary, MCP API.
 - `docs/USE_CASES.md` — five concrete personas with example flows.
 - `docs/COMPARISONS.md` — engram vs Mem0 / Letta / basic-memory / Open Brain / Obsidian / engraph.
-- `docs/adr/` — 7 ADRs (storage, MCP, sync, embedding, sync coordinator, multi-vault, team brain).
+- `docs/adr/` — 8 ADRs (storage, MCP, sync, embedding, sync coordinator, multi-vault, team brain, daemon mode).
+- `docs/DAEMON_MODE.md` — operator + migration guide for Phase 5 daemon mode (v0.5.0+).
 - `~/repos/github.com/kpachhai/idea-forge/docs/superpowers/specs/2026-05-04-engram/` — original spec (12 docs; historical authority).
 - `~/repos/github.com/kpachhai/idea-forge/workspace/engram/PHASE_<N>_RETROSPECTIVE.md` — lessons learned (Phase 2-4).

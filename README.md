@@ -98,7 +98,7 @@ The five-tool core surface is stable for the v1.x lifetime; LLM tools follow the
 
 ## Architecture in one paragraph
 
-Markdown files in `<vault>/thoughts/<prefix>/...` are the source of truth. SQLite + sqlite-vec at `<vault>/.indexes/` is a regenerable index. Embeddings (`BAAI/bge-small-en-v1.5` via FastEmbed) run locally on CPU. Sync uses the system `git` CLI — your personal vault is just a git repo. Multi-vault deployments mount one `primary` vault + any number of `read-only` mirrors and `team-write` shared vaults; the routing dispatcher decides where each capture lands. Team vaults add GPG-fingerprint-bound sender attribution + a stdlib-only Python `pre-receive` hook on the git remote. Optional LLM tools (`summarize_thought`, `synthesize_thoughts`) compose with strict per-thought portability gates.
+Markdown files in `<vault>/thoughts/<prefix>/...` are the source of truth. SQLite + sqlite-vec at `<vault>/.indexes/` is a regenerable index. Embeddings (`BAAI/bge-small-en-v1.5` via FastEmbed) run locally on CPU. Sync uses the system `git` CLI — your personal vault is just a git repo. Multi-vault deployments mount one `primary` vault + any number of `read-only` mirrors and `team-write` shared vaults; the routing dispatcher decides where each capture lands. Team vaults add GPG-fingerprint-bound sender attribution + a stdlib-only Python `pre-receive` hook on the git remote. Optional LLM tools (`summarize_thought`, `synthesize_thoughts`) compose with strict per-thought portability gates. In v0.5.0+, `engram serve` runs as a thin proxy that auto-spawns a per-vault daemon over a Unix Domain Socket — N concurrent Claude Code sessions can attach to the same vault simultaneously.
 
 Full walkthrough with diagrams: **[docs/ARCHITECTURE.md](docs/ARCHITECTURE.md)**.
 
@@ -116,6 +116,7 @@ Full walkthrough with diagrams: **[docs/ARCHITECTURE.md](docs/ARCHITECTURE.md)**
 - [FRIEND_SHARE_GUIDE.md](docs/FRIEND_SHARE_GUIDE.md) — bundle export/import flow
 - [TEAM_BRAIN_GUIDE.md](docs/TEAM_BRAIN_GUIDE.md) — shared team vault setup + policy + revocation
 - [LLM_FEATURES.md](docs/LLM_FEATURES.md) — optional LLM-mediated tools
+- [DAEMON_MODE.md](docs/DAEMON_MODE.md) — Phase 5 daemon mode: multi-session support, operator + migration guide (v0.5.0+)
 
 **Design rationale:**
 - [docs/adr/](docs/adr/) — Architecture Decision Records (one per major design choice)

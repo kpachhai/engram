@@ -9,6 +9,114 @@ The MCP tool surface is committed-stable for the v1.x lifetime per the API stabi
 
 ## [Unreleased]
 
+## [0.5.0] - 2026-05-13 — Phase 5: Daemon Mode (multi-session support)
+
+The big change in v0.5.0: **N concurrent Claude Code sessions can now
+attach to the same engram vault simultaneously**. Pre-Phase-5,
+``engram serve`` held the per-vault advisory lock for its lifetime;
+the second concurrent session against the same vault failed with
+``LockError``. Phase 5 introduces a per-vault daemon process and
+makes ``engram serve`` a thin proxy that auto-spawns the daemon on
+first invocation. Existing MCP configurations need no edits.
+
+### Added
+
+- **Daemon subpackage** (``src/engram/daemon/``): per-vault UDS
+  daemon, proxy client, fastmcp dispatch shim, spawn helpers,
+  state file, log rotation handler.
+- **``engram daemon`` subcommand group** with 4 subcommands
+  (``start``, ``stop``, ``status``, ``logs``). ``engram daemon
+  status --json`` provides a machine-readable status payload with
+  the not-running shape per spec Amendment 7. ``engram daemon
+  logs --follow`` tails the daemon's log file with inode-reopen
+  semantics for rotation handling.
+- **``DaemonConfig``** Pydantic model with 14 tunable fields
+  (idle-shutdown, spawn-timeout, WAL-recovery grace, drain budgets,
+  frame-size cap, log rotation knobs, content redaction). Full
+  reference in ``docs/DAEMON_MODE.md``.
+- **5 new daemon error classes**: ``DaemonError``,
+  ``DaemonSpawnError``, ``DaemonConnectionError``,
+  ``DaemonNotRunningError``, ``PeerCredRejectError`` — each with a
+  stable ``error_code`` so MCP clients can route consistently.
+- **6 new doctor check codes**: ``daemon_running``,
+  ``daemon_socket_permissions``, ``daemon_socket_stale``,
+  ``daemon_log_rotation_healthy``, ``daemon_uptime_excessive``,
+  ``daemon_socket_path_too_long`` — surfaced via
+  ``src/engram/diagnostics/daemon_checks.py``.
+- **Peer-credential check** (``SO_PEERCRED`` on Linux,
+  ``getpeereid`` on macOS) on every accepted UDS connection;
+  belt-and-suspenders on top of the socket's 0o600 perms.
+- **Hermetic CLI smoke** (``tests/test_phase5_cli_smoke.py``):
+  8 new subprocess-based smokes against the installed binary,
+  including a full ``daemon start --detach`` → ``status`` →
+  ``stop`` round-trip.
+- **ADR 008** (``docs/adr/008-daemon-mode.md``) captures the
+  per-vault topology + auto-spawn + UDS rationale plus
+  alternatives considered.
+- **Operator + migration guide** (``docs/DAEMON_MODE.md``)
+  documents the upgrade procedure, daemon lifecycle, status
+  output, troubleshooting, full ``DaemonConfig`` reference, and
+  the v0.4.x downgrade procedure.
+
+### Changed
+
+- **``engram serve`` default behavior**: now runs in proxy mode
+  (auto-spawns a per-vault daemon and shuffles bytes between
+  stdin/stdout and the daemon's UDS). The pre-Phase-5
+  single-process stdio path is preserved bit-for-bit behind a new
+  ``--no-daemon`` flag.
+- **``VaultLock.__init__``** now accepts ``install_signal_handlers:
+  bool = True``. Daemon use cases pass ``False`` so the daemon
+  can own its own SIGTERM/SIGINT handler (spec Amendment 1).
+- **``ServeRuntime.embedder``** type loosened from
+  ``FastEmbedProvider`` to ``object`` to match engram's existing
+  duck-typed embedder convention (mirrors ``serve_multivault``).
+- **``cli/serve.py``** factored: ``_init_serve_runtime`` (async)
+  + ``ServeRuntime`` dataclass + ``ServeInitError`` are now the
+  shared entry between ``serve --no-daemon`` and
+  ``engram daemon start``.
+
+### Migration notes
+
+#### Upgrading from v0.4.x → v0.5.0
+
+No MCP config edits are required. The ``engram serve`` command your
+client invokes today runs in proxy mode by default in v0.5.0 and
+auto-spawns the daemon on first use. See ``docs/DAEMON_MODE.md`` for
+the full upgrade procedure with verification steps.
+
+#### Downgrading from v0.5.0 → v0.4.x
+
+If you ever need to downgrade:
+
+1. ``engram daemon stop`` first — v0.4.x does not know about daemon
+   mode and ``engram serve`` will fail with ``LockError`` until the
+   v0.5.0 daemon is gone.
+2. Remove any ``daemon:`` block from ``engram.config.yaml`` —
+   v0.4.x's Pydantic model is ``extra="forbid"`` and refuses
+   configs with the block present.
+
+(Closes risk M6 in the design spec.)
+
+#### Phase renumbering
+
+The pre-2026-05-12 roadmap's "Phase 5 — Enterprise Scaffolding" and
+"Phase 6 — Enterprise Polish" are renumbered to Phase 6 and Phase 7
+respectively. The new Phase 5 is daemon mode. The roadmap files in
+``docs/superpowers/specs/2026-05-04-engram/`` (gitignored local
+artifact) reflect the renumber.
+
+### Spec reference
+
+Design spec lives locally at
+``docs/superpowers/specs/2026-05-12-engram-daemon-mode-design.md``
+(gitignored under ``docs/superpowers/``). The execution plan
+``docs/PHASE_5_PLAN.md`` is committed for traceability.
+
+---
+
+## [0.4.x] (Unreleased polish; pre-Phase-5)
+
 ### Added (public-release polish)
 
 - **`engram summarize <thought-id>`** CLI — wraps the `summarize_thought`
