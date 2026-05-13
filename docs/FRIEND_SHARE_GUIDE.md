@@ -31,8 +31,11 @@ engram export \
 ```
 
 `block` thoughts are NEVER included regardless of the flag. The
-export refuses if `engram serve` is currently holding the per-vault
-lock; stop serve before exporting.
+export refuses if the per-vault daemon (or a legacy `engram serve
+--no-daemon` process) is currently holding the per-vault lock. Stop
+the daemon first with `engram daemon stop`, run the export, then
+restart with `engram serve` (or the daemon will auto-spawn on the
+next AI session).
 
 ### 2. Transfer
 

@@ -15,9 +15,17 @@ Everything else is consequences of those four choices.
 │                         MCP-aware AI client                          │
 │              (Claude Code, Claude Desktop, custom)                   │
 └─────────────────────────────┬────────────────────────────────────────┘
-                              │ stdio MCP (JSON-RPC)
+                              │ stdio MCP (JSON-RPC over stdin/stdout)
 ┌─────────────────────────────▼────────────────────────────────────────┐
-│                          engram serve                                │
+│                  engram serve  (proxy mode, default)                 │
+│       Stateless byte shuffler: stdio ↔ UDS. Auto-spawns the          │
+│       daemon on first invocation; attaches on subsequent ones.       │
+└─────────────────────────────┬────────────────────────────────────────┘
+                              │ Unix Domain Socket
+                              │ <vault>/.indexes/engram.sock (0o600)
+                              │ + SO_PEERCRED / getpeereid
+┌─────────────────────────────▼────────────────────────────────────────┐
+│        engram daemon  (one process per vault; long-lived)            │
 │  ┌────────────────────────────────────────────────────────────────┐  │
 │  │  FastMCP server (build_multivault_server)                      │  │
 │  │  ┌──────────────┐  ┌──────────────┐  ┌──────────────────────┐  │  │
@@ -46,6 +54,17 @@ Everything else is consequences of those four choices.
                                             └───────────────┘
 ```
 
+The proxy / daemon split (introduced in v0.5.0) lets **N concurrent AI
+sessions** attach to the same vault. Each ``engram serve`` invocation
+spawns a thin proxy that auto-spawns or attaches to the per-vault
+daemon. The MCP wire format observed by the AI client is unchanged.
+
+The ``engram serve --no-daemon`` flag reverts to the legacy
+single-process model for embedded use cases. See
+[``DAEMON_MODE.md``](DAEMON_MODE.md) for the operator guide and
+[``adr/008-daemon-mode.md``](adr/008-daemon-mode.md) for the design
+rationale.
+
 ## On-disk layout
 
 A vault is a directory:
@@ -64,7 +83,12 @@ A vault is a directory:
 ├── .indexes/                           # regenerable; gitignored
 │   ├── engram.db                       # SQLite (sqlite-vec virtual table)
 │   ├── engram.db-wal
-│   └── engram.db-shm
+│   ├── engram.db-shm
+│   ├── engram.lock                     # advisory flock (held by daemon)
+│   ├── engram.sock                     # UDS (daemon listener; mode 0o600)
+│   ├── engram.spawn.lock               # serializes concurrent spawn dances
+│   ├── engram.state.json               # daemon PID + hostname + config snapshot
+│   └── engram.log                      # daemon log (rotated)
 └── .engram/                            # local-only operational state (gitignored)
     ├── identity.local                  # per-machine identity overrides
     ├── push-queue.local                # persistent push queue (team vaults)
@@ -179,6 +203,60 @@ A client-side bypass (older client, hand-edited markdown, forked engram) does NO
 
 The hook is a stdlib-only Python 3.10+ script at `src/engram/team/server_hooks/pre_receive.py`. It is COPIED to the team-vault remote's `hooks/pre-receive` by the operator at setup time; engram does not require Python on the git host (the hook can run on any host that has Python 3.10+).
 
+## Process model: proxy + daemon
+
+From v0.5.0 onward, ``engram serve`` runs in **proxy mode** by default:
+a short-lived process that connects to (or auto-spawns) a per-vault
+**daemon** over a Unix Domain Socket. The daemon owns the long-lived
+resources (``VaultLock``, ``VaultStorage``, ``SyncCoordinator``,
+``FastEmbedProvider``, ``FastMCP``) and accepts N concurrent proxy
+connections sharing one vault.
+
+### Why this exists
+
+Pre-v0.5.0, ``engram serve`` held the per-vault advisory lock for its
+lifetime. A second concurrent session against the same vault failed
+with ``LockError``. Users hit this regularly with two Claude Code
+sessions open against the same memex vault. Daemon mode resolves it
+without requiring any MCP config changes — the proxy IS still
+``engram serve`` from the AI client's POV.
+
+### Topology
+
+- **One daemon per vault.** The daemon for a primary vault also mounts
+  any configured read-only or team-write extras (Phase 3 multi-vault
+  semantics unchanged).
+- **N proxies per daemon.** Each AI session gets its own proxy
+  process; the proxy is stateless byte-shuffling between stdio (toward
+  the AI) and UDS (toward the daemon). ~200 LOC.
+- **No network listener.** UDS is local IPC, mode 0o600, plus
+  ``SO_PEERCRED`` (Linux) / ``getpeereid`` (macOS) on every accepted
+  connection. Same-UID is the trust boundary.
+- **Auto-spawn + auto-idle-shutdown.** The first ``engram serve``
+  forks the daemon and waits for ``ready\n`` on a readiness pipe.
+  After the last proxy disconnects, the daemon idles for
+  ``daemon.idle_shutdown_seconds`` (default 60 min), then exits
+  cleanly. The next ``engram serve`` re-spawns it transparently.
+- **``--no-daemon`` escape hatch.** ``engram serve --no-daemon``
+  reverts to the legacy single-process stdio model for one-shot
+  scripts, embedded use cases, or debugging.
+
+### What changes for callers
+
+| Caller | Pre-v0.5.0 behavior | v0.5.0+ behavior |
+|---|---|---|
+| AI client (Claude Code etc) | stdio MCP server | stdio MCP server (unchanged) |
+| Operator running `engram serve` | one process per session | proxy attaches to daemon (or auto-spawns) |
+| Concurrent sessions | second one hits `LockError` | N proxies share one daemon |
+| First-session latency | direct startup (~1-2s for FastEmbed) | proxy attach instant; daemon spawn ~1-2s on cold start |
+| Mutual exclusion with `--no-daemon` | n/a | `--no-daemon` and the daemon both want `VaultLock`; whichever holds it first wins |
+
+See [``DAEMON_MODE.md``](DAEMON_MODE.md) for the operator guide
+(start/stop/status/logs, config knobs, troubleshooting) and
+[``adr/008-daemon-mode.md``](adr/008-daemon-mode.md) for the design
+rationale (per-vault topology, UDS-over-HTTP, the FastMCP dispatch
+compat shim).
+
 ## MCP API surface
 
 Seven tools, stable for the v1.x lifetime:
@@ -290,3 +368,4 @@ This is the contract that makes "your data outlives every vendor" actually true:
 - `docs/FRIEND_SHARE_GUIDE.md` — bundle export / import flow.
 - `docs/TEAM_BRAIN_GUIDE.md` — shared team vault setup + policy + revocation.
 - `docs/LLM_FEATURES.md` — opt-in LLM-mediated tools.
+- `docs/DAEMON_MODE.md` — daemon-mode operator + migration guide (v0.5.0+).

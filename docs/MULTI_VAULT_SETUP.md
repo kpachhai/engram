@@ -1,16 +1,24 @@
 # Multi-vault setup
 
-Engram supports multi-vault hosting: one `engram serve` process
-serves N vaults under different roles, including a `team-write`
-role for shared team vaults. This guide covers the per-user config
-layout, role semantics, and the offline-preparation flow (so you
-don't get caught downloading an embedding model the first time
-you try to capture a thought without network).
+Engram supports multi-vault hosting: one engram process serves N
+vaults under different roles, including a `team-write` role for
+shared team vaults. From v0.5.0 onward, the "engram process" that
+holds your mounted vaults is the per-vault **daemon** (auto-spawned
+by `engram serve`); each AI session attaches as a thin proxy. From
+the multi-vault POV nothing changes — the daemon for a primary
+vault still mounts read-only and team-write extras the same way
+the pre-v0.5.0 single-process serve did.
+
+This guide covers the per-user config layout, role semantics, and
+the offline-preparation flow (so you don't get caught downloading
+an embedding model the first time you try to capture a thought
+without network).
 
 ## Concepts
 
 * **Primary vault**: the vault that accepts captures by default.
-  Exactly one primary per `engram serve` process.
+  Exactly one primary per daemon (i.e. per `engram serve` invocation
+  in `--no-daemon` mode, or per the per-vault daemon in proxy mode).
 * **Read-only vault**: a mirror of someone else's vault, imported
   via `engram import`. Search includes it (with attribution); writes
   refuse with `VaultReadOnlyError`.
@@ -158,7 +166,8 @@ see the read-only mirror as a separate vault with attribution.
 
 ## See also
 
-* [ADR 006](./adr/006-multi-vault-and-llm.md) - design rationale.
+* [ADR 006](./adr/006-multi-vault-and-llm.md) - multi-vault design rationale.
+* [DAEMON_MODE.md](DAEMON_MODE.md) - the per-vault daemon process that owns the mounted-vault set.
 * [`FRIEND_SHARE_GUIDE.md`](./FRIEND_SHARE_GUIDE.md) - bundle export
   / import workflow.
 * [`LLM_FEATURES.md`](./LLM_FEATURES.md) - LLM-mediated tools.

@@ -112,6 +112,8 @@ Add engram to your MCP server config (`~/.claude/mcp_servers.json` or via the Cl
 
 Restart Claude Code. You should see seven engram tools registered: `capture_thought`, `search_thoughts`, `list_thoughts`, `thought_stats`, `fetch`, `summarize_thought`, `synthesize_thoughts`.
 
+The first session has a small (~1-2s) spawn latency while engram boots its per-vault daemon and loads the embedding model. Subsequent concurrent Claude Code sessions on the same vault attach in milliseconds — you can run two or more sessions against the same vault simultaneously. See [DAEMON_MODE.md](DAEMON_MODE.md) for the operator-facing controls (`engram daemon status`, `engram daemon stop`, etc).
+
 ### Claude Desktop
 
 Same as Claude Code but the config lives at `~/Library/Application Support/Claude/claude_desktop_config.json` (macOS) or the OS equivalent.
@@ -156,6 +158,7 @@ The AI calls `search_thoughts` with your query. Engram embeds the query locally,
 - **Mount multiple vaults at once:** [docs/MULTI_VAULT_SETUP.md](MULTI_VAULT_SETUP.md)
 - **Run a shared team brain:** [docs/TEAM_BRAIN_GUIDE.md](TEAM_BRAIN_GUIDE.md)
 - **Use optional LLM-mediated tools (summarize / synthesize):** [docs/LLM_FEATURES.md](LLM_FEATURES.md)
+- **Run N concurrent Claude Code sessions on one vault (daemon mode):** [docs/DAEMON_MODE.md](DAEMON_MODE.md)
 
 ## Troubleshooting
 
@@ -178,7 +181,7 @@ Check `engram doctor` for `embedding_status_pending` rows — it means the embed
 
 ### My MCP client doesn't see the engram tools
 
-Restart the client after adding the server config. Run `engram serve` directly in a terminal to confirm the binary works; if it prints "MCP server started" and waits for input, the server side is fine — the issue is in the client config.
+Restart the client after adding the server config. Run `engram daemon status` to check whether the per-vault daemon is healthy — text output should show `pid`, `uptime`, and the socket path. If it says `not running`, that's fine; the daemon spawns lazily on the first `engram serve` invocation. To debug the daemon itself, run `engram daemon start` in a terminal and inspect its log (`engram daemon logs --follow`).
 
 ## Migrating from Open Brain
 

@@ -10,7 +10,7 @@ If you're coming from Open Brain (Supabase + Edge Function) or Mem0 Cloud or Let
 [your devices] -- network --> [some hosted engram MCP server] --> [your data in the cloud]
 ```
 
-That's the SaaS model. **Engram does not do this.** There is no engram-as-a-service. There is no `engram serve --listen 0.0.0.0:8080` mode. The MCP server is stdio-only and runs on each device that has an AI client. Building a hosted engram contradicts the thesis (vendor lock-in, privacy boundary failures, cross-machine fragmentation are exactly the problems engram was designed to solve).
+That's the SaaS model. **Engram does not do this.** There is no engram-as-a-service. There is no `engram serve --listen 0.0.0.0:8080` mode. The MCP wire is stdio at the AI-client boundary; internally (v0.5.0+) a per-vault Unix Domain Socket sits between the `engram serve` proxy and the daemon process, but the UDS is local IPC (mode 0o600, peer-cred-guarded) — not a network listener. Building a hosted engram contradicts the thesis (vendor lock-in, privacy boundary failures, cross-machine fragmentation are exactly the problems engram was designed to solve).
 
 ## The right mental model
 
@@ -28,6 +28,8 @@ That's the SaaS model. **Engram does not do this.** There is no engram-as-a-serv
 
 Each device runs its own `engram serve` against its own local copy of the markdown vault. The vault is a git repo. Sync is `git push` after a capture and `git pull` on serve startup. The "remote" is whatever git host you trust (GitHub, GitLab, Forgejo, Gitea, your own gitolite — anything that speaks git over SSH or HTTPS).
 
+From v0.5.0, `engram serve` runs as a thin proxy that auto-spawns (or attaches to) a long-lived per-vault daemon. This is invisible at the AI-client boundary — same `engram serve` command, same stdio MCP — but it lets N concurrent AI sessions on one device share the vault. See [DAEMON_MODE.md](DAEMON_MODE.md) for the operator guide.
+
 The "always available" property:
 
 - **Offline:** every device has the full vault on disk. Loss of network does not lose memory.
@@ -41,7 +43,7 @@ Uptime concerns translate cleanly to local-first patterns:
 
 | Concern | Local-first answer |
 |---|---|
-| "What if my MCP server is down?" | Restart it: `engram serve` is a single subprocess. If the subprocess crashes, your AI client respawns it (Claude Code does this automatically for stdio MCP servers). |
+| "What if my MCP server is down?" | The AI client respawns the `engram serve` proxy automatically for stdio MCP servers (Claude Code does this). If the per-vault daemon also crashed, the proxy's spawn dance brings it back; the daemon's idle-shutdown contract cleans up sockets after the last proxy disconnects so there's nothing stale to recover from. |
 | "What if my git remote is down?" | `engram serve` keeps working against the local vault. Captures queue up; the next successful `git push` flushes them. No data loss. |
 | "What if my disk fails?" | Restore from any other machine that has cloned the vault. Or restore from the git remote. The markdown files ARE the data; nothing to recover from a database. |
 | "What if I need to access my memory from a device I haven't set up yet?" | Clone the vault repo + install engram on the new device. Five minutes. See `docs/QUICKSTART.md` + `docs/MULTI_MACHINE_SETUP.md`. |

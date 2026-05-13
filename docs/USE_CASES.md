@@ -31,6 +31,7 @@ Six months later, you hit a similar Next.js migration and your AI surfaces this 
 - Markdown files outlive every vendor.
 - Local embeddings + sqlite-vec means search works offline.
 - No SaaS subscription, no API key in your AI provider's billing.
+- **Multiple Claude Code sessions on one vault.** From v0.5.0, engram's per-vault daemon lets you run two or three Claude sessions against the same memory simultaneously — one for the feature work, one for the doc work, one for the post-mortem you're still drafting. The first session pays the ~1-2s spawn cost; the rest attach in milliseconds. See [DAEMON_MODE.md](DAEMON_MODE.md).
 
 ## 2. The Multi-Machine Personal User
 
@@ -198,3 +199,4 @@ Be honest with yourself before adopting:
 - [docs/QUICKSTART.md](QUICKSTART.md) — five-minute install + first capture.
 - [docs/COMPARISONS.md](COMPARISONS.md) — engram vs Mem0, Letta, basic-memory, Open Brain, Obsidian + Smart Connections.
 - [docs/ARCHITECTURE.md](ARCHITECTURE.md) — how the storage + sync + MCP layers fit together.
+- [docs/DAEMON_MODE.md](DAEMON_MODE.md) — running multiple AI sessions against one vault.

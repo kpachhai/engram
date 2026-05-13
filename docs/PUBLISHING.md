@@ -50,27 +50,48 @@ Look at the changes since the last release:
 - Did you add a new tool / CLI subcommand / doctor code / optional field? → MINOR.
 - Bug fixes / docs only? → PATCH.
 
-The first public release shipped at **v0.4.0** (MINOR — the Team Brain feature set was additive: new `team-write` role, GPG-bound sender attribution, server-side `pre-receive` hook, `CaptureInputMetadata.vault` field, and a seven-tool MCP surface). Subsequent releases follow SemVer the same way.
+Historical releases:
+
+- **v0.4.0** (MINOR) — first public release. Team Brain feature set
+  was additive: new `team-write` role, GPG-bound sender attribution,
+  server-side `pre-receive` hook, `CaptureInputMetadata.vault` field,
+  and a seven-tool MCP surface.
+- **v0.5.0** (MINOR) — daemon mode. ``engram serve`` runs as a thin
+  proxy that auto-spawns a per-vault daemon over UDS; N concurrent
+  Claude Code sessions can attach to the same vault. New
+  ``engram daemon {start,stop,status,logs}`` subcommand group. The
+  MCP wire format is unchanged so existing client configurations
+  need no edits.
 
 ### 2. Update version + CHANGELOG
 
 ```bash
 cd ~/repos/github.com/kpachhai/engram
 
-# Edit pyproject.toml:
-sed -i '' 's/^version = "0\.2\.0"$/version = "0.4.0"/' pyproject.toml
+# Edit pyproject.toml AND src/engram/__init__.py to bump the version.
+# Example for v0.5.0:
+sed -i '' 's/^version = "0\.4\.0"$/version = "0.5.0"/' pyproject.toml
+sed -i '' 's/^__version__ = "0\.4\.0"$/__version__ = "0.5.0"/' src/engram/__init__.py
+
+# Relock so uv.lock matches the new project version:
+uv sync
 
 # In CHANGELOG.md, rename the [Unreleased] section header to:
-#   ## [0.4.0] - 2026-05-05
+#   ## [0.5.0] - 2026-05-13
 # And add a fresh [Unreleased] section above it.
 ```
 
-Verify:
+Verify both version files agree:
 
 ```bash
-grep '^version' pyproject.toml         # confirms 0.4.0
-head -20 CHANGELOG.md                  # confirms new section header
+grep '^version' pyproject.toml             # confirms new version
+grep '^__version__' src/engram/__init__.py  # confirms same value
+head -20 CHANGELOG.md                      # confirms new section header
 ```
+
+Both `engram --version` and `python -m engram --version` must report
+the same string after the bump — the CI ``console-script-smoke`` job
+enforces this.
 
 ### 3. Run the full validation gate
 
@@ -90,13 +111,13 @@ All four must pass. If any fails, fix it before continuing.
 
 ```bash
 uv build
-ls -la dist/                            # expect engram_mcp-0.4.0-py3-none-any.whl + .tar.gz
+ls -la dist/                            # expect engram_mcp-0.5.0-py3-none-any.whl + .tar.gz
 ```
 
 The build artifacts go in `dist/`. Inspect the wheel to make sure nothing surprising shipped:
 
 ```bash
-unzip -l dist/engram_mcp-0.4.0-py3-none-any.whl | head -30
+unzip -l dist/engram_mcp-0.5.0-py3-none-any.whl | head -30
 ```
 
 Expected: `src/engram/**/*.py` only. No tests, no docs, no `.indexes/`, no random caches. If anything unexpected is in the wheel, audit `pyproject.toml` `[tool.hatch.build.targets.wheel]` (or whatever build backend is configured) and re-build.
@@ -107,9 +128,11 @@ This catches packaging bugs that don't surface in the dev workflow.
 
 ```bash
 python -m venv /tmp/engram-publish-smoke
-/tmp/engram-publish-smoke/bin/pip install dist/engram_mcp-0.4.0-py3-none-any.whl
+/tmp/engram-publish-smoke/bin/pip install dist/engram_mcp-0.5.0-py3-none-any.whl
 /tmp/engram-publish-smoke/bin/engram --version       # confirms install
+/tmp/engram-publish-smoke/bin/python -m engram --version  # confirms `python -m engram` works (daemon spawn dance relies on this)
 /tmp/engram-publish-smoke/bin/engram doctor --help   # confirms CLI wires up
+/tmp/engram-publish-smoke/bin/engram daemon --help   # confirms daemon subcommand group wires up
 mkdir -p /tmp/engram-test-vault
 /tmp/engram-publish-smoke/bin/engram init /tmp/engram-test-vault
 /tmp/engram-publish-smoke/bin/engram doctor --config /tmp/engram-test-vault/engram.config.yaml
@@ -174,7 +197,7 @@ The `-s` flag GPG-signs the tag (per the maintainer's git commit policy). Push t
 gh release create v0.4.0 \
   --title "v0.4.0 - Team Brain" \
   --notes-from-tag \
-  dist/engram_mcp-0.4.0-py3-none-any.whl \
+  dist/engram_mcp-0.5.0-py3-none-any.whl \
   dist/engram_mcp-0.4.0.tar.gz
 ```
 

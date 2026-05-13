@@ -4,16 +4,16 @@ A clear-eyed look at what makes engram different — and when other tools are th
 
 ## TL;DR
 
-| Tool | Storage SoT | MCP-native | Local embeddings | Multi-machine sync | Team-shared writes | License |
-|---|---|---|---|---|---|---|
-| **engram** | Markdown + SQLite | Yes (5+2 tools) | Yes (FastEmbed) | Yes (git) | Yes (GPG-attributed) | Apache-2.0 |
-| Mem0 | Vector DB (Qdrant/pg) | Yes (cloud + self-host) | Optional | Cloud only | Cloud only | Apache-2.0 |
-| Letta (MemGPT) | Postgres / SQLite | Yes | Internal tiered | DB replication | n/a (single tier) | Apache-2.0 |
-| basic-memory | Markdown + SQLite | Yes (FastMCP) | Yes (FastEmbed) | git (DIY) | n/a (single project) | AGPL-3.0 |
-| Open Brain (OB1) | Supabase + pgvector | Yes (Edge Function) | No (OpenRouter) | Cloud (multi-tenant SaaS) | n/a | Open source |
-| Obsidian + Smart Connections | Markdown vault | Community plugins | Yes (bge-micro) | Obsidian Sync (paid) or community | n/a | Various |
-| engraph | Markdown + SQLite | Yes (25 tools) | Yes (bundled llama.cpp) | git | n/a | MIT |
-| Raw markdown + grep | Markdown only | No | No (keyword only) | git | DIY | n/a |
+| Tool | Storage SoT | MCP-native | Local embeddings | Multi-machine sync | Team-shared writes | Multi-session per vault | License |
+|---|---|---|---|---|---|---|---|
+| **engram** | Markdown + SQLite | Yes (5+2 tools) | Yes (FastEmbed) | Yes (git) | Yes (GPG-attributed) | Yes (per-vault UDS daemon) | Apache-2.0 |
+| Mem0 | Vector DB (Qdrant/pg) | Yes (cloud + self-host) | Optional | Cloud only | Cloud only | Yes (cloud) | Apache-2.0 |
+| Letta (MemGPT) | Postgres / SQLite | Yes | Internal tiered | DB replication | n/a (single tier) | Yes (DB-backed) | Apache-2.0 |
+| basic-memory | Markdown + SQLite | Yes (FastMCP) | Yes (FastEmbed) | git (DIY) | n/a (single project) | One stdio client per vault | AGPL-3.0 |
+| Open Brain (OB1) | Supabase + pgvector | Yes (Edge Function) | No (OpenRouter) | Cloud (multi-tenant SaaS) | n/a | Yes (cloud) | Open source |
+| Obsidian + Smart Connections | Markdown vault | Community plugins | Yes (bge-micro) | Obsidian Sync (paid) or community | n/a | One Obsidian instance per vault | Various |
+| engraph | Markdown + SQLite | Yes (25 tools) | Yes (bundled llama.cpp) | git | n/a | One stdio client per vault | MIT |
+| Raw markdown + grep | Markdown only | No | No (keyword only) | git | DIY | n/a | n/a |
 
 ## Detailed comparisons
 
@@ -31,6 +31,7 @@ A clear-eyed look at what makes engram different — and when other tools are th
 - You need to run on a work laptop that blocks external services.
 - You want git as the sync mechanism, not a Docker stack with Qdrant + optional Neo4j.
 - You're optimizing for "the human decides what to remember" (BYOC discipline) rather than agent-driven capture.
+- You run multiple AI sessions against the same memory (engram's per-vault daemon lets N concurrent Claude Code sessions share a vault — most local-first competitors lock one client per vault).
 
 **Why not Mem0:** Mem0 is solving production-agent memory; engram is solving personal-knowledge-worker memory. Different problems, both legitimate.
 
