@@ -63,8 +63,9 @@ class DaemonServer:
         daemon_config: DaemonConfig,
         paths: SocketPaths | None = None,
         clock: Callable[[], float] | None = None,
+        readiness_fd: int | None = None,
     ) -> None:
-        """Construct against a pre-built runtime.
+        r"""Construct against a pre-built runtime.
 
         Args:
             runtime: The :class:`ServeRuntime` from
@@ -80,11 +81,18 @@ class DaemonServer:
                 ``resolve_paths(runtime.config.vault_path)``.
             clock: Optional monotonic-time callable for tests. Defaults
                 to :func:`asyncio.get_event_loop().time` when running.
+            readiness_fd: When the daemon was spawned by a proxy, this
+                is the write-end FD of a pipe the proxy reads from to
+                detect successful spawn. The daemon writes ``ready\n``
+                after binding (Amendment 1 step 11) and closes the FD.
+                On a startup error, the spawning Layer F entrypoint
+                writes ``error: <msg>\n`` instead.
         """
         self.runtime = runtime
         self.daemon_config = daemon_config
         self.paths: SocketPaths = paths or resolve_paths(runtime.config.vault_path)
         self._clock = clock
+        self._readiness_fd = readiness_fd
 
         self._ready_event = asyncio.Event()
         self._shutdown_event = asyncio.Event()
@@ -150,6 +158,11 @@ class DaemonServer:
 
         # 11. Signal readiness to the spawning proxy.
         self._ready_event.set()
+        if self._readiness_fd is not None:
+            with contextlib.suppress(OSError):
+                os.write(self._readiness_fd, b"ready\n")
+                os.close(self._readiness_fd)
+            self._readiness_fd = None
         _log.info(
             "engram daemon ready: vault=%s pid=%s socket=%s",
             self.runtime.config.vault_name,

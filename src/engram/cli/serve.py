@@ -23,6 +23,7 @@ both consume the same init helper):
 from __future__ import annotations
 
 import asyncio
+import contextlib
 import logging
 from dataclasses import dataclass
 from pathlib import Path
@@ -342,6 +343,74 @@ async def _init_serve_runtime(
     )
 
 
+def _serve_no_daemon(
+    *,
+    config: EffectiveConfig,
+    force: bool,
+    skip_probes: bool,
+) -> None:
+    """Single-process stdio serve flow (the ``--no-daemon`` escape hatch).
+
+    Bit-for-bit equivalent to pre-Phase-5 ``engram serve``: acquire
+    VaultLock directly, run the FastMCP stdio loop in-process, drain on
+    exit. The Phase 5 daemon entrypoint (``engram daemon start``) uses
+    :func:`_init_serve_runtime` directly with
+    ``install_signal_handlers=False`` rather than this wrapper, because
+    it owns its own signal handling.
+    """
+    try:
+        runtime = asyncio.run(
+            _init_serve_runtime(
+                config=config,
+                force=force,
+                skip_probes=skip_probes,
+                install_signal_handlers=True,
+            )
+        )
+    except ServeInitError as exc:
+        typer.secho(str(exc), fg=typer.colors.RED, err=True)
+        raise typer.Exit(exc.exit_code) from exc
+
+    try:
+        runtime.fastmcp_server.run()
+    finally:
+        runtime.teardown()
+
+
+def _run_proxy(config: EffectiveConfig) -> int:
+    """Proxy mode: connect to (or spawn) the per-vault daemon and shuffle bytes."""
+    from engram.daemon.client import DaemonClient
+    from engram.errors import DaemonNotRunningError
+
+    if not config.daemon.auto_spawn:
+        from engram.daemon.client import _try_connect
+
+        async def _probe() -> bool:
+            from engram.daemon.socket_paths import resolve_paths as _resolve
+
+            paths = _resolve(config.vault_path)
+            conn = await _try_connect(paths.socket)
+            if conn is None:
+                return False
+            _reader, writer = conn
+            writer.close()
+            with contextlib.suppress(OSError):
+                await writer.wait_closed()
+            return True
+
+        if not asyncio.run(_probe()):
+            msg = (
+                f"no daemon running for vault {config.vault_name!r} and "
+                f"daemon.auto_spawn=false; run `engram daemon start` or "
+                f"flip the config flag"
+            )
+            typer.secho(f"engram serve: {msg}", fg=typer.colors.RED, err=True)
+            raise typer.Exit(2) from DaemonNotRunningError(msg)
+
+    client = DaemonClient(vault_path=config.vault_path, daemon_config=config.daemon)
+    return asyncio.run(client.run_proxy_loop())
+
+
 def register(app: typer.Typer) -> None:
     """Attach the ``serve`` subcommand to a typer app."""
 
@@ -372,8 +441,23 @@ def register(app: typer.Typer) -> None:
             "--skip-probes",
             help="Skip startup probes (debugging only).",
         ),
+        no_daemon: bool = typer.Option(
+            False,
+            "--no-daemon",
+            help=(
+                "Run single-process serve (the pre-Phase-5 stdio path). "
+                "Default is proxy mode: auto-spawn a per-vault daemon and "
+                "shuffle bytes between stdin/stdout and the daemon's UDS."
+            ),
+        ),
     ) -> None:
-        """Start the engram MCP server (stdio) for the configured vault."""
+        """Start the engram MCP server (proxy mode by default).
+
+        Pass ``--no-daemon`` to run today's single-process stdio path
+        directly. The default proxy mode spawns a per-vault daemon (or
+        attaches to a running one) so N concurrent Claude sessions can
+        share the same vault.
+        """
         try:
             config = load_config(
                 explicit_vault_config=config_path,
@@ -386,23 +470,20 @@ def register(app: typer.Typer) -> None:
 
         configure_logging(level=config.log_level, log_format=config.log_format)
 
-        try:
-            runtime = asyncio.run(
-                _init_serve_runtime(
-                    config=config,
-                    force=force,
-                    skip_probes=skip_probes,
-                    install_signal_handlers=True,  # today's behavior
-                )
-            )
-        except ServeInitError as exc:
-            typer.secho(str(exc), fg=typer.colors.RED, err=True)
-            raise typer.Exit(exc.exit_code) from exc
+        if no_daemon:
+            _serve_no_daemon(config=config, force=force, skip_probes=skip_probes)
+            return
 
-        try:
-            runtime.fastmcp_server.run()
-        finally:
-            runtime.teardown()
+        exit_code = _run_proxy(config)
+        if exit_code != 0:
+            raise typer.Exit(exit_code)
 
 
-__all__ = ["ServeInitError", "ServeRuntime", "_init_serve_runtime", "register"]
+__all__ = [
+    "ServeInitError",
+    "ServeRuntime",
+    "_init_serve_runtime",
+    "_run_proxy",
+    "_serve_no_daemon",
+    "register",
+]
