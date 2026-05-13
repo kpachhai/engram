@@ -101,6 +101,12 @@ def _attach_daemon_log_handler(
             root.removeHandler(h)
     root.addHandler(handler)
     root.setLevel(getattr(logging, config.daemon.log_level.upper(), logging.INFO))
+    # Detach from the proxy's process group so signals sent to the proxy
+    # (e.g., SIGTERM when the MCP client exits) don't reach the daemon.
+    # Suppressed: setsid() fails if this process is already a session leader,
+    # which happens when --detach was used (double_fork_detach already called it).
+    with contextlib.suppress(OSError):
+        os.setsid()
     # Redirect raw stdout/stderr to /dev/null so the inherited proxy pipe
     # cannot trigger a BrokenPipeError (and rich's SystemExit) when the
     # proxy process exits. This is safe: all daemon output goes to the

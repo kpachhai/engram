@@ -22,6 +22,7 @@ but is still accepted (typical thoughts are <2 KB per NFR1).
 
 from __future__ import annotations
 
+import contextlib
 import logging
 import re
 import sqlite3
@@ -232,6 +233,11 @@ class VaultStorage:
 
     def close(self) -> None:
         """Close the underlying SQLite connection."""
+        # Flush all WAL frames to the main database file before closing so
+        # the next session doesn't open a stale WAL that can cause
+        # disk I/O errors (SQLITE_IOERR) in WAL-mode shared memory.
+        with contextlib.suppress(sqlite3.Error):
+            self.conn.execute("PRAGMA wal_checkpoint(TRUNCATE)")
         try:
             self.conn.close()
         except sqlite3.Error:
