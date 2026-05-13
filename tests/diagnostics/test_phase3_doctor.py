@@ -86,9 +86,7 @@ def test_vault_name_mismatch_ok_when_names_match(tmp_path: Path) -> None:
     vault_path = tmp_path / "my-vault"
     vault_path.mkdir()
     (vault_path / "engram.config.yaml").write_text("vault_name: my-vault\n")
-    user_config = UserConfig(
-        vaults=[VaultMount(name="my-vault", path=vault_path, role="primary")]
-    )
+    user_config = UserConfig(vaults=[VaultMount(name="my-vault", path=vault_path, role="primary")])
     report = DoctorReport()
     check_user_config_vault_name_mismatch(report, user_config)
     assert _find_check(report, USER_CONFIG_VAULT_NAME_MISMATCH) == CheckStatus.OK.value
@@ -111,9 +109,7 @@ def test_vault_name_mismatch_ok_when_no_vault_config(tmp_path: Path) -> None:
     vault_path = tmp_path / "my-vault"
     vault_path.mkdir()
     # No engram.config.yaml present - check skips this vault
-    user_config = UserConfig(
-        vaults=[VaultMount(name="any-name", path=vault_path, role="primary")]
-    )
+    user_config = UserConfig(vaults=[VaultMount(name="any-name", path=vault_path, role="primary")])
     report = DoctorReport()
     check_user_config_vault_name_mismatch(report, user_config)
     assert _find_check(report, USER_CONFIG_VAULT_NAME_MISMATCH) == CheckStatus.OK.value
@@ -121,9 +117,7 @@ def test_vault_name_mismatch_ok_when_no_vault_config(tmp_path: Path) -> None:
 
 def test_vault_name_mismatch_ok_when_vault_path_missing(tmp_path: Path) -> None:
     vault_path = tmp_path / "nonexistent"
-    user_config = UserConfig(
-        vaults=[VaultMount(name="any-name", path=vault_path, role="primary")]
-    )
+    user_config = UserConfig(vaults=[VaultMount(name="any-name", path=vault_path, role="primary")])
     report = DoctorReport()
     check_user_config_vault_name_mismatch(report, user_config)
     assert _find_check(report, USER_CONFIG_VAULT_NAME_MISMATCH) == CheckStatus.OK.value
