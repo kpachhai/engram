@@ -307,6 +307,10 @@ class DaemonServer:
         6. Unlink socket file.
         7. Unlink state file.
         """
+        # 0. Cancel any pending idle-shutdown timer so asyncio doesn't
+        # log "Task was destroyed but it is pending!" on loop close.
+        self._cancel_idle_timer()
+
         # 1. Listener close (idempotent — may have already been closed by
         # the idle-shutdown phase 2 or the asyncio context manager exit).
         if self._server is not None:

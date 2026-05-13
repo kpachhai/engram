@@ -101,6 +101,16 @@ def _attach_daemon_log_handler(
             root.removeHandler(h)
     root.addHandler(handler)
     root.setLevel(getattr(logging, config.daemon.log_level.upper(), logging.INFO))
+    # Redirect raw stdout/stderr to /dev/null so the inherited proxy pipe
+    # cannot trigger a BrokenPipeError (and rich's SystemExit) when the
+    # proxy process exits. This is safe: all daemon output goes to the
+    # rotating log file; nothing useful lives on fd 1/2 past this point.
+    devnull_fd = os.open(os.devnull, os.O_RDWR)
+    try:
+        os.dup2(devnull_fd, 1)
+        os.dup2(devnull_fd, 2)
+    finally:
+        os.close(devnull_fd)
 
 
 def _pid_alive(pid: int) -> bool:
