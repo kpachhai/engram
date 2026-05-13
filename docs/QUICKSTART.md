@@ -26,6 +26,15 @@ Or with uv:
 uv tool install engram-mcp
 ```
 
+Or from a source clone (editable - tracks your local `git pull`s, and is the path most contributors use):
+
+```bash
+cd ~/repos/github.com/<your-username>/engram
+uv tool install --editable .
+```
+
+All three forms drop the `engram` binary at `~/.local/bin/engram`, which is what Claude Code's MCP launcher needs (it does not source your shell rc, so a bare `engram` on PATH is not enough - we register the absolute path in Step 5).
+
 Verify the install:
 
 ```bash
@@ -87,28 +96,23 @@ Multi-vault setups (friend-imported corpus, team-shared vault) add additional ro
 engram doctor
 ```
 
-Expected: a list of green check rows. If anything is RED, the message tells you how to fix it. Common first-time issues:
+Expected: a list of green check rows. If anything is RED, the message text on that row tells you what to fix. Common first-time issues:
 
-- **`config_missing`** — you skipped Step 3.
-- **`vault_path_missing`** — the `path` in `config.yaml` doesn't point at the vault `engram init` created.
-- **`embedding_model_missing`** — the FastEmbed model isn't downloaded yet. Run `engram doctor --download-model` (one-shot, ~130 MB).
+- A FAIL row on `thoughts_dir` or `index_dir` means the `path` in `~/.config/engram/config.yaml` doesn't point at the vault `engram init` created. Re-check Step 3.
+- A FAIL row on `sqlite_vec` means your Python's stdlib `sqlite3` was built without loadable extensions. See the Troubleshooting section below for the uv-based fix.
+- A WARN row on `pending_embeddings` means the FastEmbed model wasn't ready when some thoughts were captured. Run `engram doctor --download-model` (one-shot, ~130 MB) then `engram doctor --repair`.
 
 ## Step 5: Wire engram into your MCP client
 
 ### Claude Code
 
-Add engram to your MCP server config (`~/.claude/mcp_servers.json` or via the Claude Code settings UI):
+Register engram as a user-scope MCP server (available across all projects):
 
-```json
-{
-  "mcpServers": {
-    "engram": {
-      "command": "engram",
-      "args": ["serve"]
-    }
-  }
-}
+```bash
+claude mcp add --scope user engram -- "$(which engram)" serve
 ```
+
+Confirm with `claude mcp list` - you should see an `engram:` line. Under the hood this writes to `~/.claude.json`; don't hand-edit that file - use the `claude mcp` CLI to add or remove servers. Passing the absolute path (`"$(which engram)"`) rather than the bare command matters because Claude Code launches MCP subprocesses with a stripped PATH that does not source your shell rc.
 
 Restart Claude Code. You should see seven engram tools registered: `capture_thought`, `search_thoughts`, `list_thoughts`, `thought_stats`, `fetch`, `summarize_thought`, `synthesize_thoughts`.
 
@@ -130,13 +134,7 @@ From inside an MCP client, ask the AI to capture something:
 
 The AI calls `capture_thought`. Engram writes a markdown file under `thoughts/lesson/`, indexes the embedding locally, and returns the ID.
 
-Or capture from the command line:
-
-```bash
-echo "[Lesson] First capture from the CLI." | engram capture-stdin  # (if you wire one)
-```
-
-(Most users capture via the MCP tool — the AI is the natural capture surface.)
+Most users capture via the MCP tool — the AI is the natural capture surface. There is intentionally no `engram capture` CLI subcommand; if you need to seed thoughts from scripts, drop markdown files directly into `thoughts/<prefix>/` and run `engram reindex`.
 
 ## Step 7: Search your memory
 
@@ -177,7 +175,7 @@ uv tool install engram-mcp
 
 ### Search returns no results even though I captured thoughts
 
-Check `engram doctor` for `embedding_status_pending` rows — it means the embedding model failed to load on capture. Run `engram doctor --repair` to backfill, or `engram reindex` to rebuild from markdown.
+Check `engram doctor` for a `pending_embeddings` WARN row — it means the embedding model failed to load on capture. Run `engram doctor --repair` to backfill, or `engram reindex` to rebuild from markdown.
 
 ### My MCP client doesn't see the engram tools
 

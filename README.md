@@ -40,12 +40,8 @@ EOF
 engram doctor
 
 # 5. Wire into Claude Code (or any MCP client)
-# Add to ~/.claude/mcp_servers.json:
-# {
-#   "mcpServers": {
-#     "engram": { "command": "engram", "args": ["serve"] }
-#   }
-# }
+claude mcp add --scope user engram -- "$(which engram)" serve
+# Claude Desktop uses a different config path; see docs/QUICKSTART.md Step 5.
 ```
 
 Now ask your AI assistant: *"Capture a thought: [Lesson] engram took five minutes to set up."*

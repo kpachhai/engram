@@ -209,7 +209,7 @@ Errors observed in real migrations + their fixes:
 | `engram migrate failed: Open Brain probe failed (does the endpoint accept sort=created_at_asc?): Open Brain returned HTTP 401` | You ran the OLD MCP-based `engram migrate-from-open-brain` CLI; the OB1 MCP path doesn't work. | Switch to the Postgres-direct script per "Recommended path" above. |
 | `engram migrate failed: Open Brain response was not valid JSON: Expecting value: line 1 column 1` | Same as above; OB1 returned SSE (`event: message\ndata: {...}`) and engram's MCP HTTP client expects plain JSON. | Switch to the Postgres-direct script. |
 | `MigrationReport.__init__() missing 2 required positional arguments` | Stale copy of the migration script that pre-dates the `migration_id`/`source_url` fix. | Update to the latest script. |
-| `engram doctor` reports `config_missing` after `engram init` | You skipped writing `~/.config/engram/config.yaml`. | See `docs/QUICKSTART.md` Step 3. The per-vault config inside the vault directory is NOT enough; the user-level config is what tells doctor and serve which vaults to mount. |
+| `engram doctor` reports a FAIL row pointing at `thoughts_dir` or `index_dir` after `engram init` | You skipped writing `~/.config/engram/config.yaml`, so doctor cannot resolve the vault path. | See `docs/QUICKSTART.md` Step 3. The per-vault config inside the vault directory is NOT enough; the user-level config is what tells doctor and serve which vaults to mount. |
 
 ### Useful flags (Postgres-direct script)
 
@@ -313,7 +313,7 @@ Replace `2026_05_DD` with today's date. The data is preserved but no client can 
 
 ### 4. Update your client configs
 
-Anywhere you had Open Brain MCP references (`~/.claude/mcp_servers.json`, project CLAUDE.md files, dotfiles), replace them with the engram MCP server config. See `docs/QUICKSTART.md` Step 4.
+Anywhere you had Open Brain MCP references (Claude Code's user-scope MCP registry via `claude mcp list`, project CLAUDE.md files, dotfiles install scripts), replace them with the engram MCP server config. See `docs/QUICKSTART.md` Step 5.
 
 ### 5. Clean up secrets
 

@@ -45,7 +45,7 @@ every vault. In a pre-v0.5.0 install there is no daemon yet, so this
 just means quitting any Claude Code sessions (or any other MCP
 client) that have engram tools active.
 
-If you are using the dev-install pattern (``uv pip install -e .``
+If you are using the dev-install pattern (``uv tool install --editable .``
 against a working tree), there is no system service to stop. If you
 distributed engram via a launchd / systemd-user unit, stop the unit.
 
@@ -55,7 +55,7 @@ distributed engram via a launchd / systemd-user unit, stop the unit.
 # In your engram checkout:
 git pull
 uv sync
-uv pip install -e .
+uv tool install --editable . --reinstall
 
 # Or from PyPI (when published):
 pip install --upgrade engram-mcp
