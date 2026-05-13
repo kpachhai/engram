@@ -21,10 +21,10 @@ jobs:
       matrix:
         python-version: ["3.11", "3.12"]
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
 
       - name: Install uv
-        uses: astral-sh/setup-uv@v3
+        uses: astral-sh/setup-uv@v6
         with:
           enable-cache: true
 
@@ -61,11 +61,18 @@ jobs:
       matrix:
         os: [ubuntu-latest, macos-latest]
         python-version: ["3.11", "3.12"]
+    env:
+      # Disable terminal coloring so help-output assertions are portable
+      # across GHA runners (Typer + Rich render ANSI escapes by default
+      # when a TTY is detected).
+      NO_COLOR: "1"
+      TERM: dumb
+      COLUMNS: "200"
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
 
       - name: Install uv
-        uses: astral-sh/setup-uv@v3
+        uses: astral-sh/setup-uv@v6
         with:
           enable-cache: true
 
@@ -82,7 +89,15 @@ jobs:
       - name: Run pytest with coverage
         env:
           PY_VERSION: ${{ matrix.python-version }}
-        run: uv run --python "$PY_VERSION" pytest --cov=engram --cov-report=xml --cov-report=term-missing --cov-fail-under=80
+        # Excludes the FastEmbed real-network round-trip: it depends on
+        # a HuggingFace model download which is too flaky for CI.
+        run: |
+          uv run --python "$PY_VERSION" pytest \
+            --cov=engram \
+            --cov-report=xml \
+            --cov-report=term-missing \
+            --cov-fail-under=80 \
+            --ignore=tests/embedding/test_fastembed.py
 
       - name: Upload coverage XML
         if: matrix.os == 'ubuntu-latest' && matrix.python-version == '3.12'
@@ -91,3 +106,72 @@ jobs:
           name: coverage-xml
           path: coverage.xml
           if-no-files-found: warn
+
+  build:
+    name: Build wheel + sdist
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v6
+        with:
+          enable-cache: true
+
+      - name: Set up Python
+        run: uv python install 3.12
+
+      - name: Build distribution
+        run: uv build
+
+      - name: Inspect dist artifacts
+        run: |
+          ls -la dist/
+          test -f dist/engram_mcp-*.whl
+          test -f dist/engram_mcp-*.tar.gz
+
+      - name: Twine check (PEP 503 metadata validation)
+        run: uv run --with twine python -m twine check dist/*
+
+      - name: Upload build artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: dist
+          path: dist/
+          if-no-files-found: error
+
+  console-script-smoke:
+    name: Console-script smoke (engram + python -m engram)
+    runs-on: ubuntu-latest
+    needs: build
+    steps:
+      - uses: actions/checkout@v5
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v6
+        with:
+          enable-cache: true
+
+      - name: Set up Python
+        run: uv python install 3.12
+
+      - name: Download built distribution
+        uses: actions/download-artifact@v4
+        with:
+          name: dist
+          path: dist/
+
+      - name: Install built wheel into a clean venv + run smoke
+        # Cross-checks that the dist artifact (not the editable source)
+        # exposes both entry points. A regression where
+        # ``engram/__main__.py`` was missing broke the proxy spawn
+        # dance; this smoke catches that recurrence.
+        run: |
+          uv venv /tmp/smoke-venv
+          source /tmp/smoke-venv/bin/activate
+          uv pip install dist/engram_mcp-*.whl
+          engram --version
+          python -m engram --version
+          engram daemon --help
+          # Both invocations must report the same version.
+          test "$(engram --version)" = "$(python -m engram --version)"

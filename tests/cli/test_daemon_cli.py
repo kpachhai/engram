@@ -1,14 +1,15 @@
 """Tests for ``engram daemon`` typer subcommands + ``engram serve --no-daemon``.
 
-Layer F unit-test surface per critique B5; the end-to-end "spawn a real
-daemon process and connect" path lives in Layer G's hermetic CLI smokes
-(``tests/test_phase5_cli_smoke.py``).
+End-to-end "spawn a real daemon process and connect" paths live in
+``tests/test_phase5_cli_smoke.py`` (subprocess-based smokes against the
+installed binary).
 """
 
 from __future__ import annotations
 
 import json
 import os
+import re
 import socket as socket_module
 import tempfile
 from collections.abc import Iterator
@@ -33,6 +34,18 @@ from engram.config.models import (
 )
 from engram.daemon.socket_paths import resolve_paths
 from engram.daemon.state import DaemonState, write_state
+
+# Typer/Rich renders help output with ANSI escapes when a tty is detected.
+# CliRunner's captured stdout includes those escapes on CI runners where
+# the env reports a real terminal. Strip them before substring matches so
+# the assertions stay portable.
+_ANSI_RE = re.compile(r"\x1b\[[0-9;]*[A-Za-z]")
+_NO_COLOR_ENV = {"NO_COLOR": "1", "TERM": "dumb", "COLUMNS": "200"}
+
+
+def _plain(s: str) -> str:
+    return _ANSI_RE.sub("", s)
+
 
 # ----- fixtures ------------------------------------------------------
 
@@ -70,21 +83,22 @@ def _effective_config(vault: Path) -> EffectiveConfig:
 
 
 def test_engram_daemon_help_lists_four_subcommands() -> None:
-    runner = CliRunner()
+    runner = CliRunner(env=_NO_COLOR_ENV)
     result = runner.invoke(app, ["daemon", "--help"])
     assert result.exit_code == 0
+    plain = _plain(result.stdout)
     for sub in ("start", "stop", "status", "logs"):
-        assert sub in result.stdout
+        assert sub in plain
 
 
 def test_engram_serve_help_documents_no_daemon_flag() -> None:
-    runner = CliRunner()
+    runner = CliRunner(env=_NO_COLOR_ENV)
     result = runner.invoke(app, ["serve", "--help"])
     assert result.exit_code == 0
-    assert "--no-daemon" in result.stdout
+    assert "--no-daemon" in _plain(result.stdout)
 
 
-# ----- status: not-running shape (Amendment 7) ----------------------
+# ----- status: not-running shape -----------------------------------
 
 
 def test_status_not_running_text(short_vault: Path) -> None:
@@ -227,6 +241,6 @@ def test_pid_alive_for_unlikely_pid_is_false() -> None:
 
 def test_serve_no_daemon_flag_present() -> None:
     """Sanity: --no-daemon flag is exposed via CLI introspection."""
-    runner = CliRunner()
+    runner = CliRunner(env=_NO_COLOR_ENV)
     result = runner.invoke(app, ["serve", "--help"])
-    assert "--no-daemon" in result.stdout
+    assert "--no-daemon" in _plain(result.stdout)
