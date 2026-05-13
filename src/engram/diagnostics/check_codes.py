@@ -134,9 +134,8 @@ ALL_PHASE_4_CHECK_CODES: Final[tuple[str, ...]] = (
 )
 
 
-# Daemon-mode check codes (Phase 5; spec
-# `2026-05-12-engram-daemon-mode-design.md` Section 13.2 + Amendment 5).
-# Check implementations land in Layer E (`daemon_checks.py`).
+# Daemon-mode check codes. Check implementations live in
+# `daemon_checks.py`.
 DAEMON_RUNNING: Final[str] = "daemon_running"
 DAEMON_SOCKET_PERMISSIONS: Final[str] = "daemon_socket_permissions"
 DAEMON_SOCKET_STALE: Final[str] = "daemon_socket_stale"

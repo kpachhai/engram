@@ -4,7 +4,10 @@ Each frame is one JSON object terminated by ``\n``. SOCK_STREAM provides
 flow control; the only protocol-level concern is the frame-size limit
 that prevents an OOM from a buggy or malicious peer.
 
-Spec: ``2026-05-12-engram-daemon-mode-design.md`` Section 6.2 + Amendment 6.
+The frame-size limit defaults to 16 MiB (the per-connection
+:class:`asyncio.StreamReader` is constructed with the matching
+``limit``) so a buggy or malicious peer cannot OOM the daemon by
+streaming an unbounded line.
 """
 
 from __future__ import annotations

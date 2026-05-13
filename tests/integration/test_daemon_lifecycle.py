@@ -1,8 +1,4 @@
-"""Daemon lifecycle integration: idle, reconnect, peer-cred reject.
-
-Spec: ``2026-05-12-engram-daemon-mode-design.md`` Sections 5 + 7.2 +
-Amendments 1 + 3.
-"""
+"""Daemon lifecycle integration: idle, reconnect, peer-cred reject."""
 
 from __future__ import annotations
 
@@ -42,7 +38,7 @@ async def test_idle_shutdown_fires_after_timeout(short_vault: Path) -> None:
 async def test_two_phase_atomic_shutdown_cancels_on_reconnect(short_vault: Path) -> None:
     """Connecting during the idle countdown cancels the shutdown.
 
-    Closes deep-plan H3 — the daemon must never close the listener
+    The daemon must never close the listener
     while a proxy thinks it just attached.
     """
     runtime = build_runtime(short_vault)

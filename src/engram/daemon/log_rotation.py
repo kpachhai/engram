@@ -3,18 +3,15 @@
 Wraps stdlib :class:`logging.handlers.RotatingFileHandler` and adds:
 
 - ``umask(0o077)`` around file creation so the initial inode is born
-  with mode ``0o600`` (closes deep-plan critique S9 — closes the
-  0o644 → chmod window).
+  with mode ``0o600``, closing the 0o644-then-chmod window where a
+  brief race could expose the log to other UIDs.
 - Retention sweep that deletes rotated files older than
   ``retention_days``.
 - Mode-preservation across rotations.
 
 ``engram daemon logs --follow`` uses ``WatchedFileHandler``-style
 inode-reopen logic implemented separately in ``cli/daemon.py`` via a
-tail-poll loop (spec Amendment 8).
-
-Spec: ``2026-05-12-engram-daemon-mode-design.md`` Section 13.3 +
-Amendments 8 + 9.
+tail-poll loop so the follower survives log rotation.
 """
 
 from __future__ import annotations
@@ -39,7 +36,7 @@ class EngramRotatingHandler(logging.handlers.RotatingFileHandler):
         """Open the log with restrictive perms; record retention for sweeps."""
         # Tighten umask BEFORE the parent constructor creates the file so
         # the initial inode is born with 0600 perms instead of going
-        # through a 0644 → chmod window (closes critique S9).
+        # through a 0644 → chmod window where another process could open it.
         prior_umask = os.umask(0o077)
         try:
             super().__init__(

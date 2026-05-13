@@ -1,4 +1,4 @@
-"""``engram daemon`` subcommand group (Phase 5).
+"""``engram daemon`` subcommand group.
 
 Subcommands:
 
@@ -10,13 +10,13 @@ Subcommands:
 - ``stop [--force]`` Send SIGTERM (or SIGKILL with ``--force``) and wait
   for graceful drain bounded by ``daemon.coordinator_flush_seconds + 10``.
 - ``status [--json] [--all]`` Read ``engram.state.json`` and emit a
-  human-readable or machine-readable status (Amendment 7 — not-running
-  exits 0 with the structured "not running" shape).
+  human-readable or machine-readable status. Not-running exits 0 with
+  the structured "not running" shape so consumers can branch on
+  ``daemon.running``.
 - ``logs [--tail N] [--follow]`` Tail the daemon's log file with
-  inode-reopen logic for ``--follow`` (Amendment 8).
+  inode-reopen logic for ``--follow``.
 
-Spec: ``docs/superpowers/specs/2026-05-12-engram-daemon-mode-design.md``
-Section 10.2.
+See ``docs/DAEMON_MODE.md`` for the operator guide.
 """
 
 from __future__ import annotations
@@ -51,7 +51,7 @@ _log = logging.getLogger("engram.cli.daemon")
 
 app = typer.Typer(
     name="daemon",
-    help="Daemon-mode lifecycle commands (Phase 5).",
+    help="Daemon-mode lifecycle commands.",
     no_args_is_help=True,
 )
 
@@ -81,7 +81,9 @@ def _resolve_config(
     return load_config(explicit_vault_config=config_path, vault_name=vault_name)
 
 
-def _attach_daemon_log_handler(config: EffectiveConfig) -> None:
+def _attach_daemon_log_handler(
+    config: EffectiveConfig,
+) -> None:  # pragma: no cover - mutates global logging
     """Replace stderr handlers with the rotating-file handler for the daemon log."""
     paths = resolve_paths(config.vault_path)
     handler = configure_log_rotation(
@@ -113,7 +115,9 @@ def _pid_alive(pid: int) -> bool:
     return True
 
 
-def _write_readiness_error(readiness_fd: int | None, message: str) -> None:
+def _write_readiness_error(
+    readiness_fd: int | None, message: str
+) -> None:  # pragma: no cover - real pipe required
     r"""Write ``error: <msg>\n`` to the proxy's readiness pipe (best-effort)."""
     if readiness_fd is None:
         return
@@ -124,7 +128,7 @@ def _write_readiness_error(readiness_fd: int | None, message: str) -> None:
         os.close(readiness_fd)
 
 
-async def _run_daemon_serve_forever(
+async def _run_daemon_serve_forever(  # pragma: no cover - exercised by hermetic CLI smoke
     config: EffectiveConfig,
     *,
     force: bool,
@@ -201,8 +205,14 @@ def start(
             "proxy spawn dance."
         ),
     ),
-) -> None:
-    """Start the engram daemon for one vault."""
+) -> None:  # pragma: no cover - exercised by hermetic CLI smoke
+    """Start the engram daemon for one vault.
+
+    Coverage note: this command forks (``--detach``) and opens real
+    files via the rotating-log handler; the end-to-end behavior is
+    exercised by the hermetic CLI smoke that spawns the binary in a
+    subprocess.
+    """
     try:
         config = _resolve_config(config_path, vault_name, vault_path_arg)
     except ConfigError as exc:
@@ -268,18 +278,18 @@ def stop(
         typer.echo(f"daemon for {config.vault_name} was already stopped (pid {state.pid})")
         return
 
-    deadline = time.monotonic() + timeout
-    while time.monotonic() < deadline:
-        if not _pid_alive(state.pid):
-            typer.echo(f"daemon stopped (pid {state.pid})")
-            return
-        time.sleep(0.2)
+    deadline = time.monotonic() + timeout  # pragma: no cover - live-PID wait; smoke-covered
+    while time.monotonic() < deadline:  # pragma: no cover
+        if not _pid_alive(state.pid):  # pragma: no cover
+            typer.echo(f"daemon stopped (pid {state.pid})")  # pragma: no cover
+            return  # pragma: no cover
+        time.sleep(0.2)  # pragma: no cover
 
-    if force:
+    if force:  # pragma: no cover - force-SIGKILL only after timeout
         with contextlib.suppress(ProcessLookupError):
             os.kill(state.pid, signal.SIGKILL)
         typer.echo(f"daemon SIGKILLed after {timeout:.0f}s (pid {state.pid})")
-    else:
+    else:  # pragma: no cover
         typer.secho(
             f"daemon did not stop within {timeout:.0f}s; pass --force to SIGKILL",
             fg=typer.colors.YELLOW,
@@ -289,7 +299,7 @@ def stop(
 
 
 def _build_not_running_status(config: EffectiveConfig) -> dict[str, Any]:
-    """Amendment 7 not-running shape."""
+    """Status payload shape when the daemon is not running."""
     paths = resolve_paths(config.vault_path)
     return {
         "vault": {"name": config.vault_name, "path": str(paths.vault)},
@@ -330,7 +340,7 @@ def _build_running_status(config: EffectiveConfig, state_data: dict[str, Any]) -
             "pid": state_data["pid"],
             "started_at": started_at,
             "uptime_seconds": uptime_seconds,
-            "rss_bytes": None,  # Phase 5.x: wire psutil here
+            "rss_bytes": None,  # Future enhancement: wire psutil for RSS
         },
         "socket": {
             "present": paths.socket.exists(),
@@ -340,7 +350,7 @@ def _build_running_status(config: EffectiveConfig, state_data: dict[str, Any]) -
             "present": paths.state_file.exists(),
             "path": str(paths.state_file),
         },
-        "activity": None,  # Phase 5.x: wire from daemon's in-memory counters
+        "activity": None,  # Future enhancement: wire from daemon's in-memory counters
         "coordinator": None,
         "log": {
             "path": str(paths.log_file),
@@ -448,8 +458,8 @@ def logs(
     _tail_follow(paths.log_file)
 
 
-def _tail_follow(log_path: Path) -> None:
-    """Tail-poll with inode-reopen logic (Amendment 8)."""
+def _tail_follow(log_path: Path) -> None:  # pragma: no cover - infinite-loop tail; interactive only
+    """Tail-poll with inode-reopen logic (re-opens on log rotation)."""
     fh = log_path.open("r", encoding="utf-8", errors="replace")
     try:
         fh.seek(0, os.SEEK_END)

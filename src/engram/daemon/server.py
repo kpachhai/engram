@@ -10,12 +10,10 @@ Construction is dependency-injected: callers pass a pre-built
 :class:`engram.cli.serve.ServeRuntime` (acquired via
 :func:`engram.cli.serve._init_serve_runtime` with
 ``install_signal_handlers=False``) plus a :class:`SocketPaths` and a
-:class:`DaemonConfig`. The Layer F daemon-spawn helper wires these.
+:class:`DaemonConfig`. The ``engram daemon start`` CLI entrypoint
+wires these.
 
-Spec: ``2026-05-12-engram-daemon-mode-design.md`` Sections 5 + 8 +
-Amendments 1, 2, 3, 4, 6.
-
-Startup ordering (Amendment 1) is enforced by the caller's wiring:
+Startup ordering is enforced by the caller's wiring:
 
 1. Caller installs daemon signal handlers BEFORE constructing this server.
 2. Caller's ``_init_serve_runtime(install_signal_handlers=False)``
@@ -23,9 +21,9 @@ Startup ordering (Amendment 1) is enforced by the caller's wiring:
 3. :meth:`serve_forever` unlinks any stale socket, binds, chmods 0600,
    writes the state file, then sets the readiness event.
 
-Two-phase atomic idle shutdown (Amendment 3) is implemented via
-``_shutdown_lock`` so a proxy that reconnects between timer fire and
-listener close is never silently dropped.
+Two-phase atomic idle shutdown is implemented via ``_shutdown_lock``
+so a proxy that reconnects between timer fire and listener close is
+never silently dropped.
 """
 
 from __future__ import annotations
@@ -70,11 +68,12 @@ class DaemonServer:
         Args:
             runtime: The :class:`ServeRuntime` from
                 :func:`engram.cli.serve._init_serve_runtime` (with
-                ``install_signal_handlers=False`` per spec Amendment 1).
-                Owns the ``VaultLock``, ``VaultStorage``,
-                ``SyncCoordinator``, embedder, and the built FastMCP
-                server. The daemon takes ownership and tears it down
-                during :meth:`_drain_and_exit`.
+                ``install_signal_handlers=False`` so the daemon can
+                wire its own SIGTERM/SIGINT handler). Owns the
+                ``VaultLock``, ``VaultStorage``, ``SyncCoordinator``,
+                embedder, and the built FastMCP server. The daemon
+                takes ownership and tears it down during
+                :meth:`_drain_and_exit`.
             daemon_config: Resolved :class:`DaemonConfig`. Typically
                 ``runtime.config.daemon``.
             paths: Pre-resolved :class:`SocketPaths`; defaults to
@@ -84,9 +83,9 @@ class DaemonServer:
             readiness_fd: When the daemon was spawned by a proxy, this
                 is the write-end FD of a pipe the proxy reads from to
                 detect successful spawn. The daemon writes ``ready\n``
-                after binding (Amendment 1 step 11) and closes the FD.
-                On a startup error, the spawning Layer F entrypoint
-                writes ``error: <msg>\n`` instead.
+                after binding and closes the FD. On a startup error
+                the ``engram daemon start`` entrypoint writes
+                ``error: <msg>\n`` instead.
         """
         self.runtime = runtime
         self.daemon_config = daemon_config
@@ -113,7 +112,7 @@ class DaemonServer:
     # -- public API ----------------------------------------------------
 
     async def serve_forever(self) -> None:
-        """Main daemon entrypoint (Amendment 1 ordering, steps 7-12).
+        """Main daemon entrypoint (binds the UDS, runs the accept loop, drains).
 
         The caller's spawn helper has already done steps 1-6 (signal
         handlers, ``VaultLock``, probes, storage, coordinator, FastMCP).
@@ -202,7 +201,7 @@ class DaemonServer:
 
     @property
     def connect_during_drain(self) -> int:
-        """Counter of ``accept()`` attempts after listener close (Amendment 3)."""
+        """Counter of ``accept()`` attempts after the listener close (drain contract)."""
         return self._connect_during_drain
 
     # -- internals -----------------------------------------------------
@@ -228,7 +227,7 @@ class DaemonServer:
                 await writer.wait_closed()
             return
 
-        # Refuse new connections during drain (Amendment 3).
+        # Refuse new connections during drain (two-phase atomic shutdown contract).
         async with self._shutdown_lock:
             if self._shutdown_event.is_set():
                 self._connect_during_drain += 1
@@ -276,7 +275,7 @@ class DaemonServer:
         self._idle_timer_task = None
 
     async def _idle_timer_loop(self) -> None:
-        """Two-phase atomic idle shutdown (Amendment 3)."""
+        """Two-phase atomic idle shutdown (two-phase atomic shutdown contract)."""
         try:
             await asyncio.sleep(self.daemon_config.idle_shutdown_seconds)
         except asyncio.CancelledError:
@@ -297,7 +296,7 @@ class DaemonServer:
             self._shutdown_event.set()
 
     async def _drain_and_exit(self) -> None:
-        """Amendment 2 drain contract.
+        """Graceful shutdown drain — runs in a fixed order with explicit budgets.
 
         1. Stop accepting (listener is already closed by the shutdown path).
         2. Wait for in-flight tasks OR force-cancel after
@@ -374,7 +373,7 @@ class DaemonServer:
     def _install_async_signal_handlers(self) -> None:
         """Install SIGTERM/SIGINT handlers via the asyncio loop.
 
-        Daemon owns its own signal handling per Amendment 1; the caller
+        The daemon owns its own signal handling; the caller
         passes ``install_signal_handlers=False`` to ``VaultLock`` so we
         do not stomp these handlers from the lock side.
         """

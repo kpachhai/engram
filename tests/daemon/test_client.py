@@ -1,12 +1,9 @@
 """Proxy client: byte shuffler + connect dance + reconnect backoff.
 
-Spec: ``2026-05-12-engram-daemon-mode-design.md`` Sections 5.2 + 5.6 +
-Amendment 4.
-
-Scope per critique B5: Layer D unit tests. End-to-end proxy↔daemon
-integration is a Layer G smoke concern (the proxy spawn dance forks an
-``engram daemon start`` subcommand that does not yet exist until Layer
-F wires it).
+Unit-test scope. End-to-end proxy↔daemon integration (proxy spawns a
+real daemon process, sends MCP frames, gets responses) lives in the
+hermetic CLI smokes; here we test the helpers with injected streams
+and a mock spawn callable.
 """
 
 from __future__ import annotations

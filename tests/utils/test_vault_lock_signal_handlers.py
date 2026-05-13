@@ -1,10 +1,10 @@
 """VaultLock with ``install_signal_handlers=False``.
 
-The daemon (Phase 5 Layer C) owns its own SIGTERM/SIGINT handler so the
-holder must NOT install its own. Test:
+The daemon owns its own SIGTERM/SIGINT handler so the holder must NOT
+install its own. Test:
 
 1. Default behavior unchanged: VaultLock installs SIGTERM/SIGINT handlers
-   when used directly (`engram serve --no-daemon` continues to work).
+   when used directly (``engram serve --no-daemon`` continues to work).
 2. ``install_signal_handlers=False`` leaves the existing handlers alone so
    the daemon can wire its own.
 """

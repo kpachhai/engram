@@ -165,10 +165,10 @@ uv run engram doctor --download-model --print-hashes
 
 **Discipline that's been load-bearing on this project:**
 
-1. **Layer ordering: integration callsites in CLI/server BEFORE integration tests, not after.** Phase 3 + Phase 4 both got bitten by deferring CLI wiring to the end. If you're adding a new component, wire it into the user-facing path (CLI / `build_multivault_server` / `engram doctor`) in the same change that adds the component, not later.
+1. **Integration callsites in CLI/server BEFORE integration tests, not after.** Earlier delivery iterations got bitten by deferring CLI wiring to the end. If you're adding a new component, wire it into the user-facing path (CLI / `build_multivault_server` / `engram doctor`) in the same change that adds the component, not later.
 2. **Hermetic CLI smoke is mandatory at exit.** Per `python-package-builder` Phase Exit Step 5: every new CLI subcommand or modified subcommand gets a smoke test in `tests/test_phase4_cli_smoke.py` that spawns the actual binary via subprocess. The test suite catches handler bugs; the smoke catches wiring bugs.
 3. **Defense-in-depth at security boundaries.** When adding a new constraint (allowlist, refusal, gate), put it in two places: the capture-time client-side gate AND the push-time server-side check (when applicable). Single-layer enforcement is brittle.
-4. **Spec-vs-implementation audit before claiming "done."** Run a sub-agent to walk the relevant spec doc and cross-check against `src/engram/` before merging. Three independent gaps (FastEmbed integrity, LLM CLI, doc count drift) escaped initial Phase 4 closeout because we didn't audit thoroughly.
+4. **Spec-vs-implementation audit before claiming "done."** Run a sub-agent to walk the relevant spec doc and cross-check against `src/engram/` before merging. Three independent gaps (FastEmbed integrity, LLM CLI, doc count drift) escaped an earlier closeout because we didn't audit thoroughly.
 5. **Verify-before-done at every "shipped" claim.** Stderr discipline (check both stdout AND stderr). Bounds-checks on numerical outputs. List what was NOT verified explicitly. The `verify-before-done` global skill produces the checklist.
 
 ## Operational reality
@@ -176,7 +176,7 @@ uv run engram doctor --download-model --print-hashes
 - **Embedding model:** `BAAI/bge-small-en-v1.5` is pinned. The hash manifest in `src/engram/embedding/model_hashes.py` is populated; mismatched files raise `EmbeddingError`. Recompute via `engram doctor --download-model --print-hashes` after any model upgrade.
 - **Index location:** `<vault>/.indexes/engram.db` (gitignored).
 - **Locks + state:** `<vault>/.engram/` holds per-machine state (identity, push queue, orphan tarballs); always gitignored.
-- **MCP server:** stdio at the client boundary. No HTTP. No network listener. No telemetry. In Phase 5+ (daemon mode, v0.5.0), a per-vault Unix Domain Socket sits between the ``engram serve`` proxy and the daemon process that owns the vault — UDS is local IPC, not a network listener. Filesystem perms (0o600) plus ``SO_PEERCRED``/``getpeereid`` enforce same-UID access.
+- **MCP server:** stdio at the client boundary. No HTTP. No network listener. No telemetry. From v0.5.0 onward (daemon mode), a per-vault Unix Domain Socket sits between the ``engram serve`` proxy and the daemon process that owns the vault — UDS is local IPC, not a network listener. Filesystem perms (0o600) plus ``SO_PEERCRED``/``getpeereid`` enforce same-UID access.
 - **CI matrix:** Python 3.11 + 3.12, macOS + Ubuntu. ruff + ruff-format + mypy + pytest + coverage all gate the merge.
 
 ## See also
@@ -185,6 +185,6 @@ uv run engram doctor --download-model --print-hashes
 - `docs/USE_CASES.md` — five concrete personas with example flows.
 - `docs/COMPARISONS.md` — engram vs Mem0 / Letta / basic-memory / Open Brain / Obsidian / engraph.
 - `docs/adr/` — 8 ADRs (storage, MCP, sync, embedding, sync coordinator, multi-vault, team brain, daemon mode).
-- `docs/DAEMON_MODE.md` — operator + migration guide for Phase 5 daemon mode (v0.5.0+).
+- `docs/DAEMON_MODE.md` — operator + migration guide for daemon mode (v0.5.0+).
 - `~/repos/github.com/kpachhai/idea-forge/docs/superpowers/specs/2026-05-04-engram/` — original spec (12 docs; historical authority).
 - `~/repos/github.com/kpachhai/idea-forge/workspace/engram/PHASE_<N>_RETROSPECTIVE.md` — lessons learned (Phase 2-4).

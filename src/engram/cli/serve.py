@@ -1,7 +1,7 @@
 """``engram serve`` CLI command - launches the FastMCP stdio server.
 
-Lifecycle (steps 1-10 are factored into :func:`_init_serve_runtime` so the
-Phase 5 daemon — see ``src/engram/daemon/server.py`` — and ``--no-daemon``
+Lifecycle (steps 1-10 are factored into :func:`_init_serve_runtime` so
+the daemon — see ``src/engram/daemon/server.py`` — and ``--no-daemon``
 both consume the same init helper):
 
 1. Load resolved configuration.
@@ -16,7 +16,7 @@ both consume the same init helper):
 9. Construct (lazy) :class:`FastEmbedProvider`.
 10. Build the FastMCP server.
 11. Run its stdio loop (single-process) OR enter the daemon's UDS accept
-    loop (Layer C).
+    loop in the daemon process.
 12. On exit: drain the coordinator queue, release the lock, close storage.
 """
 
@@ -179,11 +179,11 @@ def _build_multivault_server_for(
 class ServeRuntime:
     """Resources owned across the serve lifecycle.
 
-    The daemon (Phase 5 Layer C) and ``engram serve --no-daemon`` both
-    receive this dataclass from :func:`_init_serve_runtime`. The serve-side
-    caller then either runs ``fastmcp_server.run()`` (today's stdio loop)
-    or hands the server to the daemon's per-connection dispatch loop, and
-    invokes :meth:`teardown` on exit.
+    Both the daemon and ``engram serve --no-daemon`` receive this
+    dataclass from :func:`_init_serve_runtime`. The serve-side caller
+    then either runs ``fastmcp_server.run()`` (single-process stdio
+    loop) or hands the server to the daemon's per-connection dispatch
+    loop, and invokes :meth:`teardown` on exit.
 
     The ``embedder`` field is typed ``object`` to match engram's
     duck-typed embedder convention (mirrors ``serve_multivault`` and
@@ -221,10 +221,10 @@ async def _init_serve_runtime(
     """Initialize the serve-side runtime (steps 2-10 of the lifecycle).
 
     Shared between ``engram serve --no-daemon`` (callers pass
-    ``install_signal_handlers=True``) and the Phase 5 daemon (callers
-    pass ``install_signal_handlers=False`` per spec Amendment 1 so the
-    daemon owns its own SIGTERM/SIGINT handler). Caller is responsible for
-    config loading + ``configure_logging`` BEFORE invoking this helper.
+    ``install_signal_handlers=True``) and the daemon (callers pass
+    ``install_signal_handlers=False`` so the daemon owns its own
+    SIGTERM/SIGINT handler). Caller is responsible for config loading
+    and ``configure_logging`` BEFORE invoking this helper.
 
     Raises :class:`ServeInitError` when init cannot proceed; the caller
     surfaces ``exit_code`` and the operator-facing message through
@@ -343,7 +343,7 @@ async def _init_serve_runtime(
     )
 
 
-def _serve_no_daemon(
+def _serve_no_daemon(  # pragma: no cover - exercised by serve-mode smoke
     *,
     config: EffectiveConfig,
     force: bool,
@@ -353,7 +353,7 @@ def _serve_no_daemon(
 
     Bit-for-bit equivalent to pre-Phase-5 ``engram serve``: acquire
     VaultLock directly, run the FastMCP stdio loop in-process, drain on
-    exit. The Phase 5 daemon entrypoint (``engram daemon start``) uses
+    exit. The daemon entrypoint (``engram daemon start``) uses
     :func:`_init_serve_runtime` directly with
     ``install_signal_handlers=False`` rather than this wrapper, because
     it owns its own signal handling.
@@ -377,8 +377,14 @@ def _serve_no_daemon(
         runtime.teardown()
 
 
-def _run_proxy(config: EffectiveConfig) -> int:
-    """Proxy mode: connect to (or spawn) the per-vault daemon and shuffle bytes."""
+def _run_proxy(config: EffectiveConfig) -> int:  # pragma: no cover - exercised by smoke
+    """Proxy mode: connect to (or spawn) the per-vault daemon and shuffle bytes.
+
+    Exercised end-to-end by the hermetic CLI smoke (which spawns the
+    installed binary in a subprocess); the proxy loop wraps real
+    stdin/stdout pipes and forks for the daemon spawn dance, neither
+    of which is hermetic in a pytest worker.
+    """
     from engram.daemon.client import DaemonClient
     from engram.errors import DaemonNotRunningError
 
@@ -445,17 +451,17 @@ def register(app: typer.Typer) -> None:
             False,
             "--no-daemon",
             help=(
-                "Run single-process serve (the pre-Phase-5 stdio path). "
-                "Default is proxy mode: auto-spawn a per-vault daemon and "
-                "shuffle bytes between stdin/stdout and the daemon's UDS."
+                "Run single-process serve (legacy stdio path). Default "
+                "is proxy mode: auto-spawn a per-vault daemon and shuffle "
+                "bytes between stdin/stdout and the daemon's UDS."
             ),
         ),
     ) -> None:
         """Start the engram MCP server (proxy mode by default).
 
-        Pass ``--no-daemon`` to run today's single-process stdio path
-        directly. The default proxy mode spawns a per-vault daemon (or
-        attaches to a running one) so N concurrent Claude sessions can
+        Pass ``--no-daemon`` to run the legacy single-process stdio
+        path directly. The default proxy mode spawns a per-vault daemon
+        (or attaches to a running one) so N concurrent Claude sessions can
         share the same vault.
         """
         try:

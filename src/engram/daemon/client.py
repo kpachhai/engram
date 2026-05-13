@@ -10,8 +10,9 @@ the proxy retries 3 times with exponential backoff + jitter
 (``1s + jitter``, ``4s + jitter``, ``16s + jitter``) before surfacing an
 MCP-level error to Claude.
 
-Spec: ``2026-05-12-engram-daemon-mode-design.md`` Sections 5.2 + 5.6 +
-Amendment 4 (WAL recovery grace folded into spawn timeout).
+When the WAL file at spawn time exceeds 10 MiB, the proxy extends
+the spawn timeout by ``wal_recovery_grace_seconds`` to give the
+daemon room to replay before binding.
 """
 
 from __future__ import annotations
@@ -100,12 +101,17 @@ class DaemonClient:
 
     # -- top-level proxy entry ----------------------------------------
 
-    async def run_proxy_loop(self) -> int:
+    async def run_proxy_loop(self) -> int:  # pragma: no cover - real stdio + fork
         """Connect (spawn if needed) and shuffle bytes until either side closes.
 
         Returns 0 on a clean shutdown initiated by the proxy's stdin
         (Claude closed) or by the daemon's UDS write side. The caller's
         ``engram serve`` exit code is this return value.
+
+        Coverage note: this top-level orchestration is exercised by the
+        hermetic CLI smoke (which spawns the binary in a subprocess);
+        unit tests exercise each of the helpers below directly with
+        injected streams and a mock spawn callable.
         """
         reader, writer = await self._connect_with_spawn_if_missing()
         try:
@@ -272,7 +278,7 @@ async def _try_connect(
     return reader, writer
 
 
-async def _spawn_daemon_process(
+async def _spawn_daemon_process(  # pragma: no cover - forks the process; smoke-covered
     *,
     vault_path: Path,
     spawn_timeout_seconds: int,
@@ -282,14 +288,17 @@ async def _spawn_daemon_process(
 
     Single-fork: the child execs ``engram daemon start --vault-path
     <path> --readiness-fd <wfd>``. The child performs its own
-    double-fork detach inside that subcommand (Layer F wires the
-    detach). The parent (the proxy) reads the readiness pipe and
-    surfaces error or success.
+    double-fork detach inside that subcommand. The parent (the proxy)
+    reads the readiness pipe and surfaces error or success.
 
     Effective timeout is ``spawn_timeout_seconds`` plus
-    ``wal_recovery_grace_seconds`` (Amendment 4) when the WAL file at
-    spawn time exceeds 10 MiB — the daemon may need extra time to
-    replay before binding.
+    ``wal_recovery_grace_seconds`` when the WAL file at spawn time
+    exceeds 10 MiB — the daemon may need extra time to replay before
+    binding.
+
+    Coverage note: ``os.fork()`` inside a pytest worker would clone
+    the test runner. End-to-end behavior is exercised by the hermetic
+    CLI smoke that spawns the binary in a subprocess.
     """
     rfd, wfd = os.pipe()
     try:
@@ -353,8 +362,15 @@ async def _spawn_daemon_process(
         raise DaemonSpawnError(msg)
 
 
-async def _wrap_stdin() -> asyncio.StreamReader:
-    """Wrap ``sys.stdin`` as an :class:`asyncio.StreamReader`."""
+async def _wrap_stdin() -> asyncio.StreamReader:  # pragma: no cover - real stdin pipe required
+    """Wrap ``sys.stdin`` as an :class:`asyncio.StreamReader`.
+
+    Requires a real pipe-shaped stdin (Claude Code MCP invocation pipes
+    stdin/stdout); pytest workers have a TTY-shaped stdin which fails
+    ``connect_read_pipe`` with ``OSError: Invalid argument``. Tests
+    inject a pre-seeded ``StreamReader`` via the ``DaemonClient``
+    constructor instead.
+    """
     loop = asyncio.get_running_loop()
     reader = asyncio.StreamReader()
     protocol = asyncio.StreamReaderProtocol(reader)
@@ -362,8 +378,12 @@ async def _wrap_stdin() -> asyncio.StreamReader:
     return reader
 
 
-async def _wrap_stdout() -> asyncio.StreamWriter:
-    """Wrap ``sys.stdout`` as an :class:`asyncio.StreamWriter`."""
+async def _wrap_stdout() -> asyncio.StreamWriter:  # pragma: no cover - real stdout pipe required
+    """Wrap ``sys.stdout`` as an :class:`asyncio.StreamWriter`.
+
+    Same pytest-worker stdio limitation as :func:`_wrap_stdin`. Tests
+    inject a writer through the ``DaemonClient`` constructor.
+    """
     loop = asyncio.get_running_loop()
     reader = asyncio.StreamReader()
     protocol = asyncio.StreamReaderProtocol(reader)

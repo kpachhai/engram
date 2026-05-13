@@ -1,10 +1,9 @@
-"""Shared fixtures for Phase 5 daemon integration tests.
+"""Shared fixtures for daemon integration tests.
 
 The integration tests construct a real :class:`DaemonServer` with a
-:class:`ServeRuntime` built from real :class:`VaultStorage` + a
-:class:`_FakeEmbedder` (mirrors engram's existing pattern in
-``tests/cli/test_phase3_serve_startup.py``). The daemon and any proxy
-connections share one asyncio event loop owned by ``pytest-asyncio``.
+:class:`ServeRuntime` built from real :class:`VaultStorage` plus a
+hermetic :class:`FakeEmbedder`. The daemon and any proxy connections
+share one asyncio event loop owned by ``pytest-asyncio``.
 """
 
 from __future__ import annotations

@@ -2,16 +2,13 @@
 
 The full process-killing crash recovery (SIGKILL daemon mid-capture,
 proxy retries with backoff, replays in-flight request) requires real
-subprocess control and is part of the operational dogfood criterion
-(spec Section 17.4). Here we cover the unit-level invariants that
-make the recovery path safe:
+subprocess control and is part of operational dogfood. Here we cover
+the unit-level invariants that make the recovery path safe:
 
 - Capture replay is idempotent: re-running the same capture against
   the same vault returns the same thought_id (storage-level dedup).
-- Spawn dance unlinks stale socket file before bind (already covered
-  by the DaemonServer ``serve_forever`` step ordering — Layer C).
-
-Spec: ``2026-05-12-engram-daemon-mode-design.md`` Section 5.6.
+- Spawn dance unlinks stale socket file before bind (covered by the
+  DaemonServer ``serve_forever`` step ordering).
 """
 
 from __future__ import annotations

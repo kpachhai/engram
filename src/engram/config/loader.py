@@ -316,7 +316,7 @@ def load_config(
             routing_rules=routing_rules,
             log_level=log_level,
             log_format=log_format,
-            # Phase 5: per-vault daemon settings flow through VaultConfig
+            # Per-vault daemon settings flow through VaultConfig
             # (the 5-layer merge already populated it from the per-vault YAML).
             daemon=vault_config.daemon,
         )

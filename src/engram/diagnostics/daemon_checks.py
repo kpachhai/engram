@@ -1,15 +1,12 @@
-"""Daemon-mode doctor checks (Phase 5).
+"""Daemon-mode doctor checks.
 
 Each ``check_*`` function inspects a vault's daemon-mode artifacts
 (``engram.sock``, ``engram.state.json``, ``engram.log``) and returns
 exactly one :class:`DaemonDoctorRow` so ``engram doctor`` can fold
 the rows into its output.
 
-Per CLAUDE.md, this module is named without ``Phase N`` framing
-(critique B3); the codes themselves live in ``check_codes.py``.
-
-Spec: ``2026-05-12-engram-daemon-mode-design.md`` Section 13.2 +
-Amendment 5.
+The check codes themselves are declared in
+:mod:`engram.diagnostics.check_codes`.
 """
 
 from __future__ import annotations
@@ -61,8 +58,8 @@ def check_daemon_running(vault_path: Path) -> DaemonDoctorRow:
 
     The check is best-effort: it tries a non-blocking UDS connect.
     Failure to connect (file missing, refused, timeout) is reported
-    as ``INFO not-running`` — not-running is a normal state per
-    Amendment 7.
+    as ``INFO not-running`` — not-running is a normal state, not an
+    error.
     """
     paths = resolve_paths(vault_path)
     if not paths.socket.exists():

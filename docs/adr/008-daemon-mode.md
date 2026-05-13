@@ -20,13 +20,13 @@ vault: the second session's ``engram serve`` invocation fails with
 vaults, ``--force`` lock takeover that drops the first session, or
 falling back to an external memory service).
 
-The friction was captured on 2026-05-12 and resolved in Phase 5 by
-introducing a per-vault daemon process. ``engram serve`` becomes a
-thin proxy that auto-spawns the daemon on first invocation and
-attaches as one of N concurrent clients. The MCP wire format observed
-by Claude Code is unchanged, so existing MCP configurations need no
-edits. The implementation lives in ``src/engram/daemon/`` (subpackage
-introduced in this Phase) and ``src/engram/cli/daemon.py`` (new typer
+The friction was captured on 2026-05-12 and resolved by introducing
+a per-vault daemon process. ``engram serve`` becomes a thin proxy
+that auto-spawns the daemon on first invocation and attaches as one
+of N concurrent clients. The MCP wire format observed by Claude Code
+is unchanged, so existing MCP configurations need no edits. The
+implementation lives in ``src/engram/daemon/`` and
+``src/engram/cli/daemon.py`` (new typer
 subcommand group).
 
 Three constraints shape the design:
@@ -91,7 +91,7 @@ scheme, an auth-token rotation story (you can't trust ``127.0.0.1``
 on multi-user hosts), and a TLS-or-not decision. UDS sidesteps every
 one of those questions.
 
-### D4. Amendment 1 startup ordering contract
+### D4. Daemon startup ordering contract
 
 The forked daemon child runs an exact 12-step startup dance:
 install signal handlers, acquire ``VaultLock``, run probes, detect
@@ -107,7 +107,7 @@ recovery is part of the spawn. ``state.json`` after bind: status
 readers can trust the file when it exists. ``ready`` last: the
 proxy attaches only when everything is ready.
 
-### D5. Amendment 2 + 3 graceful shutdown
+### D5. Graceful shutdown drain + two-phase idle shutdown
 
 Shutdown drains in a fixed order with explicit budgets: close
 listener, wait for in-flight tasks (``shutdown_drain_seconds``),
@@ -133,8 +133,9 @@ future fastmcp release moves or renames the attribute.
 The contract is **upstream-MCP-canonical, not fastmcp-bespoke** — the
 stream + ``SessionMessage`` + ``LowLevelServer.run`` pattern is owned
 by the upstream ``mcp`` SDK, much more stable than fastmcp-side
-renames. Confidence rated MEDIUM in
-``docs/PHASE_5_FASTMCP_AUDIT.md``.
+renames. The historical FastMCP audit (archived under
+``docs/archive/phases/``) rates confidence as MEDIUM for this
+reason; the compat shim + smoke test bound the blast radius.
 
 ## Alternatives considered
 
@@ -154,7 +155,7 @@ strictly stronger same-UID guarantees with no port hygiene story.
 ### A3. Hybrid: keep the existing ``--no-daemon`` path AND offer
 daemon mode behind an opt-in flag
 
-Rejected as default. The whole point of Phase 5 is to make N
+Rejected as default. The whole point of this work is to make N
 concurrent sessions Just Work for the maintainer's own dogfood.
 Opt-in daemon mode would have left the friction in place for the
 common path. ``--no-daemon`` is preserved as an escape hatch for
@@ -173,7 +174,7 @@ using the documented ``LowLevelServer.run`` contract.
 ### Positive
 
 - N concurrent Claude Code sessions can attach to the same vault
-  simultaneously. The friction that motivated Phase 5 is closed.
+  simultaneously. The friction that motivated this work is closed.
 - The MCP wire format is unchanged. No client config edits needed.
 - Idle daemon auto-shuts down after configurable timeout (default
   60 min) so unused vaults don't keep a Python process alive
@@ -206,13 +207,13 @@ using the documented ``LowLevelServer.run`` contract.
 
 ## Pinned-invariant analysis
 
-| # | Invariant | Status after Phase 5 |
+| # | Invariant | Status after daemon mode |
 |---|---|---|
 | 1 | Per-thought portability gate at the storage facade | Preserved — the daemon owns the single ``VaultStorage`` for the vault; the gate fires there as before. |
 | 2 | Markdown SoT is canonical | Preserved — daemon writes to the same ``thoughts/<prefix>/...`` tree. |
 | 3 | One writer per vault | Preserved AND strengthened — ``VaultLock`` is now held by a long-lived daemon, not a short-lived ``serve`` per session. |
 | 4 | Two-layer enforcement at security boundaries | Preserved AND extended — UDS filesystem perms (0o600 + owner dir) combine with ``SO_PEERCRED`` / ``getpeereid`` per connection. |
-| 5 | Sync coordinator drains on shutdown | Preserved — Amendment 2 makes the drain explicit with its own budget (``coordinator_flush_seconds``). |
+| 5 | Sync coordinator drains on shutdown | Preserved — the drain contract is explicit with its own budget (``coordinator_flush_seconds``). |
 | 6 | MCP wire format stable for v1.x | Preserved — daemon dispatches via the upstream MCP ``LowLevelServer`` so the bytes Claude observes are identical to v0.4.x output. |
 | 7 | At-most-one-primary per user | Preserved — the daemon for a primary vault mounts read-only extras via the unchanged Phase 3 path. |
 

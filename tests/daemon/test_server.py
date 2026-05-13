@@ -1,12 +1,9 @@
 """DaemonServer accept loop + idle shutdown + drain.
 
-Spec: ``2026-05-12-engram-daemon-mode-design.md`` Sections 5 + 8 +
-Amendments 1, 2, 3, 6.
-
-Scope per critique B5: Layer C unit tests live here. The full
-MCP-handshake-against-real-FastMCP smoke is a Layer G concern and is
-deferred to ``tests/test_phase4_cli_smoke.py`` (Layer G adds the
-``engram serve`` proxy-mode smokes).
+Unit-test scope only. The full MCP-handshake-against-real-FastMCP
+roundtrip is covered by the integration tests in
+``tests/integration/test_daemon_multi_proxy.py`` and the hermetic CLI
+smoke in ``tests/test_phase5_cli_smoke.py``.
 """
 
 from __future__ import annotations

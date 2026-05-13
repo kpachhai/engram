@@ -1,8 +1,4 @@
-"""Log rotation policy.
-
-Spec: ``2026-05-12-engram-daemon-mode-design.md`` Section 13.3 +
-Amendment 8.
-"""
+"""Log rotation policy."""
 
 from __future__ import annotations
 

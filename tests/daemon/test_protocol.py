@@ -1,13 +1,9 @@
 """Newline-delimited JSON-RPC framing helpers.
 
-Spec: ``2026-05-12-engram-daemon-mode-design.md`` Section 6.2 + Amendment 6.
-
-The plan's original fixture used ``socket.socketpair()`` plus
-``loop.connect_accepted_socket`` which is flaky across pytest event-loop
-fixtures. We follow the plan's noted fallback path and drive the reader
-directly via :meth:`asyncio.StreamReader.feed_data` + ``feed_eof`` — this
-exercises exactly the same code path that the daemon's accept loop will
-use, but without any socket plumbing.
+These tests drive the reader directly via
+:meth:`asyncio.StreamReader.feed_data` + ``feed_eof`` — this exercises
+exactly the same code path that the daemon's accept loop uses, without
+any socket plumbing.
 """
 
 from __future__ import annotations

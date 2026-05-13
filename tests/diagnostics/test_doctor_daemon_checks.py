@@ -1,8 +1,4 @@
-"""Daemon-mode doctor checks.
-
-Spec: ``2026-05-12-engram-daemon-mode-design.md`` Section 13.2 +
-Amendment 5.
-"""
+"""Daemon-mode doctor checks."""
 
 from __future__ import annotations
 

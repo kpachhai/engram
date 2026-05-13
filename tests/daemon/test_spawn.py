@@ -1,12 +1,9 @@
 """Spawn-lock acquisition + readiness pipe.
 
-Spec: ``2026-05-12-engram-daemon-mode-design.md`` Section 5.2 step 4 +
-Amendment 1 (daemon startup ordering).
-
 ``double_fork_detach`` is exercised at the daemon process boundary
-(Layer C hermetic CLI smoke); spawn-time forks inside the test process
-would orphan PIDs into the pytest runner, so we cover that behavior at
-the Layer G smoke level rather than here.
+(hermetic CLI smoke); spawn-time forks inside the test process would
+orphan PIDs into the pytest runner, so we cover that behavior at the
+subprocess smoke level rather than here.
 """
 
 from __future__ import annotations

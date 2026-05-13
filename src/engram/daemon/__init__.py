@@ -1,12 +1,26 @@
-"""engram daemon mode (Phase 5).
+"""engram daemon-mode subpackage.
 
-Spec: ``docs/superpowers/specs/2026-05-12-engram-daemon-mode-design.md``.
-Plan: ``docs/PHASE_5_PLAN.md``.
+The daemon listens on a per-vault Unix Domain Socket and accepts N
+concurrent ``engram serve`` proxy connections sharing one vault. This
+subpackage holds:
 
-This subpackage hosts the daemon server (Layer C), proxy client (Layer D),
-spawn-lock + readiness-pipe helpers (Layer B), per-vault path resolution
-(Layer A), and the UDS framing protocol (Layer B). Today (Layer A only),
-only ``socket_paths`` is populated.
+- :mod:`engram.daemon.server` — accept loop, per-connection task,
+  idle-shutdown timer, graceful drain.
+- :mod:`engram.daemon.client` — proxy process: stdio ↔ UDS byte
+  shuffler with auto-spawn-on-miss + reconnect backoff.
+- :mod:`engram.daemon.spawn` — spawn-lock + readiness-pipe + double-fork.
+- :mod:`engram.daemon.protocol` — newline-delimited JSON-RPC framing.
+- :mod:`engram.daemon.auth` — ``SO_PEERCRED`` / ``getpeereid``
+  same-UID check.
+- :mod:`engram.daemon.socket_paths` — per-vault path resolution with
+  macOS UDS ``sun_path`` limit enforcement.
+- :mod:`engram.daemon.state` — daemon state file (PID + hostname +
+  config snapshot).
+- :mod:`engram.daemon.log_rotation` — rotating handler with 0o600
+  perms + retention sweep.
+
+See ``docs/DAEMON_MODE.md`` for the operator guide and
+``docs/adr/008-daemon-mode.md`` for the design rationale.
 """
 
 from __future__ import annotations

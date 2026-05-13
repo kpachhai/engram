@@ -1,6 +1,4 @@
-"""Hermetic CLI smoke for Phase 5 (``engram daemon`` + ``engram serve --no-daemon``).
-
-Spec: ``2026-05-12-engram-daemon-mode-design.md`` Section 14.5.
+"""Hermetic CLI smoke for ``engram daemon`` + ``engram serve --no-daemon``.
 
 Each test spawns the installed ``engram`` binary via subprocess and
 asserts observable state (filesystem layout, exit codes, stdout
@@ -8,12 +6,11 @@ contents). Per the engram CLAUDE.md "test the binary, not just the
 suite" discipline.
 
 The full proxy-mode round-trip (proxy spawns daemon, sends MCP
-initialize, gets response) is gated by the operational dogfood
-criterion (spec Section 17.4) because it requires real FastEmbed
-model loading per spawn — ~2 s x every smoke would balloon test
-wall-clock. The CLI-shape smokes below verify wiring; the
-unit/integration tests in tests/daemon/ + tests/integration/
-verify the per-connection dispatch contract.
+initialize, gets response) is gated by operational dogfood because
+it requires real FastEmbed model loading per spawn — ~2 s x every
+smoke would balloon test wall-clock. The CLI-shape smokes below
+verify wiring; the unit/integration tests in ``tests/daemon/`` +
+``tests/integration/`` verify the per-connection dispatch contract.
 """
 
 from __future__ import annotations

@@ -1,13 +1,15 @@
-"""Spawn-lock acquisition + double-fork daemon detach + readiness pipe.
+r"""Spawn-lock acquisition + double-fork daemon detach + readiness pipe.
 
 The spawn-lock (separate from :class:`engram.utils.lock.VaultLock`)
 serializes concurrent ``engram serve`` invocations attempting to spawn
 a daemon for the same vault. It is held briefly — only for the duration
 of the fork + wait-for-ready dance.
 
-Spec: ``2026-05-12-engram-daemon-mode-design.md`` Section 5.2 step 4 +
-Amendment 1 (startup ordering: signal-handlers BEFORE VaultLock BEFORE
-unlink BEFORE bind BEFORE ready).
+Startup ordering inside the daemon child is rigid: signal handlers
+are installed BEFORE ``VaultLock`` acquisition, the stale-socket
+``unlink`` happens BEFORE ``bind``, the state file is written AFTER
+``bind``, and ``ready\n`` is the very last step so the proxy only
+attaches once everything is in place.
 """
 
 from __future__ import annotations
@@ -149,16 +151,15 @@ async def wait_for_ready(
     raise DaemonSpawnError(msg)
 
 
-def double_fork_detach() -> None:
+def double_fork_detach() -> None:  # pragma: no cover - forks the process; smoke-covered
     """Standard Unix double-fork detach.
 
     The caller is the parent before invoking; on return the caller is
     the grandchild process with no controlling terminal. Stdin/stdout/
     stderr are redirected to ``/dev/null`` so the daemon does not write
-    to the proxy's stdio.
-
-    Layer C wires this into the daemon-spawn helper; Layer G smoke
-    exercises the full fork dance against the installed binary.
+    to the proxy's stdio. Exercised end-to-end by the hermetic CLI
+    smokes (``engram daemon start --detach``) — unit tests cannot fork
+    inside the pytest worker.
     """
     if os.fork() != 0:
         os._exit(0)

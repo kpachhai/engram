@@ -116,7 +116,7 @@ Full walkthrough with diagrams: **[docs/ARCHITECTURE.md](docs/ARCHITECTURE.md)**
 - [FRIEND_SHARE_GUIDE.md](docs/FRIEND_SHARE_GUIDE.md) — bundle export/import flow
 - [TEAM_BRAIN_GUIDE.md](docs/TEAM_BRAIN_GUIDE.md) — shared team vault setup + policy + revocation
 - [LLM_FEATURES.md](docs/LLM_FEATURES.md) — optional LLM-mediated tools
-- [DAEMON_MODE.md](docs/DAEMON_MODE.md) — Phase 5 daemon mode: multi-session support, operator + migration guide (v0.5.0+)
+- [DAEMON_MODE.md](docs/DAEMON_MODE.md) — daemon mode: multi-session support, operator + migration guide (v0.5.0+)
 
 **Design rationale:**
 - [docs/adr/](docs/adr/) — Architecture Decision Records (one per major design choice)

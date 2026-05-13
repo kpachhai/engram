@@ -10,10 +10,8 @@ session. FastMCP itself only exposes loop-owning entrypoints
 This shim is the single point that touches the underscore-prefixed
 ``_mcp_server`` attribute. A future fastmcp bump that renames the
 attribute or changes ``LowLevelServer.run``'s signature breaks here
-loudly (Layer G adds a dispatch-isolation smoke against the contract).
-
-Spec: ``docs/PHASE_5_FASTMCP_AUDIT.md`` (the audit doc) +
-``2026-05-12-engram-daemon-mode-design.md`` Section 12.1, Audit 2.
+loudly; ``tests/daemon/test_dispatch_isolation.py`` asserts the
+expected contract so the failure mode points directly at this file.
 """
 
 from __future__ import annotations
@@ -49,14 +47,14 @@ def get_low_level_server(fastmcp_server: FastMCP[Any]) -> LowLevelServer:
     if not isinstance(inner, LowLevelServer):
         msg = (
             "fastmcp_server._mcp_server is not a LowLevelServer — fastmcp may "
-            "have changed its internal API. See docs/PHASE_5_FASTMCP_AUDIT.md "
-            "for the upgrade procedure."
+            "have changed its internal API. See docs/adr/008-daemon-mode.md "
+            "(decision D6) for the upgrade procedure."
         )
         raise TypeError(msg)
     return inner
 
 
-async def serve_session(
+async def serve_session(  # pragma: no cover - exercised by integration tests
     fastmcp_server: FastMCP[Any],
     *,
     uds_reader: asyncio.StreamReader,

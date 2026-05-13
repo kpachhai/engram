@@ -6,8 +6,6 @@ confusion (the daemon writes the hostname so a stale state file from a
 different machine surfaces as a doctor row rather than silently
 reattaching).
 
-Spec: ``2026-05-12-engram-daemon-mode-design.md`` Section 12.1 +
-Amendment 1.
 """
 
 from __future__ import annotations
@@ -40,8 +38,7 @@ def write_state(path: Path, state: DaemonState) -> None:
     """Atomically write the state file.
 
     :func:`engram.utils.atomic_write.atomic_write_text` enforces mode
-    ``0o600`` internally; no explicit mode kwarg is passed (closes
-    critique B1).
+    ``0o600`` internally; no explicit mode kwarg is required.
     """
     path.parent.mkdir(parents=True, exist_ok=True)
     payload = json.dumps(asdict(state), separators=(",", ":"))

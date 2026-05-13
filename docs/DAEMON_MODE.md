@@ -1,4 +1,4 @@
-# engram Daemon Mode (Phase 5)
+# engram Daemon Mode
 
 Daemon mode lets **N concurrent Claude Code sessions** attach to the
 same engram vault simultaneously. It is the default in v0.5.0 and
@@ -228,8 +228,8 @@ engram daemon stop --force
 ```
 
 SIGKILLs after the timeout. Use this only when a graceful stop has
-already failed; the daemon's drain contract (Amendment 2 in the
-design spec) handles in-flight git pushes correctly under SIGTERM.
+already failed; the daemon's drain contract (see ``docs/adr/008-daemon-mode.md``)
+handles in-flight git pushes correctly under SIGTERM.
 
 ---
 
@@ -362,10 +362,10 @@ existing ``LockError`` message; stop the daemon first.
 
 ---
 
-## Spec + ADR references
+## See also
 
-- Design spec: ``docs/superpowers/specs/2026-05-12-engram-daemon-mode-design.md``
-  (local working artifact; gitignored under ``docs/superpowers/``)
-- ADR: ``docs/adr/008-daemon-mode.md``
-- FastMCP audit (Layer C dispatch decision): ``docs/PHASE_5_FASTMCP_AUDIT.md``
-- Plan: ``docs/PHASE_5_PLAN.md``
+- **Design rationale**: ``docs/adr/008-daemon-mode.md`` (per-vault
+  topology, auto-spawn, UDS, FastMCP dispatch trade-offs).
+- **Historical plan + audits** (archived for posterity, not user-facing):
+  ``docs/archive/phases/`` (the design spec, FastMCP audit, baseline
+  test snapshot, and 8-layer execution plan).

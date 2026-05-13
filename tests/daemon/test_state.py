@@ -1,7 +1,4 @@
-"""Daemon state file at ``<vault>/.indexes/engram.state.json``.
-
-Spec: ``2026-05-12-engram-daemon-mode-design.md`` Section 12.1 + Amendment 1.
-"""
+"""Daemon state file at ``<vault>/.indexes/engram.state.json``."""
 
 from __future__ import annotations
 

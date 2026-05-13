@@ -67,10 +67,9 @@ class VaultLock:
                 has confirmed no other engram serve is running for this vault.
             install_signal_handlers: If ``True`` (default), VaultLock installs
                 its own SIGTERM/SIGINT handler that releases the lock on
-                signal. The daemon (Phase 5 Layer C) passes ``False`` so it
-                can own its own signal handler that drains the coordinator
-                + closes storage + releases the lock in the correct order
-                (spec Amendment 1).
+                signal. The daemon passes ``False`` so it can own its
+                own signal handler that drains the coordinator, closes
+                storage, and releases the lock in the correct order.
         """
         self.vault_path = Path(vault_path)
         self.lock_path = self.vault_path / _INDEXES_SUBDIR / _LOCK_FILENAME

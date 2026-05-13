@@ -1,13 +1,10 @@
 """FastMCP per-connection dispatch isolation contract.
 
-Spec: ``docs/PHASE_5_FASTMCP_AUDIT.md`` + ``2026-05-12-engram-daemon-mode-design.md``
-Amendment 11.
-
 These tests bound the blast radius of a future fastmcp version bump
 that renames ``FastMCP._mcp_server`` or changes ``LowLevelServer.run``'s
 signature. They are deliberately tightly scoped at the compat-shim
 boundary so the failure mode points directly to the contract that
-broke.
+broke. See ``docs/adr/008-daemon-mode.md`` for the design rationale.
 """
 
 from __future__ import annotations
@@ -25,8 +22,8 @@ def test_low_level_server_run_signature_stable() -> None:
 
     A breaking change here means the daemon's per-connection dispatch
     shim needs an update. The fix lives in ``daemon/fastmcp_dispatch.py``
-    and ``docs/PHASE_5_FASTMCP_AUDIT.md`` documents the upgrade
-    procedure.
+    and ``docs/adr/008-daemon-mode.md`` (decision D6) documents the
+    upgrade procedure.
     """
     sig = inspect.signature(LowLevelServer.run)
     params = list(sig.parameters)
@@ -52,7 +49,7 @@ def test_get_low_level_server_raises_on_missing_attr() -> None:
     with pytest.raises(TypeError) as exc_info:
         get_low_level_server(_FakeFastMCP())  # type: ignore[arg-type]
     assert "_mcp_server" in str(exc_info.value)
-    assert "PHASE_5_FASTMCP_AUDIT" in str(exc_info.value)
+    assert "adr/008-daemon-mode" in str(exc_info.value)
 
 
 def test_get_low_level_server_raises_on_wrong_type() -> None:

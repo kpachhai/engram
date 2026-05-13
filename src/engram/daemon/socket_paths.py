@@ -11,7 +11,7 @@ under ``<vault>/.indexes/``:
 The resolver enforces the macOS UDS path-length limit (104 bytes for
 ``sun_path``; Linux is 108) at resolve time so callers fail fast with a
 clear remediation hint rather than at ``bind()`` time with a confusing
-``OSError``. Spec Amendment 5 + Section 12.1.
+``OSError``.
 """
 
 from __future__ import annotations

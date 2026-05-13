@@ -1,7 +1,5 @@
 """Multi-proxy integration: concurrent UDS connections + MCP initialize handshakes.
 
-Spec: ``2026-05-12-engram-daemon-mode-design.md`` Sections 4 + 6 + 8.
-
 These tests bypass DaemonClient and drive the UDS directly so the
 assertion surface is on the daemon's per-connection dispatch (the
 fastmcp_dispatch shim). DaemonClient is exercised in
@@ -89,7 +87,7 @@ async def test_two_concurrent_proxies_distinct_ids_no_crosstalk(
 ) -> None:
     """Two concurrent connections: each gets the response for its own id.
 
-    Closes deep-plan M4 — a future fastmcp bump that causes response
+    Bounds the blast radius of a future fastmcp bump that causes response
     cross-talk would fail this assertion loudly.
     """
     _daemon, paths = running_daemon

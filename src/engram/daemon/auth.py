@@ -53,12 +53,12 @@ def peer_credentials(fd: int) -> PeerCred:
     for the combined fetch + check.
     """
     platform = sys.platform
-    if platform.startswith("linux"):
+    if platform.startswith("linux"):  # pragma: no cover - Linux-only path
         data = _getsockopt(fd, socket.SOL_SOCKET, _SO_PEERCRED_LINUX, _UCRED_SIZE)
         pid, uid, gid = struct.unpack(_UCRED_FMT, data)
         return PeerCred(pid=pid, uid=uid, gid=gid)
 
-    if platform == "darwin":
+    if platform == "darwin":  # pragma: no cover - macOS-only path
         libc = ctypes.CDLL("libc.dylib", use_errno=True)
         c_uid = ctypes.c_uint32()
         c_gid = ctypes.c_uint32()
@@ -69,8 +69,8 @@ def peer_credentials(fd: int) -> PeerCred:
             raise OSError(errno, msg)
         return PeerCred(pid=0, uid=c_uid.value, gid=c_gid.value)
 
-    msg = f"peer_credentials not supported on platform {platform}"
-    raise NotImplementedError(msg)
+    msg = f"peer_credentials not supported on platform {platform}"  # pragma: no cover
+    raise NotImplementedError(msg)  # pragma: no cover
 
 
 def check_peer_or_reject(fd: int) -> PeerCred:
@@ -92,7 +92,9 @@ def _getsockopt(fd: int, level: int, opt: int, size: int) -> bytes:
 
     :func:`socket.fromfd` duplicates ``fd``; we own + close the dup; the
     original fd (typically the daemon's accept-loop socket) is left
-    untouched. Closes deep-plan critique S4.
+    untouched. The dup-and-close pattern guards against accidentally
+    closing the daemon's own listening socket from inside an asyncio
+    accept callback.
     """
     dup_sock = socket.fromfd(fd, socket.AF_UNIX, socket.SOCK_STREAM)
     try:

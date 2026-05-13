@@ -298,7 +298,7 @@ class PushQueuePersistenceFailed(EngramError):
     error_code: str = "push_queue_persistence_failed"
 
 
-# Daemon-mode errors (Phase 5) ----------------------------------------------
+# Daemon-mode errors --------------------------------------------------------
 
 
 class DaemonError(EngramError):
