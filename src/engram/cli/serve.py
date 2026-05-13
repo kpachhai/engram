@@ -152,8 +152,17 @@ def _build_multivault_server_for(
             set_setting(extra.conn, "embedding_model_name", config.embedding_model)
             set_setting(extra.conn, "embedding_dim", str(embedder.dimension))  # type: ignore[attr-defined]
             registry.mount(name=mount.name, storage=extra, role=mount.role)
-        except Exception:
-            _log.exception("engram serve: could not mount %r", mount.name)
+        except Exception as exc:
+            hint = ""
+            if "primary vault is already mounted" in str(exc):
+                vault_config = vault_path / "engram.config.yaml"
+                if vault_config.exists():
+                    hint = (
+                        f" Hint: vault at {vault_path} has its own vault_name in "
+                        f"engram.config.yaml that likely differs from {mount.name!r}; "
+                        "run 'engram doctor' to detect the mismatch."
+                    )
+            _log.exception("engram serve: could not mount %r.%s", mount.name, hint)
             continue
 
     budget = LLMBudget.load_or_init(

@@ -75,8 +75,12 @@ READ_ONLY_VAULT_DECLARES_LLM: Final[str] = "read_only_vault_declares_llm"
 #: FAIL when a friend-imported (read-only) vault carries a portability=block
 #: thought; refuse to mount that vault.
 FRIEND_VAULT_BLOCK_THOUGHT_PRESENT: Final[str] = "friend_vault_block_thought_present"
+#: WARN when a user-config vault ``name:`` differs from the vault's own
+#: ``vault_name:`` in its ``engram.config.yaml``. The mismatch causes
+#: ``engram serve`` to attempt a second primary mount and log a VaultError.
+USER_CONFIG_VAULT_NAME_MISMATCH: Final[str] = "user_config_vault_name_mismatch"
 
-#: Canonical multi-vault superset; tests iterate this to assert all 22
+#: Canonical multi-vault superset; tests iterate this to assert all 23
 #: codes are unique non-empty snake_case strings.
 ALL_PHASE_3_CHECK_CODES: Final[tuple[str, ...]] = (
     *ALL_PHASE_2_CHECK_CODES,
@@ -88,6 +92,7 @@ ALL_PHASE_3_CHECK_CODES: Final[tuple[str, ...]] = (
     LLM_DAILY_COST_CAP_APPROACHED,
     READ_ONLY_VAULT_DECLARES_LLM,
     FRIEND_VAULT_BLOCK_THOUGHT_PRESENT,
+    USER_CONFIG_VAULT_NAME_MISMATCH,
 )
 
 
@@ -186,6 +191,7 @@ __all__ = [
     "READ_ONLY_VAULT_DECLARES_LLM",
     "ROUTING_RULE_PRIORITY_COLLISION",
     "SERVE_CONFIG_STALE",
+    "USER_CONFIG_VAULT_NAME_MISMATCH",
     "SIGNED_COMMITS_REQUIRED",
     "SUBMODULE_UNDER_VAULT",
     "SYNC_USER_IDENTITY_SET",

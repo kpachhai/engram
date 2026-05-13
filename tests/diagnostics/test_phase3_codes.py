@@ -1,6 +1,6 @@
 """Multi-vault doctor check-code constants.
 
-Asserts the 8 multi-vault codes exist, are unique non-empty snake_case
+Asserts the 9 multi-vault codes exist, are unique non-empty snake_case
 strings, and that ``ALL_PHASE_3_CHECK_CODES`` is a strict superset of
 ``ALL_PHASE_2_CHECK_CODES``.
 """
@@ -21,6 +21,7 @@ from engram.diagnostics.check_codes import (
     LLM_PROVIDER_REACHABLE,
     MULTIPLE_PRIMARY_VAULTS,
     READ_ONLY_VAULT_DECLARES_LLM,
+    USER_CONFIG_VAULT_NAME_MISMATCH,
     VAULT_PATH_COLLISION,
 )
 
@@ -33,6 +34,7 @@ _NEW_CODES = (
     LLM_DAILY_COST_CAP_APPROACHED,
     READ_ONLY_VAULT_DECLARES_LLM,
     FRIEND_VAULT_BLOCK_THOUGHT_PRESENT,
+    USER_CONFIG_VAULT_NAME_MISMATCH,
 )
 
 _SNAKE_CASE = re.compile(r"^[a-z][a-z0-9_]*$")
@@ -59,8 +61,8 @@ def test_phase_3_superset_includes_all_phase_2() -> None:
 
 
 def test_phase_3_superset_count() -> None:
-    """14 sync codes + 8 multi-vault codes = 22 total, all unique."""
-    assert len(ALL_PHASE_3_CHECK_CODES) == len(ALL_PHASE_2_CHECK_CODES) + 8
+    """14 sync codes + 9 multi-vault codes = 23 total, all unique."""
+    assert len(ALL_PHASE_3_CHECK_CODES) == len(ALL_PHASE_2_CHECK_CODES) + 9
     assert len(set(ALL_PHASE_3_CHECK_CODES)) == len(ALL_PHASE_3_CHECK_CODES)
 
 

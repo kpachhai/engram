@@ -13,6 +13,7 @@ from engram.diagnostics.check_codes import (
     LLM_PROVIDER_REACHABLE,
     MULTIPLE_PRIMARY_VAULTS,
     READ_ONLY_VAULT_DECLARES_LLM,
+    USER_CONFIG_VAULT_NAME_MISMATCH,
     VAULT_PATH_COLLISION,
 )
 from engram.diagnostics.doctor import CheckStatus, DoctorReport
@@ -24,6 +25,7 @@ from engram.diagnostics.phase3_checks import (
     check_llm_provider_reachable,
     check_multiple_primary_vaults,
     check_read_only_vault_declares_llm,
+    check_user_config_vault_name_mismatch,
     check_vault_path_collision,
     run_phase3_checks,
 )
@@ -75,6 +77,56 @@ def test_multiple_primary_pass_when_one_or_zero(tmp_path: Path) -> None:
 # Multiple primaries are now refused at the UserConfig level (Layer A
 # validator). The doctor check still exists as defense-in-depth in case
 # the validator changes; it's exercised via the Layer A validator instead.
+
+
+# === user_config_vault_name_mismatch ===
+
+
+def test_vault_name_mismatch_ok_when_names_match(tmp_path: Path) -> None:
+    vault_path = tmp_path / "my-vault"
+    vault_path.mkdir()
+    (vault_path / "engram.config.yaml").write_text("vault_name: my-vault\n")
+    user_config = UserConfig(
+        vaults=[VaultMount(name="my-vault", path=vault_path, role="primary")]
+    )
+    report = DoctorReport()
+    check_user_config_vault_name_mismatch(report, user_config)
+    assert _find_check(report, USER_CONFIG_VAULT_NAME_MISMATCH) == CheckStatus.OK.value
+
+
+def test_vault_name_mismatch_warn_when_names_differ(tmp_path: Path) -> None:
+    vault_path = tmp_path / "my-vault"
+    vault_path.mkdir()
+    (vault_path / "engram.config.yaml").write_text("vault_name: my-vault\n")
+    user_config = UserConfig(
+        vaults=[VaultMount(name="wrong-name", path=vault_path, role="primary")]
+    )
+    report = DoctorReport()
+    check_user_config_vault_name_mismatch(report, user_config)
+    result = _find_check(report, USER_CONFIG_VAULT_NAME_MISMATCH)
+    assert result == CheckStatus.WARN.value
+
+
+def test_vault_name_mismatch_ok_when_no_vault_config(tmp_path: Path) -> None:
+    vault_path = tmp_path / "my-vault"
+    vault_path.mkdir()
+    # No engram.config.yaml present - check skips this vault
+    user_config = UserConfig(
+        vaults=[VaultMount(name="any-name", path=vault_path, role="primary")]
+    )
+    report = DoctorReport()
+    check_user_config_vault_name_mismatch(report, user_config)
+    assert _find_check(report, USER_CONFIG_VAULT_NAME_MISMATCH) == CheckStatus.OK.value
+
+
+def test_vault_name_mismatch_ok_when_vault_path_missing(tmp_path: Path) -> None:
+    vault_path = tmp_path / "nonexistent"
+    user_config = UserConfig(
+        vaults=[VaultMount(name="any-name", path=vault_path, role="primary")]
+    )
+    report = DoctorReport()
+    check_user_config_vault_name_mismatch(report, user_config)
+    assert _find_check(report, USER_CONFIG_VAULT_NAME_MISMATCH) == CheckStatus.OK.value
 
 
 # === vault_path_collision ===

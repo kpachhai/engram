@@ -29,7 +29,8 @@ from __future__ import annotations
 
 import asyncio
 import logging
-from typing import TYPE_CHECKING
+from pathlib import Path
+from typing import TYPE_CHECKING, Any
 
 from engram.diagnostics.check_codes import (
     AGGREGATOR_MODE,
@@ -39,6 +40,7 @@ from engram.diagnostics.check_codes import (
     LLM_PROVIDER_REACHABLE,
     MULTIPLE_PRIMARY_VAULTS,
     READ_ONLY_VAULT_DECLARES_LLM,
+    USER_CONFIG_VAULT_NAME_MISMATCH,
     VAULT_PATH_COLLISION,
 )
 from engram.diagnostics.doctor import CheckStatus, DoctorReport
@@ -56,6 +58,74 @@ if TYPE_CHECKING:
     from engram.multivault.registry import VaultRegistry
 
 _log = logging.getLogger("engram.diagnostics.phase3_checks")
+
+_VAULT_CONFIG_FILENAME = "engram.config.yaml"
+
+
+def _read_vault_name_from_disk(vault_path: Path) -> str | None:
+    """Return vault_name from <vault>/engram.config.yaml, or None if absent/unreadable."""
+    config_path = vault_path / _VAULT_CONFIG_FILENAME
+    if not config_path.exists():
+        return None
+    try:
+        from ruamel.yaml import YAML
+
+        yaml = YAML(typ="safe", pure=True)
+        with config_path.open("r", encoding="utf-8") as fh:
+            data: Any = yaml.load(fh)
+        if isinstance(data, dict):
+            name = data.get("vault_name")
+            return str(name) if name else None
+    except Exception:
+        return None
+    return None
+
+
+def check_user_config_vault_name_mismatch(
+    report: DoctorReport,
+    user_config: UserConfig,
+) -> None:
+    """WARN when a user-config vault name differs from the vault's own vault_name.
+
+    When ``~/.config/engram/config.yaml`` lists a vault as ``name: X`` but the
+    vault's own ``engram.config.yaml`` declares ``vault_name: Y`` (X != Y),
+    ``engram serve`` mounts the vault once as Y (primary, from the vault-level
+    config) and then attempts to mount it again as X (primary, from the user
+    config). The second mount raises a VaultError; the mismatch is the root cause.
+
+    Fix: rename the ``name:`` entry in ``~/.config/engram/config.yaml`` to match
+    the vault's own ``vault_name``.
+    """
+    mismatches: list[str] = []
+    for mount in user_config.vaults:
+        vault_path = mount.path.expanduser().resolve()
+        if not vault_path.exists():
+            continue
+        on_disk_name = _read_vault_name_from_disk(vault_path)
+        if on_disk_name is None:
+            continue
+        if on_disk_name != mount.name:
+            mismatches.append(
+                f"user config name {mount.name!r} != vault's own vault_name "
+                f"{on_disk_name!r} at {vault_path}; "
+                f"rename to {on_disk_name!r} in ~/.config/engram/config.yaml"
+            )
+    if mismatches:
+        report.add(
+            USER_CONFIG_VAULT_NAME_MISMATCH,
+            CheckStatus.WARN,
+            (
+                f"{len(mismatches)} vault name mismatch(es); mismatched names "
+                "cause 'primary vault already mounted' VaultError on serve"
+            ),
+            detail="; ".join(mismatches),
+        )
+        return
+    report.add(
+        USER_CONFIG_VAULT_NAME_MISMATCH,
+        CheckStatus.OK,
+        "all user-config vault names match their vault-level engram.config.yaml",
+    )
 
 
 def check_multiple_primary_vaults(
@@ -322,11 +392,12 @@ def run_phase3_checks(
     per_vault_llm: dict[str, LLMConfig | None] | None = None,
     force_sequential: bool = False,
 ) -> None:
-    """Run all eight multi-vault checks against ``registry``.
+    """Run all nine multi-vault checks against ``registry``.
 
     Convenience for the doctor CLI command; tests typically call
     individual check functions to assert specific scenarios.
     """
+    check_user_config_vault_name_mismatch(report, user_config)
     check_multiple_primary_vaults(report, user_config)
     check_vault_path_collision(report, registry)
     check_embedding_model_mismatch_across_vaults(report, registry)
@@ -349,6 +420,7 @@ __all__ = [
     "check_llm_provider_reachable",
     "check_multiple_primary_vaults",
     "check_read_only_vault_declares_llm",
+    "check_user_config_vault_name_mismatch",
     "check_vault_path_collision",
     "run_phase3_checks",
 ]
