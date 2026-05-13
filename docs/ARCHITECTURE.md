@@ -236,7 +236,19 @@ without requiring any MCP config changes — the proxy IS still
   forks the daemon and waits for ``ready\n`` on a readiness pipe.
   After the last proxy disconnects, the daemon idles for
   ``daemon.idle_shutdown_seconds`` (default 60 min), then exits
-  cleanly. The next ``engram serve`` re-spawns it transparently.
+  cleanly. On shutdown, the daemon issues ``PRAGMA
+  wal_checkpoint(TRUNCATE)`` before closing the SQLite connection so
+  the WAL is fully flushed to the main database file; this prevents
+  stale WAL/SHM state from causing ``SQLITE_IOERR`` in the next
+  daemon startup. The next ``engram serve`` re-spawns it
+  transparently.
+- **Process group isolation.** After fork, the daemon calls
+  ``os.setsid()`` to place itself in a new session, detaching from
+  the proxy's process group. This ensures that SIGTERM sent to the
+  proxy's PGID (e.g. on Claude Code session close) does not reach the
+  daemon. File descriptors 1 and 2 are redirected to ``/dev/null``
+  after fork for the same reason — the inherited stdout would trigger
+  ``BrokenPipeError`` in the rich console handler once the proxy exits.
 - **``--no-daemon`` escape hatch.** ``engram serve --no-daemon``
   reverts to the legacy single-process stdio model for one-shot
   scripts, embedded use cases, or debugging.

@@ -100,6 +100,15 @@ FastMCP server, unlink any stale socket file, bind, ``chmod 0o600``,
 write ``engram.state.json`` with PID + hostname, write ``ready\n``
 to the readiness pipe, enter the accept loop.
 
+**Step 0 (process isolation, before step 1):** ``_attach_daemon_log_handler``
+calls ``os.setsid()`` to place the daemon in a new session and
+process group, then redirects fd 1 and fd 2 to ``/dev/null``. This
+ensures (a) SIGTERM sent to the spawning proxy's PGID (e.g. on Claude
+Code session close) does not propagate to the daemon, and (b) writes
+to the inherited stdout fd do not trigger ``BrokenPipeError`` in the
+rich console handler once the proxy exits. Both of these caused the
+daemon to die on every Claude Code restart before this fix.
+
 **Why this order.** Signal handlers before resources: SIGTERM
 during init still cleans up. ``VaultLock`` before bind: two racing
 spawners cannot both pass step 2. Unlink before bind: stale-socket

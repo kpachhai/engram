@@ -179,9 +179,26 @@ engram doctor
 
 You can skip the `--reinstall` step if `git diff HEAD@{1} HEAD -- pyproject.toml uv.lock` is empty (no dependency changes). Running it unconditionally is the "just run it" habit that avoids the "did pyproject.toml change? I forgot to check" failure mode.
 
-### What about the running engram serve process?
+### What about the running engram process?
 
-There isn't one — engram is a stdio MCP launched as a subprocess by your MCP client (Claude Code, etc.) on each session start, terminated when the client exits. No daemon to restart manually. New client session = new `engram serve` process = fresh code.
+In v0.5.0+, `engram serve` runs as a thin proxy that auto-spawns a
+per-vault **daemon** on first use. The daemon is a long-lived process
+that survives individual Claude Code session open/close cycles —
+subsequent sessions attach to the running daemon instantly rather than
+re-loading the embedding model each time.
+
+After a code update, the daemon does NOT automatically pick up the new
+binary. You need to restart it:
+
+```bash
+engram daemon stop   # graceful drain; waits for in-flight tool calls
+# The next `engram serve` (i.e. the next Claude Code session) auto-spawns
+# a fresh daemon from the updated binary.
+```
+
+The daemon auto-shuts-down after ``daemon.idle_shutdown_seconds``
+(default 60 min) with no attached sessions, so if you close all your
+Claude Code sessions the daemon will exit on its own within an hour.
 
 ### Schema migrations
 

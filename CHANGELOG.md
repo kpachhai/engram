@@ -58,6 +58,18 @@ first invocation. Existing MCP configurations need no edits.
   output, troubleshooting, full ``DaemonConfig`` reference, and
   the v0.4.x downgrade procedure.
 
+### Added
+
+- **``user_config_vault_name_mismatch`` doctor check**
+  (``src/engram/diagnostics/phase3_checks.py``): WARNs when the
+  ``name:`` field in ``~/.config/engram/config.yaml`` does not match
+  the ``vault_name:`` in the vault's own ``engram.config.yaml``. This
+  mismatch previously surfaced as an opaque ``VaultError: primary
+  vault already mounted`` at daemon startup with no pointer to the
+  fix. ``engram doctor`` now names the mismatch and shows the
+  corrective action. ``ALL_PHASE_3_CHECK_CODES`` grows from 22 to
+  23 codes.
+
 ### Changed
 
 - **``engram serve`` default behavior**: now runs in proxy mode
@@ -75,6 +87,22 @@ first invocation. Existing MCP configurations need no edits.
   + ``ServeRuntime`` dataclass + ``ServeInitError`` are now the
   shared entry between ``serve --no-daemon`` and
   ``engram daemon start``.
+- **``_attach_daemon_log_handler``** (``cli/daemon.py``): now calls
+  ``os.setsid()`` after attaching the rotating log handler, placing
+  the daemon in a new process group. Also redirects fd 1 and fd 2 to
+  ``/dev/null``. Without this, SIGTERM sent to the spawning proxy's
+  PGID on Claude Code session close also killed the daemon; and
+  writes to the inherited stdout after the proxy exited triggered
+  ``BrokenPipeError`` → ``SystemExit(1)`` in the rich console handler.
+- **``DaemonServer._drain_and_exit``** (``daemon/server.py``): idle-
+  shutdown timer is now cancelled as the first step of the drain
+  sequence (step 0) before the listener close, preventing asyncio
+  from logging "Task was destroyed but it is pending!" during loop
+  teardown.
+- **``VaultStorage.close``** (``storage/facade.py``): issues
+  ``PRAGMA wal_checkpoint(TRUNCATE)`` before closing the SQLite
+  connection. A crash that left a stale WAL/SHM behind caused
+  ``SQLITE_IOERR`` on every tool call in the next daemon startup.
 
 ### Migration notes
 
@@ -196,7 +224,7 @@ Design spec lives locally at
   `team_membership_revoked`, `team_policy_violation_quarantined`,
   `serve_config_stale`, `routing_rule_priority_collision`,
   `team_vault_embedding_mismatch`, `git_branch_drifted`.
-  `ALL_PHASE_4_CHECK_CODES` superset has 31 codes total.
+  `ALL_PHASE_4_CHECK_CODES` superset has 32 codes total (updated from 31 when `user_config_vault_name_mismatch` was added to Phase 3 in v0.5.0).
 - **11 new errors**: `TeamMemberNotEnrolled`, `TeamPolicyViolation`,
   `RoutingRuleAmbiguous`, `RoutingTargetNotMounted`,
   `BlockThoughtInTeamVaultDisallowed`, `TeamVaultEmbeddingMismatch`,

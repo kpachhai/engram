@@ -31,7 +31,7 @@ engram/
 │   ├── LLM_FEATURES.md               # opt-in summarize / synthesize tools
 │   ├── PUBLISHING.md                 # PyPI release procedure (maintainer-only)
 │   ├── DEPLOYMENT_MODEL.md           # local-first thesis (why not cloud-hosted)
-│   ├── adr/                          # 7 ADRs (one per major design choice)
+│   ├── adr/                          # 8 ADRs (one per major design choice)
 │   └── archive/
 │       └── phases/                   # historical: PHASE_<N>_PLAN + PHASE_<N>_CODE_COMPLETE
 ├── src/engram/
@@ -47,7 +47,7 @@ engram/
 │   ├── team/                         # team-vault primitives + pre-receive hook
 │   ├── bundle/                       # export/import bundle format
 │   ├── migration/                    # Open Brain migration pipeline
-│   ├── diagnostics/                  # engram doctor + 31 check codes
+│   ├── diagnostics/                  # engram doctor + 32 check codes
 │   └── utils/                        # atomic_write, fingerprint, file_naming, lock
 ├── tests/                            # 1166 tests (unit + integration + smoke)
 └── bench/                            # NFR1 search-latency benchmarks
@@ -176,7 +176,7 @@ uv run engram doctor --download-model --print-hashes
 - **Embedding model:** `BAAI/bge-small-en-v1.5` is pinned. The hash manifest in `src/engram/embedding/model_hashes.py` is populated; mismatched files raise `EmbeddingError`. Recompute via `engram doctor --download-model --print-hashes` after any model upgrade.
 - **Index location:** `<vault>/.indexes/engram.db` (gitignored).
 - **Locks + state:** `<vault>/.engram/` holds per-machine state (identity, push queue, orphan tarballs); always gitignored.
-- **MCP server:** stdio at the client boundary. No HTTP. No network listener. No telemetry. From v0.5.0 onward (daemon mode), a per-vault Unix Domain Socket sits between the ``engram serve`` proxy and the daemon process that owns the vault — UDS is local IPC, not a network listener. Filesystem perms (0o600) plus ``SO_PEERCRED``/``getpeereid`` enforce same-UID access.
+- **MCP server:** stdio at the client boundary. No HTTP. No network listener. No telemetry. From v0.5.0 onward (daemon mode), a per-vault Unix Domain Socket sits between the ``engram serve`` proxy and the daemon process that owns the vault — UDS is local IPC, not a network listener. Filesystem perms (0o600) plus ``SO_PEERCRED``/``getpeereid`` enforce same-UID access. The daemon calls ``os.setsid()`` after fork so it survives proxy exit (e.g. Claude Code session close) and does not die with the proxy's process group.
 - **CI matrix:** Python 3.11 + 3.12, macOS + Ubuntu. ruff + ruff-format + mypy + pytest + coverage all gate the merge.
 
 ## See also

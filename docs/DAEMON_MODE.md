@@ -295,6 +295,34 @@ A daemon is holding the vault lock. ``--no-daemon`` and daemon mode
 are mutually exclusive. Either run ``engram daemon stop`` first, or
 drop the ``--no-daemon`` flag and let the proxy attach normally.
 
+### Daemon dies every time Claude Code session restarts
+
+In v0.5.0.0, the daemon shared the spawning proxy's process group.
+When Claude Code sent SIGTERM to the proxy's PGID on session close,
+the signal also reached the daemon. Fixed in a subsequent patch:
+the daemon now calls ``os.setsid()`` immediately after fork, placing
+itself in a new process group so proxy-directed signals do not reach it.
+
+If you see the daemon restarting on every Claude Code session open,
+upgrade to the latest engram and verify with:
+
+```bash
+ps -o pid,pgid,command | grep engram
+```
+
+The daemon's PID and PGID should differ (daemon is its own session
+leader).
+
+### Tools not loading at session start (first tool call fails)
+
+Symptom: the first engram tool call in a new Claude Code session
+returns an error, but subsequent calls succeed. Root cause is that
+the daemon was dying on proxy exit (see above) and had to re-spawn on
+each new session. The ``~512ms`` spawn dance overlaps with Claude
+Code's MCP initialization handshake; a race causes the first tool
+request to fail. Fix: same setsid patch above keeps the daemon alive
+across sessions for instant attach.
+
 ### UDS path too long on macOS
 
 macOS limits ``sun_path`` to 104 bytes including the trailing NUL.
@@ -332,7 +360,7 @@ documents what each knob does so operators can tune deliberately.
 
 ## Doctor checks
 
-``engram doctor`` learned 6 new daemon-mode rows in v0.5.0:
+``engram doctor`` learned 7 new daemon-mode and config rows in v0.5.0:
 
 - ``daemon_running`` (INFO) — is the daemon up?
 - ``daemon_socket_permissions`` (WARN on non-0o600 or foreign owner)
@@ -343,6 +371,12 @@ documents what each knob does so operators can tune deliberately.
   suggesting a restart to pick up engram updates)
 - ``daemon_socket_path_too_long`` (WARN when the resolved UDS path
   exceeds macOS's 104-byte ``sun_path`` limit)
+- ``user_config_vault_name_mismatch`` (WARN) — the ``name:`` field in
+  ``~/.config/engram/config.yaml`` does not match the ``vault_name:``
+  in the vault's own ``engram.config.yaml``. This mismatch causes
+  ``VaultError: primary vault already mounted`` at daemon startup.
+  Correct the ``name:`` in the user config to match the vault's own
+  ``vault_name:``, then restart.
 
 ---
 

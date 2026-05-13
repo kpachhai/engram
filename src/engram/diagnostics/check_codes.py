@@ -123,7 +123,7 @@ TEAM_VAULT_EMBEDDING_MISMATCH: Final[str] = "team_vault_embedding_mismatch"
 #: (someone ran ``git checkout`` outside engram's awareness).
 GIT_BRANCH_DRIFTED: Final[str] = "git_branch_drifted"
 
-#: Canonical team-vault superset; tests iterate this to assert all 31
+#: Canonical team-vault superset; tests iterate this to assert all 32
 #: codes are unique non-empty snake_case strings.
 ALL_PHASE_4_CHECK_CODES: Final[tuple[str, ...]] = (
     *ALL_PHASE_3_CHECK_CODES,
