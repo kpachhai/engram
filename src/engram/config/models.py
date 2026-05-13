@@ -270,6 +270,50 @@ class UserConfig(BaseModel):
         return self
 
 
+class DaemonConfig(BaseModel):
+    """Phase 5 daemon-mode configuration.
+
+    Spec: ``docs/superpowers/specs/2026-05-12-engram-daemon-mode-design.md``
+    Section 11.1 + Amendments 2, 4, 6, 8, 9.
+    """
+
+    model_config = ConfigDict(extra="forbid")
+
+    #: Auto-spawn a daemon when ``engram serve`` finds none. False disables
+    #: the spawn-dance and surfaces ``DaemonNotRunningError`` instead.
+    auto_spawn: bool = True
+    #: Idle-shutdown timeout in seconds; ``0`` means never auto-shutdown.
+    idle_shutdown_seconds: int = Field(default=3600, ge=0)
+    #: Proxy waits this long for ``ready\n`` on the readiness pipe.
+    spawn_timeout_seconds: int = Field(default=30, ge=1)
+    #: Spawn-flock wait budget before giving up.
+    spawn_lock_timeout_seconds: int = Field(default=10, ge=1)
+    #: Extra grace added to ``spawn_timeout_seconds`` when the daemon
+    #: detects a large WAL file at startup (Amendment 4).
+    wal_recovery_grace_seconds: int = Field(default=60, ge=0)
+    #: Per-connection-task force-cancel budget during shutdown drain
+    #: (Amendment 2 step 2).
+    shutdown_drain_seconds: int = Field(default=5, ge=1)
+    #: ``coordinator.force_flush()`` budget; distinct from the outer
+    #: ``engram daemon stop`` wait (Amendment 2 step 3).
+    coordinator_flush_seconds: int = Field(default=30, ge=1)
+    #: Per-connection idle timeout; ``0`` means never time out an idle
+    #: proxy connection. Default 24h.
+    connection_idle_timeout_seconds: int = Field(default=86400, ge=0)
+    #: Max single JSON-RPC frame size in bytes (Amendment 6). Default 16
+    #: MiB; floor 64 KiB ensures real MCP responses always fit.
+    max_frame_bytes: int = Field(default=16 * 1024 * 1024, ge=65536)
+    #: Log rotation threshold (MB). 0 is not permitted; set very large to
+    #: disable rotation effectively.
+    log_max_size_mb: int = Field(default=100, ge=1)
+    #: How long to retain rotated logs.
+    log_retention_days: int = Field(default=7, ge=1)
+    #: Daemon log level (DEBUG/INFO/WARNING/ERROR).
+    log_level: str = Field(default="INFO")
+    #: Whether per-request log lines redact thought content (Amendment 9).
+    log_redact_thought_content: bool = Field(default=True)
+
+
 class VaultConfig(BaseModel):
     """Per-vault configuration: ``<vault>/engram.config.yaml``."""
 
@@ -282,6 +326,9 @@ class VaultConfig(BaseModel):
     sync: SyncConfig = Field(default_factory=SyncConfig)
     # Per-vault LLM override; if None, falls through to UserConfig.llm.
     llm: LLMConfig | None = None
+    #: Phase 5 daemon-mode settings. Merged into :class:`EffectiveConfig`
+    #: by the loader so the runtime view exposes a populated default.
+    daemon: DaemonConfig = Field(default_factory=DaemonConfig)
 
 
 class EffectiveConfig(BaseModel):
@@ -315,11 +362,15 @@ class EffectiveConfig(BaseModel):
     routing_rules: list[RoutingRule] = Field(default_factory=list)
     log_level: str = "INFO"
     log_format: Literal["text", "json"] = "text"
+    #: Phase 5 daemon-mode settings; populated by the loader from the
+    #: per-vault ``daemon:`` block (or defaulted).
+    daemon: DaemonConfig = Field(default_factory=DaemonConfig)
 
 
 __all__ = [
     "DEFAULT_EMBEDDING_MODEL",
     "AggregatorConfig",
+    "DaemonConfig",
     "EffectiveConfig",
     "LLMConfig",
     "RoutingRule",

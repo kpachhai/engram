@@ -134,8 +134,31 @@ ALL_PHASE_4_CHECK_CODES: Final[tuple[str, ...]] = (
 )
 
 
+# Daemon-mode check codes (Phase 5; spec
+# `2026-05-12-engram-daemon-mode-design.md` Section 13.2 + Amendment 5).
+# Check implementations land in Layer E (`daemon_checks.py`).
+DAEMON_RUNNING: Final[str] = "daemon_running"
+DAEMON_SOCKET_PERMISSIONS: Final[str] = "daemon_socket_permissions"
+DAEMON_SOCKET_STALE: Final[str] = "daemon_socket_stale"
+DAEMON_LOG_ROTATION_HEALTHY: Final[str] = "daemon_log_rotation_healthy"
+DAEMON_UPTIME_EXCESSIVE: Final[str] = "daemon_uptime_excessive"
+DAEMON_SOCKET_PATH_TOO_LONG: Final[str] = "daemon_socket_path_too_long"
+
+#: Canonical daemon-mode check tuple. Tests iterate this to assert the six
+#: codes are unique snake_case strings.
+ALL_DAEMON_CHECK_CODES: Final[tuple[str, ...]] = (
+    DAEMON_RUNNING,
+    DAEMON_SOCKET_PERMISSIONS,
+    DAEMON_SOCKET_STALE,
+    DAEMON_LOG_ROTATION_HEALTHY,
+    DAEMON_UPTIME_EXCESSIVE,
+    DAEMON_SOCKET_PATH_TOO_LONG,
+)
+
+
 __all__ = [
     "AGGREGATOR_MODE",
+    "ALL_DAEMON_CHECK_CODES",
     "ALL_PHASE_2_CHECK_CODES",
     "ALL_PHASE_3_CHECK_CODES",
     "ALL_PHASE_4_CHECK_CODES",
@@ -143,6 +166,12 @@ __all__ = [
     "BRANCH_ALIGNMENT",
     "CLOUD_SYNC_UNDER_DOTGIT",
     "CONFLICT_MARKERS_PRESENT",
+    "DAEMON_LOG_ROTATION_HEALTHY",
+    "DAEMON_RUNNING",
+    "DAEMON_SOCKET_PATH_TOO_LONG",
+    "DAEMON_SOCKET_PERMISSIONS",
+    "DAEMON_SOCKET_STALE",
+    "DAEMON_UPTIME_EXCESSIVE",
     "EMBEDDING_MODEL_MISMATCH_ACROSS_VAULTS",
     "FRIEND_VAULT_BLOCK_THOUGHT_PRESENT",
     "GITIGNORE_INDEXES",

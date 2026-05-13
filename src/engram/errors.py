@@ -298,6 +298,39 @@ class PushQueuePersistenceFailed(EngramError):
     error_code: str = "push_queue_persistence_failed"
 
 
+# Daemon-mode errors (Phase 5) ----------------------------------------------
+
+
+class DaemonError(EngramError):
+    """Base class for all daemon-mode errors."""
+
+    error_code: str = "daemon_error"
+
+
+class DaemonSpawnError(DaemonError):
+    """Daemon spawn dance failed (timeout, lock contention, init failure)."""
+
+    error_code: str = "daemon_spawn_error"
+
+
+class DaemonConnectionError(DaemonError):
+    """Proxy could not connect to the daemon over UDS."""
+
+    error_code: str = "daemon_connection_error"
+
+
+class DaemonNotRunningError(DaemonError):
+    """No daemon is running and auto-spawn is disabled."""
+
+    error_code: str = "daemon_not_running_error"
+
+
+class PeerCredRejectError(DaemonError):
+    """Peer credential check rejected a connection from a non-self UID."""
+
+    error_code: str = "peer_cred_reject_error"
+
+
 __all__ = [
     "AttributionCommitterMismatch",
     "BlockThoughtInTeamVaultDisallowed",
@@ -305,6 +338,10 @@ __all__ = [
     "BundleCycleDetected",
     "BundleImportError",
     "ConfigError",
+    "DaemonConnectionError",
+    "DaemonError",
+    "DaemonNotRunningError",
+    "DaemonSpawnError",
     "DuplicateVaultName",
     "EmbeddingError",
     "EmbeddingModelMismatch",
@@ -313,6 +350,7 @@ __all__ = [
     "LLMProviderError",
     "LockError",
     "MigrationError",
+    "PeerCredRejectError",
     "PushQueuePersistenceFailed",
     "RoutingRuleAmbiguous",
     "RoutingTargetNotMounted",

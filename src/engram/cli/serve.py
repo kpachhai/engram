@@ -1,6 +1,8 @@
 """``engram serve`` CLI command - launches the FastMCP stdio server.
 
-Lifecycle:
+Lifecycle (steps 1-10 are factored into :func:`_init_serve_runtime` so the
+Phase 5 daemon — see ``src/engram/daemon/server.py`` — and ``--no-daemon``
+both consume the same init helper):
 
 1. Load resolved configuration.
 2. Run :func:`engram.sync.startup_probes.run_startup_probes`. On any FAIL,
@@ -8,20 +10,21 @@ Lifecycle:
 3. Detect cloud-sync vault paths and warn.
 4. Acquire the per-vault advisory lock.
 5. If ``sync.auto_pull_on_startup``, run :func:`maybe_startup_pull`.
-6. Scan markdown for conflict markers; if found, enter degraded mode
-   (search OK, capture refused).
+6. Scan markdown for conflict markers; if found, exit nonzero.
 7. Open :class:`VaultStorage`.
-8. Build the :class:`SyncCoordinator` and attach it to storage; start it.
+8. Build the :class:`SyncCoordinator` and attach it to storage.
 9. Construct (lazy) :class:`FastEmbedProvider`.
-10. Build the FastMCP server and run its stdio loop.
-11. On exit (graceful or otherwise): drain the coordinator queue, release
-    the lock, close storage.
+10. Build the FastMCP server.
+11. Run its stdio loop (single-process) OR enter the daemon's UDS accept
+    loop (Layer C).
+12. On exit: drain the coordinator queue, release the lock, close storage.
 """
 
 from __future__ import annotations
 
 import asyncio
 import logging
+from dataclasses import dataclass
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
@@ -55,6 +58,21 @@ _CLOUD_SYNC_PATH_HINTS = (
     "OneDrive",
     "Google Drive",
 )
+
+
+class ServeInitError(Exception):
+    """Raised by :func:`_init_serve_runtime` when init cannot proceed.
+
+    Carries the operator-facing message in ``args[0]`` and the desired
+    process exit code in ``exit_code``. Callers translate to whatever
+    output channel they own (``typer.Exit`` for the CLI; readiness-pipe
+    write for the daemon spawn dance).
+    """
+
+    def __init__(self, message: str, *, exit_code: int = 2) -> None:
+        """Store the operator-facing message and the desired process exit code."""
+        super().__init__(message)
+        self.exit_code = exit_code
 
 
 def _looks_like_cloud_sync_path(path: Path) -> str | None:
@@ -156,6 +174,170 @@ def _build_multivault_server_for(
     )
 
 
+@dataclass
+class ServeRuntime:
+    """Resources owned across the serve lifecycle.
+
+    The daemon (Phase 5 Layer C) and ``engram serve --no-daemon`` both
+    receive this dataclass from :func:`_init_serve_runtime`. The serve-side
+    caller then either runs ``fastmcp_server.run()`` (today's stdio loop)
+    or hands the server to the daemon's per-connection dispatch loop, and
+    invokes :meth:`teardown` on exit.
+    """
+
+    config: EffectiveConfig
+    vault_lock: VaultLock
+    storage: VaultStorage
+    coordinator: SyncCoordinator | None
+    embedder: FastEmbedProvider
+    fastmcp_server: FastMCP[Any]
+
+    def teardown(self) -> None:
+        """Drain the coordinator (best-effort), close storage, release the lock."""
+        if self.coordinator is not None:
+            try:
+                asyncio.run(self.coordinator.stop())
+            except Exception:
+                _log.exception("coordinator drain raised on shutdown")
+        try:
+            self.storage.close()
+        except Exception:
+            _log.exception("storage close raised on shutdown")
+        self.vault_lock.release()
+
+
+async def _init_serve_runtime(
+    *,
+    config: EffectiveConfig,
+    force: bool,
+    skip_probes: bool,
+    install_signal_handlers: bool = True,
+) -> ServeRuntime:
+    """Initialize the serve-side runtime (steps 2-10 of the lifecycle).
+
+    Shared between ``engram serve --no-daemon`` (callers pass
+    ``install_signal_handlers=True``) and the Phase 5 daemon (callers
+    pass ``install_signal_handlers=False`` per spec Amendment 1 so the
+    daemon owns its own SIGTERM/SIGINT handler). Caller is responsible for
+    config loading + ``configure_logging`` BEFORE invoking this helper.
+
+    Raises :class:`ServeInitError` when init cannot proceed; the caller
+    surfaces ``exit_code`` and the operator-facing message through
+    whatever channel it owns (typer.Exit, daemon readiness pipe, etc.).
+    """
+    # Step 2: startup probes BEFORE acquiring lock.
+    if not skip_probes and (config.vault_path / ".git").exists():
+        probe_report = await startup_probes.run_startup_probes(
+            config.sync,
+            config.vault_path,
+            thoughts_dir=config.thoughts_dir,
+        )
+        if probe_report.has_failures:
+            msg = "engram serve: startup probes failed:\n" + startup_probes.serialize_failures(
+                probe_report.failures
+            )
+            raise ServeInitError(msg)
+        for warning in probe_report.warnings:
+            _log.warning("startup probe %s: %s", warning.code, warning.message)
+
+    # Step 3: cloud-sync path detection (log-only warning).
+    cloud_hint = _looks_like_cloud_sync_path(config.vault_path)
+    if cloud_hint is not None:
+        _log.warning(
+            "vault path %s is under a consumer cloud-sync provider (%s); "
+            "SQLite locking semantics on these are unreliable. If you need "
+            "multi-machine sync, use git-based sync with a non-synced "
+            "vault directory instead.",
+            config.vault_path,
+            cloud_hint,
+        )
+
+    # Step 4: acquire VaultLock.
+    vault_lock = VaultLock(
+        config.vault_path,
+        force=force,
+        install_signal_handlers=install_signal_handlers,
+    )
+    try:
+        vault_lock.acquire()
+    except LockError as exc:
+        raise ServeInitError(f"engram serve: {exc}") from exc
+
+    # Step 5: startup pull (no-op when no remote / disabled).
+    if (config.vault_path / ".git").exists():
+        try:
+            await maybe_startup_pull(config.vault_path, config.sync)
+        except Exception:
+            _log.exception("startup pull crashed; continuing")
+
+    # Step 6: conflict-marker scan -> degraded mode FAIL.
+    if conflict_marker_scan(config.thoughts_dir):
+        vault_lock.release()
+        msg = (
+            "engram serve: conflict markers detected in thoughts/; "
+            "resolve them then re-run `engram serve`"
+        )
+        raise ServeInitError(msg)
+
+    # Steps 7 + 9: open storage + embedder.
+    try:
+        embedder = FastEmbedProvider(model_name=config.embedding_model)
+        storage = VaultStorage(
+            thoughts_dir=config.thoughts_dir,
+            index_db_path=config.index_dir / "engram.db",
+            embedding_dim=embedder.dimension,
+            embedding_model_name=config.embedding_model,
+            vault_name=config.vault_name,
+        )
+    except EngramIndexError as exc:
+        vault_lock.release()
+        raise ServeInitError(f"engram serve: {exc}") from exc
+
+    # Step 8: build + attach the coordinator (only if vault is a git repo).
+    coordinator: SyncCoordinator | None = None
+    if (config.vault_path / ".git").exists() and not config.sync.disabled:
+        coordinator = SyncCoordinator(
+            repo_dir=config.vault_path,
+            config=_coordinator_config_from(config),
+        )
+        storage.set_sync_coordinator(coordinator)
+        # The coordinator's asyncio task is started lazily on first enqueue.
+
+    # Step 10: build the FastMCP server (single-vault or multivault).
+    extra_vaults = [v for v in (config.vaults or []) if v.name != config.vault_name]
+    if extra_vaults:
+        server = _build_multivault_server_for(
+            config=config,
+            primary_storage=storage,
+            embedder=embedder,
+            primary_coordinator=coordinator,
+        )
+    else:
+        server = build_server(
+            storage,
+            embedder,
+            default_user=config.default_user,
+            server_name="engram",
+        )
+
+    _log.info(
+        "engram serve starting: vault=%s default_user=%s model=%s extra_vaults=%d",
+        config.vault_name,
+        config.default_user,
+        config.embedding_model,
+        len(extra_vaults),
+    )
+
+    return ServeRuntime(
+        config=config,
+        vault_lock=vault_lock,
+        storage=storage,
+        coordinator=coordinator,
+        embedder=embedder,
+        fastmcp_server=server,
+    )
+
+
 def register(app: typer.Typer) -> None:
     """Attach the ``serve`` subcommand to a typer app."""
 
@@ -200,127 +382,23 @@ def register(app: typer.Typer) -> None:
 
         configure_logging(level=config.log_level, log_format=config.log_format)
 
-        # Step 2: startup probes BEFORE acquiring lock.
-        if not skip_probes and (config.vault_path / ".git").exists():
-            probe_report = asyncio.run(
-                startup_probes.run_startup_probes(
-                    config.sync,
-                    config.vault_path,
-                    thoughts_dir=config.thoughts_dir,
-                )
-            )
-            if probe_report.has_failures:
-                typer.secho(
-                    "engram serve: startup probes failed:\n"
-                    + startup_probes.serialize_failures(probe_report.failures),
-                    fg=typer.colors.RED,
-                    err=True,
-                )
-                raise typer.Exit(2)
-            for warning in probe_report.warnings:
-                _log.warning("startup probe %s: %s", warning.code, warning.message)
-
-        cloud_hint = _looks_like_cloud_sync_path(config.vault_path)
-        if cloud_hint is not None:
-            _log.warning(
-                "vault path %s is under a consumer cloud-sync provider (%s); "
-                "SQLite locking semantics on these are unreliable. If you need "
-                "multi-machine sync, use git-based sync with a non-synced "
-                "vault directory instead.",
-                config.vault_path,
-                cloud_hint,
-            )
-
         try:
-            lock = VaultLock(config.vault_path, force=force)
-            lock.acquire()
-        except LockError as exc:
-            typer.secho(f"engram serve: {exc}", fg=typer.colors.RED, err=True)
-            raise typer.Exit(2) from exc
-
-        # Step 5: startup pull (no-op when no remote / disabled).
-        if (config.vault_path / ".git").exists():
-            try:
-                asyncio.run(maybe_startup_pull(config.vault_path, config.sync))
-            except Exception:
-                _log.exception("startup pull crashed; continuing")
-
-        # Step 6: conflict-marker scan -> degraded mode FAIL.
-        if conflict_marker_scan(config.thoughts_dir):
-            typer.secho(
-                "engram serve: conflict markers detected in thoughts/; "
-                "resolve them then re-run `engram serve`",
-                fg=typer.colors.RED,
-                err=True,
-            )
-            lock.release()
-            raise typer.Exit(2)
-
-        try:
-            embedder = FastEmbedProvider(model_name=config.embedding_model)
-            storage = VaultStorage(
-                thoughts_dir=config.thoughts_dir,
-                index_db_path=config.index_dir / "engram.db",
-                embedding_dim=embedder.dimension,
-                embedding_model_name=config.embedding_model,
-                vault_name=config.vault_name,
-            )
-        except EngramIndexError as exc:
-            typer.secho(f"engram serve: {exc}", fg=typer.colors.RED, err=True)
-            lock.release()
-            raise typer.Exit(2) from exc
-
-        # Step 8: build + attach the coordinator (only if vault is a git repo).
-        coordinator: SyncCoordinator | None = None
-        coordinator_loop: asyncio.AbstractEventLoop | None = None
-        if (config.vault_path / ".git").exists() and not config.sync.disabled:
-            coordinator = SyncCoordinator(
-                repo_dir=config.vault_path,
-                config=_coordinator_config_from(config),
-            )
-            storage.set_sync_coordinator(coordinator)
-            # The coordinator's asyncio task is started by the FastMCP loop's
-            # event loop. We start it lazily on first enqueue via storage.
-
-        try:
-            # When the per-user config has more than one vault entry,
-            # the serve command builds the multi-vault server with a
-            # registry routing across all configured vaults (one primary
-            # + zero-or-many read-only). Otherwise it uses the
-            # single-vault server.
-            extra_vaults = [v for v in (config.vaults or []) if v.name != config.vault_name]
-            if extra_vaults:
-                server = _build_multivault_server_for(
+            runtime = asyncio.run(
+                _init_serve_runtime(
                     config=config,
-                    primary_storage=storage,
-                    embedder=embedder,
-                    primary_coordinator=coordinator,
+                    force=force,
+                    skip_probes=skip_probes,
+                    install_signal_handlers=True,  # today's behavior
                 )
-            else:
-                server = build_server(
-                    storage,
-                    embedder,
-                    default_user=config.default_user,
-                    server_name="engram",
-                )
-            _log.info(
-                "engram serve starting: vault=%s default_user=%s model=%s extra_vaults=%d",
-                config.vault_name,
-                config.default_user,
-                config.embedding_model,
-                len(extra_vaults),
             )
-            server.run()
+        except ServeInitError as exc:
+            typer.secho(str(exc), fg=typer.colors.RED, err=True)
+            raise typer.Exit(exc.exit_code) from exc
+
+        try:
+            runtime.fastmcp_server.run()
         finally:
-            # Step 11: drain the coordinator on shutdown (best-effort).
-            if coordinator is not None:
-                try:
-                    asyncio.run(coordinator.stop())
-                except Exception:
-                    _log.exception("coordinator drain raised on shutdown")
-            storage.close()
-            lock.release()
-            del coordinator_loop
+            runtime.teardown()
 
 
-__all__ = ["register"]
+__all__ = ["ServeInitError", "ServeRuntime", "_init_serve_runtime", "register"]

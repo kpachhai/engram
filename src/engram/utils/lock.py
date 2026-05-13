@@ -51,7 +51,13 @@ _LOCK_FILE_MODE = 0o600
 class VaultLock:
     """Context manager for the per-vault engram lock at ``<vault>/.indexes/engram.lock``."""
 
-    def __init__(self, vault_path: Path, *, force: bool = False) -> None:
+    def __init__(
+        self,
+        vault_path: Path,
+        *,
+        force: bool = False,
+        install_signal_handlers: bool = True,
+    ) -> None:
         """Create a (not yet acquired) vault lock handle.
 
         Args:
@@ -59,10 +65,17 @@ class VaultLock:
             force: If ``True``, taking over an apparently-held lock is allowed
                 via one unlink-and-retry attempt. Use only when the operator
                 has confirmed no other engram serve is running for this vault.
+            install_signal_handlers: If ``True`` (default), VaultLock installs
+                its own SIGTERM/SIGINT handler that releases the lock on
+                signal. The daemon (Phase 5 Layer C) passes ``False`` so it
+                can own its own signal handler that drains the coordinator
+                + closes storage + releases the lock in the correct order
+                (spec Amendment 1).
         """
         self.vault_path = Path(vault_path)
         self.lock_path = self.vault_path / _INDEXES_SUBDIR / _LOCK_FILENAME
         self.force = force
+        self.install_signal_handlers = install_signal_handlers
         self._fd: int | None = None
         self._original_sigterm: Any = None
         self._original_sigint: Any = None
@@ -156,6 +169,10 @@ class VaultLock:
 
     def _install_cleanup_hooks(self) -> None:
         atexit.register(self._cleanup)
+        if not self.install_signal_handlers:
+            # Daemon owns its own SIGTERM/SIGINT handler — do not stomp it.
+            # The atexit hook above still fires on interpreter shutdown.
+            return
         self._original_sigterm = signal.signal(signal.SIGTERM, self._signal_handler)
         self._original_sigint = signal.signal(signal.SIGINT, self._signal_handler)
         self._signal_handlers_installed = True
