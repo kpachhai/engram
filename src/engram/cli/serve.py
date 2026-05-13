@@ -183,13 +183,17 @@ class ServeRuntime:
     caller then either runs ``fastmcp_server.run()`` (today's stdio loop)
     or hands the server to the daemon's per-connection dispatch loop, and
     invokes :meth:`teardown` on exit.
+
+    The ``embedder`` field is typed ``object`` to match engram's
+    duck-typed embedder convention (mirrors ``serve_multivault`` and
+    lets tests substitute a fake provider).
     """
 
     config: EffectiveConfig
     vault_lock: VaultLock
     storage: VaultStorage
     coordinator: SyncCoordinator | None
-    embedder: FastEmbedProvider
+    embedder: object
     fastmcp_server: FastMCP[Any]
 
     def teardown(self) -> None:
