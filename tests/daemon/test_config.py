@@ -14,7 +14,7 @@ from engram.config.models import DaemonConfig, EffectiveConfig
 def test_defaults_match_spec() -> None:
     cfg = DaemonConfig()
     assert cfg.auto_spawn is True
-    assert cfg.idle_shutdown_seconds == 3600
+    assert cfg.idle_shutdown_seconds == 30
     assert cfg.spawn_timeout_seconds == 30
     assert cfg.spawn_lock_timeout_seconds == 10
     assert cfg.wal_recovery_grace_seconds == 60
@@ -119,7 +119,7 @@ def test_daemon_config_empty_block_uses_defaults(tmp_path: Path) -> None:
     vault_dir = tmp_path / "vault"
     user_config = _write_per_user_with_vault(tmp_path, vault_dir, "daemon: {}\n")
     cfg = load_config(user_config_path=user_config, vault_name="test")
-    assert cfg.daemon.idle_shutdown_seconds == 3600
+    assert cfg.daemon.idle_shutdown_seconds == 30
     assert cfg.daemon.spawn_timeout_seconds == 30
 
 
@@ -128,5 +128,5 @@ def test_daemon_config_missing_block_uses_defaults(tmp_path: Path) -> None:
     # No daemon: block at all.
     user_config = _write_per_user_with_vault(tmp_path, vault_dir, "")
     cfg = load_config(user_config_path=user_config, vault_name="test")
-    assert cfg.daemon.idle_shutdown_seconds == 3600
+    assert cfg.daemon.idle_shutdown_seconds == 30
     assert cfg.daemon.log_max_size_mb == 100

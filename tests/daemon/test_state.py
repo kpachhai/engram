@@ -31,7 +31,7 @@ def test_write_then_read_roundtrip(short_vault: Path) -> None:
         vault_name="memex",
         vault_path=str(paths.vault),
         hostname=socket.gethostname(),
-        config_snapshot={"idle_shutdown_seconds": 3600},
+        config_snapshot={"idle_shutdown_seconds": 30},
     )
     write_state(paths.state_file, state)
     loaded = read_state(paths.state_file)

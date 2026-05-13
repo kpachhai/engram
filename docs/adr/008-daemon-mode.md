@@ -186,8 +186,8 @@ using the documented ``LowLevelServer.run`` contract.
   simultaneously. The friction that motivated this work is closed.
 - The MCP wire format is unchanged. No client config edits needed.
 - Idle daemon auto-shuts down after configurable timeout (default
-  60 min) so unused vaults don't keep a Python process alive
-  forever.
+  30 seconds) so unused vaults don't keep a Python process alive
+  after the last session closes.
 - New CLI surface (``engram daemon start/stop/status/logs``) gives
   operators direct introspection on the running daemon.
 - Six new doctor checks surface daemon-mode health.

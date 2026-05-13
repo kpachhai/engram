@@ -87,6 +87,13 @@ first invocation. Existing MCP configurations need no edits.
   + ``ServeRuntime`` dataclass + ``ServeInitError`` are now the
   shared entry between ``serve --no-daemon`` and
   ``engram daemon start``.
+- **``DaemonConfig.idle_shutdown_seconds`` default changed from
+  ``3600`` to ``30``**. The daemon now exits ~30 seconds after the
+  last Claude session closes, matching the expected behavior that the
+  daemon only runs while Claude is running. Users who want the old
+  always-warm behavior can set ``daemon.idle_shutdown_seconds: 3600``
+  (or any value, including ``0`` for never-auto-shutdown) in their
+  vault's ``engram.config.yaml``.
 - **``_attach_daemon_log_handler``** (``cli/daemon.py``): now calls
   ``os.setsid()`` after attaching the rotating log handler, placing
   the daemon in a new process group. Also redirects fd 1 and fd 2 to

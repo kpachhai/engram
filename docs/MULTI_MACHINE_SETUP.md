@@ -285,9 +285,9 @@ batch into one commit.
 
 From v0.5.0, each machine's `engram serve` invocation runs as a thin
 proxy and auto-spawns a per-vault daemon. The daemon owns the
-`SyncCoordinator` for the life of the daemon (default 60-min idle
-shutdown), which means a long-running daemon batches commits across
-many AI sessions cleanly. Stopping the daemon (`engram daemon stop`)
+`SyncCoordinator` for the life of the daemon (default 30s idle
+shutdown), which means the daemon batches commits across concurrent AI
+sessions cleanly. Stopping the daemon (`engram daemon stop`)
 drains any pending commits before exiting. See [DAEMON_MODE.md](DAEMON_MODE.md).
 
 ### Manual sync (when serve is not running)

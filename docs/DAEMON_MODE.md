@@ -128,8 +128,8 @@ Both Claude sessions are now attached to the one daemon process; no
 
 ### Optional: stop the daemon explicitly
 
-When you close all Claude sessions, the daemon idles for 60 minutes
-(default) then auto-shuts-down. If you want to stop it sooner:
+When you close all Claude sessions, the daemon idles for 30 seconds
+(default) then auto-shuts-down. If you want to stop it immediately:
 
 ```bash
 engram daemon stop
@@ -161,8 +161,8 @@ The daemon is **demand-spawned**:
 The daemon shuts down when:
 
 - The idle timer fires (``daemon.idle_shutdown_seconds`` in
-  ``engram.config.yaml``, default 3600 = 60 min). The timer counts
-  down only while zero proxies are connected.
+  ``engram.config.yaml``, default 30s). The timer counts down only
+  while zero proxies are connected.
 - An operator runs ``engram daemon stop`` (SIGTERM + bounded wait;
   ``--force`` SIGKILLs after the timeout).
 - The host shuts down.
@@ -343,7 +343,7 @@ documents what each knob does so operators can tune deliberately.
 | Field | Default | Range | Meaning |
 |---|---|---|---|
 | ``auto_spawn`` | ``true`` | bool | If false, ``engram serve`` errors out when no daemon is running. Use when you run daemons via launchd / systemd-user units and want to refuse silent fallbacks. |
-| ``idle_shutdown_seconds`` | ``3600`` | ``>= 0`` | Seconds after the last proxy disconnects until the daemon auto-exits. ``0`` means never. |
+| ``idle_shutdown_seconds`` | ``30`` | ``>= 0`` | Seconds after the last proxy disconnects until the daemon auto-exits. ``0`` means never. |
 | ``spawn_timeout_seconds`` | ``30`` | ``>= 1`` | How long the proxy waits for ``ready\n`` from a spawning daemon. |
 | ``spawn_lock_timeout_seconds`` | ``10`` | ``>= 1`` | How long the proxy waits for the per-vault spawn flock when a concurrent spawner is mid-dance. |
 | ``wal_recovery_grace_seconds`` | ``60`` | ``>= 0`` | Extra grace added to ``spawn_timeout_seconds`` when the daemon detects a large WAL at startup. |

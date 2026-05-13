@@ -235,7 +235,7 @@ without requiring any MCP config changes — the proxy IS still
 - **Auto-spawn + auto-idle-shutdown.** The first ``engram serve``
   forks the daemon and waits for ``ready\n`` on a readiness pipe.
   After the last proxy disconnects, the daemon idles for
-  ``daemon.idle_shutdown_seconds`` (default 60 min), then exits
+  ``daemon.idle_shutdown_seconds`` (default 30s), then exits
   cleanly. On shutdown, the daemon issues ``PRAGMA
   wal_checkpoint(TRUNCATE)`` before closing the SQLite connection so
   the WAL is fully flushed to the main database file; this prevents

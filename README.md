@@ -197,8 +197,8 @@ engram daemon stop   # graceful drain; waits for in-flight tool calls
 ```
 
 The daemon auto-shuts-down after ``daemon.idle_shutdown_seconds``
-(default 60 min) with no attached sessions, so if you close all your
-Claude Code sessions the daemon will exit on its own within an hour.
+(default 30 seconds) with no attached sessions, so closing all
+Claude Code sessions causes the daemon to exit within about 30 seconds.
 
 ### Schema migrations
 

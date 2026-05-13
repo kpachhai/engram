@@ -284,7 +284,7 @@ class DaemonConfig(BaseModel):
     #: the spawn-dance and surfaces ``DaemonNotRunningError`` instead.
     auto_spawn: bool = True
     #: Idle-shutdown timeout in seconds; ``0`` means never auto-shutdown.
-    idle_shutdown_seconds: int = Field(default=3600, ge=0)
+    idle_shutdown_seconds: int = Field(default=30, ge=0)
     #: Proxy waits this long for ``ready\n`` on the readiness pipe.
     spawn_timeout_seconds: int = Field(default=30, ge=1)
     #: Spawn-flock wait budget before giving up.
