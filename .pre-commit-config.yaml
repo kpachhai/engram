@@ -41,3 +41,14 @@ repos:
         language: system
         pass_filenames: false
         types: [python]
+
+      # PII discipline (self-contained - no external repo dependencies).
+      # Scanner + patterns live at .githooks/ inside this repo. Identity-
+      # specific patterns (real name, emails) load from
+      # ~/.config/devkit/identity.json at scan time if present; absent on
+      # forker machines, only structural patterns apply.
+      - id: pii-scan
+        name: PII scan
+        entry: bash -c 'SCANNER="$(git rev-parse --show-toplevel)/.githooks/pii-scan.sh"; if [ -x "$SCANNER" ]; then "$SCANNER" --staged; fi'
+        language: system
+        pass_filenames: false
