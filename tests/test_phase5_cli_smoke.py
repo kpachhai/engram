@@ -106,6 +106,47 @@ def test_engram_serve_help_documents_no_daemon() -> None:
     assert "--no-daemon" in result.stdout
 
 
+# ----- delete subcommand --------------------------------------------
+
+
+def test_engram_delete_help_exposes_dry_run_and_yes() -> None:
+    """``engram delete --help`` documents both safety flags."""
+    result = _run(["delete", "--help"])
+    assert "--dry-run" in result.stdout
+    assert "--yes" in result.stdout
+
+
+def test_engram_delete_invalid_uuid_exits_2(smoke_vault: Path) -> None:
+    """``engram delete not-a-uuid`` exits 2 with a clear message on stderr."""
+    result = _run(
+        [
+            "delete",
+            "not-a-uuid",
+            "--config",
+            str(smoke_vault / "engram.config.yaml"),
+        ],
+        expect_zero=False,
+    )
+    assert result.returncode == 2
+    assert "invalid uuid" in result.stderr.lower()
+
+
+def test_engram_delete_unknown_id_exits_1(smoke_vault: Path) -> None:
+    """``engram delete <unknown-uuid>`` exits 1 with a ``not found`` message."""
+    # Need a valid UUID format that just doesn't exist in the vault.
+    result = _run(
+        [
+            "delete",
+            "00000000-0000-0000-0000-000000000000",
+            "--config",
+            str(smoke_vault / "engram.config.yaml"),
+        ],
+        expect_zero=False,
+    )
+    assert result.returncode == 1
+    assert "not found" in result.stderr.lower()
+
+
 # ----- status / stop / logs on a cold vault -------------------------
 
 

@@ -34,7 +34,7 @@ from uuid import UUID
 
 from uuid_extensions import uuid7
 
-from engram.errors import VaultError, VaultReadOnlyError
+from engram.errors import ThoughtNotFoundError, VaultError, VaultReadOnlyError
 from engram.models import Thought, ThoughtWithSimilarity
 from engram.models.frontmatter import (
     DEFAULT_PORTABILITY_BY_PREFIX,
@@ -502,18 +502,33 @@ class VaultStorage:
         write_thought(updated, base_dir=self.thoughts_dir)
         return True
 
-    def delete(self, thought_id: UUID | str) -> bool:
+    def delete(self, thought_id: UUID | str, *, source: str = "api") -> Thought:
         """Remove a thought from both markdown SoT and SQLite.
+
+        Returns the deleted :class:`Thought` so callers (CLI, MCP handler)
+        can emit a confirmation that includes prefix + portability without
+        a separate lookup.
+
+        Args:
+            thought_id: UUID of the thought to delete.
+            source: Audit-log tag identifying the call site (``mcp``,
+                ``cli``, or default ``api`` for direct programmatic use).
 
         Raises:
             VaultReadOnlyError: if mounted with ``read_only_role=True``.
+            ThoughtNotFoundError: if no thought with this id exists.
         """
         self._refuse_if_read_only("delete")
         existing = self.get_by_id(thought_id)
         if existing is None:
-            return False
+            msg = f"no thought with id={thought_id!r}"
+            raise ThoughtNotFoundError(msg)
+        # SQLite first: if this fails, the markdown is still on disk and
+        # the row is still in the index - clean transaction failure, no
+        # half-deleted state.
         if not _q_delete_thought(self.conn, thought_id):
-            return False
+            msg = f"sqlite delete failed for id={thought_id!r}"
+            raise ThoughtNotFoundError(msg)
         try:
             existing.file_path.unlink(missing_ok=True)
         except OSError:
@@ -521,7 +536,17 @@ class VaultStorage:
                 "SQLite row deleted but markdown unlink failed for %s; manual cleanup required",
                 existing.file_path,
             )
-        return True
+        _log.info(
+            "thought_deleted id=%s prefix=%s portability=%s fingerprint=%s vault=%s source=%s",
+            existing.id,
+            existing.prefix,
+            existing.portability,
+            existing.fingerprint,
+            existing.vault,
+            source,
+        )
+        self._post_capture_sync(existing)
+        return existing
 
     # === stats + doctor support ===
 

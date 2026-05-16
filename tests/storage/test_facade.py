@@ -274,15 +274,77 @@ def test_update_metadata(vault: VaultStorage):
 def test_delete_removes_both_markdown_and_sqlite(vault: VaultStorage):
     thought = vault.capture(content="[Lesson] body", embedding=_zero_vec())
     file_path = thought.file_path
-    assert vault.delete(thought.id)
+    deleted = vault.delete(thought.id)
+    # Return value is the deleted thought (not bool).
+    assert deleted.id == thought.id
+    assert deleted.prefix == "Lesson"
     assert vault.get_by_id(thought.id) is None
     assert not file_path.exists()
 
 
-def test_delete_unknown_returns_false(vault: VaultStorage):
+def test_delete_unknown_raises_thought_not_found(vault: VaultStorage):
     from uuid import uuid4
 
-    assert vault.delete(uuid4()) is False
+    from engram.errors import ThoughtNotFoundError
+
+    with pytest.raises(ThoughtNotFoundError):
+        vault.delete(uuid4())
+
+
+def test_delete_removes_embedding_row(vault: VaultStorage):
+    """The vector index row tied to the deleted thought is removed too."""
+    thought = vault.capture(content="[Lesson] vector row test", embedding=_vec_a())
+
+    # Confirm the embedding row exists before delete.
+    cur = vault.conn.execute(
+        "SELECT thought_id FROM thought_embeddings WHERE thought_id = ?",
+        (str(thought.id),),
+    )
+    assert cur.fetchone() is not None
+
+    vault.delete(thought.id)
+
+    cur = vault.conn.execute(
+        "SELECT thought_id FROM thought_embeddings WHERE thought_id = ?",
+        (str(thought.id),),
+    )
+    assert cur.fetchone() is None
+
+
+def test_delete_emits_audit_log(vault: VaultStorage, caplog: pytest.LogCaptureFixture) -> None:
+    """Every deletion emits a structured INFO line via engram.storage.facade."""
+    import logging
+
+    thought = vault.capture(content="[Lesson] auditable", embedding=_zero_vec())
+    with caplog.at_level(logging.INFO, logger="engram.storage.facade"):
+        vault.delete(thought.id, source="cli")
+    audit_lines = [
+        rec
+        for rec in caplog.records
+        if rec.name == "engram.storage.facade" and "thought_deleted" in rec.getMessage()
+    ]
+    assert audit_lines, "expected at least one thought_deleted audit line"
+    msg = audit_lines[-1].getMessage()
+    assert f"id={thought.id}" in msg
+    assert "prefix=Lesson" in msg
+    assert "source=cli" in msg
+
+
+def test_delete_enqueues_sync_coordinator(vault: VaultStorage) -> None:
+    """When a coordinator is attached, delete forwards via _post_capture_sync."""
+    calls: list[object] = []
+
+    class _StubCoordinator:
+        def enqueue(self, path: object, **_kw: object) -> None:
+            calls.append(path)
+
+    thought = vault.capture(content="[Lesson] enqueue test", embedding=_zero_vec())
+    # Attach AFTER capture so we only see the delete enqueue.
+    vault.set_sync_coordinator(_StubCoordinator())
+    vault.delete(thought.id)
+    assert calls, "expected coordinator.enqueue to be called for the delete"
+    # The enqueued path corresponds to the deleted thought's file_path.
+    assert calls[-1] == thought.file_path
 
 
 # === stats ===

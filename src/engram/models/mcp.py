@@ -165,10 +165,55 @@ class FetchOutput(BaseModel):
     thought: Thought | None = None
 
 
+class DeleteInput(BaseModel):
+    """Input to ``delete_thought``.
+
+    ``confirm`` has no default: callers MUST explicitly pass either
+    ``False`` (preview) or ``True`` (commit). Forgetting the parameter
+    surfaces as a validation error rather than a silent destructive
+    default. AI clients are expected to call once with ``confirm=False``
+    to obtain a preview, show it to the user, and only call again with
+    ``confirm=True`` after explicit user approval.
+    """
+
+    model_config = ConfigDict(extra="forbid")
+
+    id: UUID = Field(..., description="UUID of the thought to delete.")
+    confirm: bool = Field(
+        ...,
+        description=(
+            "Set False for a dry-run preview. Set True only after the user "
+            "has explicitly approved the deletion shown in the preview "
+            "response."
+        ),
+    )
+
+
+class DeleteOutput(BaseModel):
+    """Output of ``delete_thought``.
+
+    ``deleted=False`` covers two cases: ``confirm=False`` dry-run preview
+    (``body_preview`` populated) and ``not found`` (``body_preview`` absent,
+    ``message`` reports the not-found condition).
+    """
+
+    model_config = ConfigDict(extra="ignore")
+
+    deleted: bool
+    id: UUID
+    prefix: str | None = None
+    portability: Portability | None = None
+    created_at: datetime | None = None
+    body_preview: str | None = None
+    message: str
+
+
 __all__ = [
     "CaptureInput",
     "CaptureInputMetadata",
     "CaptureOutput",
+    "DeleteInput",
+    "DeleteOutput",
     "FetchInput",
     "FetchOutput",
     "Filter",

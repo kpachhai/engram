@@ -53,7 +53,7 @@ engram/
 └── bench/                            # NFR1 search-latency benchmarks
 ```
 
-The spec lives outside this repo at `~/repos/github.com/kpachhai/idea-forge/docs/superpowers/specs/2026-05-04-engram/` (the maintainer's planning repo). Treat the spec as historical context; the shipped repo is authoritative for what engram actually does today.
+The spec lives outside this repo at `~/repos/github.com/kpachhai/idea-forge/docs/superpowers/specs/2026-05-04-engram/` (the maintainer's planning repo). Treat the spec as historical context; the shipped repo is authoritative for what engram actually does today. <!-- pii-allow:spec-back-ref -->
 
 ## Phase history (historical context, not active work)
 
@@ -177,6 +177,7 @@ uv run engram doctor --download-model --print-hashes
 - **Index location:** `<vault>/.indexes/engram.db` (gitignored).
 - **Locks + state:** `<vault>/.engram/` holds per-machine state (identity, push queue, orphan tarballs); always gitignored.
 - **MCP server:** stdio at the client boundary. No HTTP. No network listener. No telemetry. From v0.5.0 onward (daemon mode), a per-vault Unix Domain Socket sits between the ``engram serve`` proxy and the daemon process that owns the vault — UDS is local IPC, not a network listener. Filesystem perms (0o600) plus ``SO_PEERCRED``/``getpeereid`` enforce same-UID access. The daemon calls ``os.setsid()`` after fork so it survives proxy exit (e.g. Claude Code session close) and does not die with the proxy's process group.
+- **`delete_thought` confirmation contract:** the MCP `delete_thought(id, confirm)` tool requires `confirm` to be passed explicitly (no default). Always call once with `confirm=False` first — the response carries metadata + the first ~200 chars of the body — show that preview to the user, then call again with `confirm=True` only after explicit user approval. Each call deletes at most one thought; bulk delete-by-search is intentionally not supported via MCP. The `engram delete <id>` CLI parallels this with a typed-string (`delete`) confirmation gate and a `--dry-run` flag.
 - **CI matrix:** Python 3.11 + 3.12, macOS + Ubuntu. ruff + ruff-format + mypy + pytest + coverage all gate the merge.
 
 ## See also
@@ -186,5 +187,5 @@ uv run engram doctor --download-model --print-hashes
 - `docs/COMPARISONS.md` — engram vs Mem0 / Letta / basic-memory / Open Brain / Obsidian / engraph.
 - `docs/adr/` — 8 ADRs (storage, MCP, sync, embedding, sync coordinator, multi-vault, team brain, daemon mode).
 - `docs/DAEMON_MODE.md` — operator + migration guide for daemon mode (v0.5.0+).
-- `~/repos/github.com/kpachhai/idea-forge/docs/superpowers/specs/2026-05-04-engram/` — original spec (12 docs; historical authority).
-- `~/repos/github.com/kpachhai/idea-forge/workspace/engram/PHASE_<N>_RETROSPECTIVE.md` — lessons learned (Phase 2-4).
+- `~/repos/github.com/kpachhai/idea-forge/docs/superpowers/specs/2026-05-04-engram/` — original spec (12 docs; historical authority). <!-- pii-allow:spec-back-ref -->
+- `~/repos/github.com/kpachhai/idea-forge/workspace/engram/PHASE_<N>_RETROSPECTIVE.md` — lessons learned (Phase 2-4). <!-- pii-allow:spec-back-ref -->

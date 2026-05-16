@@ -9,6 +9,38 @@ The MCP tool surface is committed-stable for the v1.x lifetime per the API stabi
 
 ## [Unreleased]
 
+### Added
+
+- **`delete_thought` MCP tool** with a mandatory two-call confirmation
+  contract. Callers pass `confirm: bool` explicitly (no default). The
+  first call (`confirm=False`) returns metadata + a ~200-char body
+  preview without modifying the vault; the second call (`confirm=True`)
+  removes the markdown file, the SQLite row, and the embedding row, and
+  enqueues a git commit via the sync coordinator. Unknown ids return
+  `deleted: false` with a `"Not found"` message (not an error). Tool
+  count rises from seven to eight (six core + two LLM).
+- **`engram delete <id>` CLI** with a typed-string (`delete`) confirmation
+  gate. `--dry-run` prints the preview without modifying the vault;
+  `--yes` skips the prompt (intended for CI / scripts that have already
+  validated the id).
+- **`ThoughtNotFoundError`** in `engram.errors` (error_code
+  `thought_not_found`) — raised by `VaultStorage.delete()` when the id
+  is absent. The MCP and CLI handlers shield callers from the exception
+  and surface a user-visible "Not found" message instead.
+
+### Changed
+
+- **`VaultStorage.delete(thought_id, *, source="api")`** now returns the
+  deleted `Thought` (previously `bool`) so callers can emit a
+  confirmation that includes prefix + portability without a separate
+  lookup. The method emits a structured INFO log line
+  (`thought_deleted id=... prefix=... portability=... fingerprint=...
+  vault=... source=...`) and forwards the deleted thought to
+  `_post_capture_sync` so the sync coordinator stages the git removal.
+  Existing callers that ignored the return value (CLI move-thought)
+  continue to work; callers that relied on the boolean falsy return
+  for "not found" must catch `ThoughtNotFoundError` instead.
+
 ## [0.5.0] - 2026-05-13 — Phase 5: Daemon Mode (multi-session support)
 
 The big change in v0.5.0: **N concurrent Claude Code sessions can now
@@ -660,4 +692,4 @@ Design spec lives locally at
   diagnostics, embedding, mcp, migration, models, storage, utils, fixtures,
   properties).
 
-[Unreleased]: https://github.com/kpachhai/engram/compare/...HEAD
+[Unreleased]: https://github.com/kpachhai/engram/compare/...HEAD <!-- pii-allow:repo-url -->

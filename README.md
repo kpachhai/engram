@@ -80,17 +80,18 @@ Detailed analysis: **[docs/COMPARISONS.md](docs/COMPARISONS.md)**.
 
 ## Tools exposed via MCP
 
-Seven tools — five core (deterministic, no LLM calls), two optional LLM-mediated:
+Eight tools — six core (deterministic, no LLM calls), two optional LLM-mediated:
 
 - `capture_thought(content, metadata?)` — write a new thought
 - `search_thoughts(query, k?, filter?)` — semantic top-k
 - `list_thoughts(limit?, offset?, filter?, sort?)` — filtered + sorted + paginated
 - `thought_stats()` — aggregate counts
 - `fetch(id)` — lookup by id
+- `delete_thought(id, confirm)` — delete a thought; AI clients MUST call once with `confirm=False` to obtain a preview, then again with `confirm=True` after explicit user approval (also exposed as `engram delete <id>` CLI with typed-string confirmation gate)
 - `summarize_thought(id)` — LLM-mediated single-thought summary (opt-in; also exposed as `engram summarize <id>` CLI)
 - `synthesize_thoughts(query, k, filter)` — LLM-mediated cross-vault RAG (opt-in; also exposed as `engram synthesize "<query>"` CLI)
 
-The five-tool core surface is stable for the v1.x lifetime; LLM tools follow the same stability commitment.
+The six-tool core surface is stable for the v1.x lifetime; LLM tools follow the same stability commitment.
 
 ## Architecture in one paragraph
 
@@ -122,7 +123,7 @@ Full walkthrough with diagrams: **[docs/ARCHITECTURE.md](docs/ARCHITECTURE.md)**
 You can run engram entirely from a working copy of this repo:
 
 ```bash
-git clone https://github.com/kpachhai/engram
+git clone https://github.com/kpachhai/engram  # pii-allow:repo-url
 cd engram
 uv sync --all-extras --dev
 
@@ -207,7 +208,7 @@ For most updates, `engram doctor` post-update is the catch-all: if any check is 
 ## Development
 
 ```bash
-git clone https://github.com/kpachhai/engram
+git clone https://github.com/kpachhai/engram  # pii-allow:repo-url
 cd engram
 uv sync --all-extras --dev
 uv run pytest

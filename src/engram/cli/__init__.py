@@ -51,6 +51,7 @@ def _root(
 from engram.cli import bundle as _bundle_cmd  # noqa: E402
 from engram.cli import clone as _clone_cmd  # noqa: E402
 from engram.cli import daemon as _daemon_cmd  # noqa: E402
+from engram.cli import delete as _delete_cmd  # noqa: E402
 from engram.cli import doctor as _doctor_cmd  # noqa: E402
 from engram.cli import init as _init_cmd  # noqa: E402
 from engram.cli import llm as _llm_cmd  # noqa: E402
@@ -72,6 +73,7 @@ _sync_cmd.register(app)
 _bundle_cmd.register(app)
 _team_vault_cmd.register(app)
 _llm_cmd.register(app)
+_delete_cmd.register(app)
 if hasattr(_move_thought_cmd, "register"):
     _move_thought_cmd.register(app)
 

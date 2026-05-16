@@ -12,6 +12,7 @@ from engram.embedding.protocol import EmbeddingProvider
 from engram.errors import EmbeddingError
 from engram.mcp.tools import (
     capture_thought_handler,
+    delete_thought_handler,
     fetch_handler,
     list_thoughts_handler,
     search_thoughts_handler,
@@ -20,6 +21,7 @@ from engram.mcp.tools import (
 from engram.models.mcp import (
     CaptureInput,
     CaptureInputMetadata,
+    DeleteInput,
     FetchInput,
     Filter,
     ListInput,
@@ -92,11 +94,11 @@ def test_capture_thought_writes_with_embedding(vault, embedder):
 def test_capture_thought_uses_default_user_when_no_metadata_source(vault, embedder):
     payload = CaptureInput(content="[Lesson] body")
     result = asyncio.run(
-        capture_thought_handler(vault, embedder, payload=payload, default_user="kpachhai")
+        capture_thought_handler(vault, embedder, payload=payload, default_user="testuser")
     )
     fetched = vault.get_by_id(result.id)
     assert fetched is not None
-    assert fetched.source == "kpachhai"
+    assert fetched.source == "testuser"
 
 
 def test_capture_thought_metadata_source_overrides_default(vault, embedder):
@@ -105,7 +107,7 @@ def test_capture_thought_metadata_source_overrides_default(vault, embedder):
         metadata=CaptureInputMetadata(source="alice"),
     )
     result = asyncio.run(
-        capture_thought_handler(vault, embedder, payload=payload, default_user="kpachhai")
+        capture_thought_handler(vault, embedder, payload=payload, default_user="testuser")
     )
     fetched = vault.get_by_id(result.id)
     assert fetched is not None
@@ -257,3 +259,90 @@ def test_fetch_unknown_returns_null_thought_not_error(vault):
     """B6: fetch returns null thought (not error) for unknown id."""
     result = asyncio.run(fetch_handler(vault, payload=FetchInput(id=uuid4())))
     assert result.thought is None
+
+
+# === delete_thought ===
+
+
+def test_delete_thought_dry_run_returns_preview(vault, embedder):
+    """confirm=False returns preview metadata + body_preview; does NOT delete."""
+    captured = asyncio.run(
+        capture_thought_handler(
+            vault, embedder, payload=CaptureInput(content="[Lesson] preview body content")
+        )
+    )
+    result = asyncio.run(
+        delete_thought_handler(vault, payload=DeleteInput(id=captured.id, confirm=False))
+    )
+    assert result.deleted is False
+    assert result.id == captured.id
+    assert result.prefix == "Lesson"
+    assert result.portability == "portable"
+    assert result.created_at is not None
+    assert result.body_preview is not None
+    assert "preview body content" in result.body_preview
+    assert "Dry run" in result.message
+    # Thought is still in the vault.
+    assert vault.get_by_id(captured.id) is not None
+
+
+def test_delete_thought_confirm_true_deletes(vault, embedder):
+    """confirm=True removes the thought; returns deleted=True with metadata."""
+    captured = asyncio.run(
+        capture_thought_handler(
+            vault, embedder, payload=CaptureInput(content="[Lesson] please delete me")
+        )
+    )
+    result = asyncio.run(
+        delete_thought_handler(vault, payload=DeleteInput(id=captured.id, confirm=True))
+    )
+    assert result.deleted is True
+    assert result.id == captured.id
+    assert result.prefix == "Lesson"
+    assert "Deleted thought" in result.message
+    # Verify the thought is gone.
+    assert vault.get_by_id(captured.id) is None
+
+
+def test_delete_thought_unknown_returns_not_found_not_error(vault):
+    """Unknown id returns deleted=False with 'Not found' message (no raise)."""
+    bogus = uuid4()
+    result = asyncio.run(delete_thought_handler(vault, payload=DeleteInput(id=bogus, confirm=True)))
+    assert result.deleted is False
+    assert result.id == bogus
+    assert "Not found" in result.message
+    assert result.body_preview is None
+
+
+def test_delete_thought_dry_run_never_calls_storage_delete(vault, embedder):
+    """confirm=False must NOT invoke storage.delete (defense-in-depth check)."""
+    captured = asyncio.run(
+        capture_thought_handler(
+            vault, embedder, payload=CaptureInput(content="[Lesson] dry-run-only")
+        )
+    )
+
+    call_count = {"n": 0}
+    real_delete = vault.delete
+
+    def _counting_delete(*args, **kwargs):
+        call_count["n"] += 1
+        return real_delete(*args, **kwargs)
+
+    vault.delete = _counting_delete
+    try:
+        asyncio.run(
+            delete_thought_handler(vault, payload=DeleteInput(id=captured.id, confirm=False))
+        )
+    finally:
+        vault.delete = real_delete
+
+    assert call_count["n"] == 0
+
+
+def test_delete_thought_input_rejects_missing_confirm():
+    """confirm has no default; absent confirm is a Pydantic validation error."""
+    from pydantic import ValidationError
+
+    with pytest.raises(ValidationError):
+        DeleteInput.model_validate({"id": str(uuid4())})

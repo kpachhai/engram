@@ -72,6 +72,18 @@ class MigrationError(EngramError):
     error_code: str = "migration_error"
 
 
+class ThoughtNotFoundError(EngramError):
+    """Raised when a delete or fetch targets an ID not in the index.
+
+    The MCP ``fetch`` tool intentionally returns ``thought: null`` for
+    unknown ids (NOT this error); callers that require existence (delete,
+    move-thought) raise this so the caller knows the operation was a
+    no-op rather than a silent success.
+    """
+
+    error_code: str = "thought_not_found"
+
+
 # Multi-vault errors --------------------------------------------------------
 
 
@@ -361,6 +373,7 @@ __all__ = [
     "TeamVaultAlreadyInitialized",
     "TeamVaultEmbeddingMismatch",
     "TeamWriteRequiresRemote",
+    "ThoughtNotFoundError",
     "VaultError",
     "VaultPathCollision",
     "VaultReadOnlyError",

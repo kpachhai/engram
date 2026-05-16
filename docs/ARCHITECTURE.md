@@ -271,7 +271,7 @@ compat shim).
 
 ## MCP API surface
 
-Seven tools, stable for the v1.x lifetime:
+Eight tools, stable for the v1.x lifetime:
 
 | Tool | Purpose | Side effects |
 |------|---------|--------------|
@@ -280,8 +280,15 @@ Seven tools, stable for the v1.x lifetime:
 | `list_thoughts` | Filtered + sorted + paginated list | none |
 | `thought_stats` | Aggregate counts | none |
 | `fetch` | Lookup by id | none |
+| `delete_thought` | Delete a thought by id (mandatory two-call confirm contract) | unlinks markdown + deletes SQLite row + embedding + enqueues git commit |
 | `summarize_thought` | LLM-mediated single-thought summary (opt-in) | LLM call (per portability gate) |
 | `synthesize_thoughts` | LLM-mediated cross-vault RAG (opt-in) | LLM call (per portability gate) |
+
+The `delete_thought` tool takes a required `confirm: bool`. AI clients
+MUST call once with `confirm=False` to obtain a metadata + body-preview
+response, show that preview to the user, and only call again with
+`confirm=True` after explicit approval. Unknown ids return
+`deleted: false` with a `"Not found"` message (not an error).
 
 **API stability commitment:** these signatures and field shapes are stable for the v1.x lifetime. Only non-breaking additions (new optional fields, new optional filter dimensions, new tools) are permitted. Breaking changes warrant v2.0.
 
@@ -297,7 +304,7 @@ GPG identity is discovered via `gpg --list-secret-keys --with-colons`; the colon
 
 ## LLM features (opt-in)
 
-Engram's five core MCP tools are deterministic — no LLM calls. Two additional tools layer LLM-mediated features on top:
+Engram's six core MCP tools are deterministic — no LLM calls. Two additional tools layer LLM-mediated features on top:
 
 - `summarize_thought(id)` — compresses a single thought via the configured LLM provider with a citation post-validator.
 - `synthesize_thoughts(query, k, filter)` — RAG-style cross-vault synthesis. Aggregates top-k from all mounted vaults (per portability gate), wraps each in a delimited block, calls the LLM with an anti-injection system prompt, validates citations.

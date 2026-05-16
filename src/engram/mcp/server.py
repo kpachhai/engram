@@ -2,12 +2,13 @@
 
 Two factories:
 
-* :func:`build_server` - 5-tool single-vault wiring used by
-  single-vault deployments.
+* :func:`build_server` - single-vault wiring exposing the six core tools
+  (``capture_thought``, ``search_thoughts``, ``list_thoughts``,
+  ``thought_stats``, ``fetch``, ``delete_thought``).
 * :func:`build_multivault_server` - multi-vault wiring that takes a
   :class:`engram.multivault.registry.VaultRegistry` and adds the
   ``summarize_thought`` and ``synthesize_thoughts`` tools alongside
-  the stable five.
+  the six core tools (eight total).
 
 Each tool is a thin shim around the handlers in
 :mod:`engram.mcp.tools` (storage tools) or :mod:`engram.mcp.llm_tools`
@@ -34,6 +35,7 @@ from engram.mcp.llm_tools import (
 )
 from engram.mcp.tools import (
     capture_thought_handler,
+    delete_thought_handler,
     fetch_handler,
     list_thoughts_handler,
     search_thoughts_handler,
@@ -43,6 +45,8 @@ from engram.models.mcp import (
     CaptureInput,
     CaptureInputMetadata,
     CaptureOutput,
+    DeleteInput,
+    DeleteOutput,
     FetchInput,
     FetchOutput,
     Filter,
@@ -83,10 +87,10 @@ def build_server(
     default_user: str = "engram-user",
     server_name: str = "engram",
 ) -> FastMCP[Any]:
-    """Wire the 5 engram tools to a FastMCP server and return it.
+    """Wire the six core engram tools to a FastMCP server and return it.
 
     Single-vault entry point. Multi-vault callers use
-    :func:`build_multivault_server`.
+    :func:`build_multivault_server`, which adds the optional LLM tools.
     """
     mcp: FastMCP[Any] = FastMCP(server_name)
 
@@ -141,6 +145,27 @@ def build_server(
         result: FetchOutput = await fetch_handler(storage, payload=payload)
         return result.model_dump(mode="json")
 
+    @mcp.tool
+    async def delete_thought(id: str, confirm: bool) -> dict[str, Any]:
+        """Delete a thought permanently from the vault.
+
+        ALWAYS call with ``confirm=False`` first to preview the thought
+        (returns prefix, portability, created_at, and the first ~200 chars
+        of the body). Show the preview to the user. Only call again with
+        ``confirm=True`` after the user has explicitly approved the
+        deletion. Deletion removes the markdown file, the SQLite row, and
+        the embedding, and enqueues a git commit so the change propagates
+        to other machines on the next pull.
+
+        Unknown ids return ``deleted: false`` with a ``"Not found"``
+        message (not an error). Each ``delete_thought`` call deletes at
+        most one thought; bulk deletion requires N explicit confirmed
+        calls.
+        """
+        payload = DeleteInput(id=UUID(id), confirm=confirm)
+        result: DeleteOutput = await delete_thought_handler(storage, payload=payload)
+        return result.model_dump(mode="json")
+
     return mcp
 
 
@@ -154,10 +179,11 @@ def build_multivault_server(
 ) -> FastMCP[Any]:
     """Multi-vault MCP server with routing dispatcher + capture gate.
 
-    Wires the seven engram tools (``capture_thought``,
+    Wires the eight engram tools (``capture_thought``,
     ``search_thoughts``, ``list_thoughts``, ``thought_stats``,
-    ``fetch``, ``summarize_thought``, ``synthesize_thoughts``) to a
-    FastMCP server backed by a :class:`VaultRegistry`. ``capture_thought``
+    ``fetch``, ``delete_thought``, ``summarize_thought``,
+    ``synthesize_thoughts``) to a FastMCP server backed by a
+    :class:`VaultRegistry`. ``capture_thought``
     consults the per-prefix routing dispatcher when no explicit ``vault:``
     metadata is supplied, then runs the team-vault capture gate
     (read-only refusal + member enrollment + policy refuse-or-pass +
@@ -352,6 +378,27 @@ def build_multivault_server(
         """
         payload = FetchInput(id=UUID(id))
         result: FetchOutput = await fetch_handler(registry.primary(), payload=payload)
+        return result.model_dump(mode="json")
+
+    @mcp.tool
+    async def delete_thought(id: str, confirm: bool) -> dict[str, Any]:
+        """Delete a thought permanently from the primary vault.
+
+        ALWAYS call with ``confirm=False`` first to preview the thought
+        (returns prefix, portability, created_at, and the first ~200 chars
+        of the body). Show the preview to the user. Only call again with
+        ``confirm=True`` after the user has explicitly approved the
+        deletion. Deletion removes the markdown file, the SQLite row, and
+        the embedding, and enqueues a git commit so the change propagates
+        to other machines on the next pull.
+
+        Targets the primary vault. Cross-vault delete is not yet
+        supported via MCP; operators delete from non-primary vaults via
+        ``engram delete --vault <name>``. Each call deletes at most one
+        thought.
+        """
+        payload = DeleteInput(id=UUID(id), confirm=confirm)
+        result: DeleteOutput = await delete_thought_handler(registry.primary(), payload=payload)
         return result.model_dump(mode="json")
 
     @mcp.tool

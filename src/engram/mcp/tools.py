@@ -21,11 +21,13 @@ from typing import TypedDict
 from uuid import UUID
 
 from engram.embedding.protocol import EmbeddingProvider
-from engram.errors import EmbeddingError
+from engram.errors import EmbeddingError, ThoughtNotFoundError
 from engram.models.frontmatter import Portability
 from engram.models.mcp import (
     CaptureInput,
     CaptureOutput,
+    DeleteInput,
+    DeleteOutput,
     FetchInput,
     FetchOutput,
     ListInput,
@@ -188,8 +190,78 @@ async def fetch_handler(
     return FetchOutput(thought=thought)
 
 
+#: Body preview length (characters) shown in ``delete_thought`` dry-run
+#: responses. Long enough for the AI/user to identify the thought,
+#: short enough to keep the wire payload bounded.
+_DELETE_BODY_PREVIEW_CHARS = 200
+
+
+async def delete_thought_handler(
+    storage: VaultStorage,
+    *,
+    payload: DeleteInput,
+) -> DeleteOutput:
+    """Handle the ``delete_thought`` MCP tool.
+
+    Two-call contract:
+
+    1. ``confirm=False`` returns a preview (metadata + first ~200 chars of
+       body) and does NOT modify the vault.
+    2. ``confirm=True`` deletes the thought (markdown + SQLite row +
+       embedding) and enqueues a git commit via the sync coordinator.
+
+    Unknown ids return ``deleted=False`` with a ``"Not found"`` message
+    rather than raising, mirroring the ``fetch`` tool's friendly-failure
+    semantics: the AI client should see "thought not found" as a domain
+    response, not an exception.
+    """
+    thought_id: UUID = payload.id
+    existing = storage.get_by_id(thought_id)
+    if existing is None:
+        return DeleteOutput(
+            deleted=False,
+            id=thought_id,
+            message=f"Not found: no thought with id={thought_id}",
+        )
+    body_preview = existing.content[:_DELETE_BODY_PREVIEW_CHARS] if existing.content else None
+    if not payload.confirm:
+        return DeleteOutput(
+            deleted=False,
+            id=existing.id,
+            prefix=existing.prefix,
+            portability=existing.portability,
+            created_at=existing.created_at,
+            body_preview=body_preview,
+            message=(
+                "Dry run: thought not deleted. Call again with confirm=True to permanently delete."
+            ),
+        )
+    try:
+        deleted = storage.delete(existing.id, source="mcp")
+    except ThoughtNotFoundError:
+        # Race: thought disappeared between lookup and delete (another
+        # client / CLI process deleted it). Report as not-found rather
+        # than re-raising.
+        return DeleteOutput(
+            deleted=False,
+            id=thought_id,
+            message=(
+                f"Not found: thought {thought_id} was already deleted between preview and confirm"
+            ),
+        )
+    return DeleteOutput(
+        deleted=True,
+        id=deleted.id,
+        prefix=deleted.prefix,
+        portability=deleted.portability,
+        created_at=deleted.created_at,
+        message=f"Deleted thought {deleted.id} ({deleted.prefix}).",
+    )
+
+
 __all__ = [
     "capture_thought_handler",
+    "delete_thought_handler",
     "fetch_handler",
     "list_thoughts_handler",
     "search_thoughts_handler",
