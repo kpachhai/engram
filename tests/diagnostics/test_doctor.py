@@ -4,6 +4,8 @@ from __future__ import annotations
 
 from pathlib import Path
 
+import pytest
+
 from engram.config.models import (
     DEFAULT_EMBEDDING_MODEL,
     EffectiveConfig,
@@ -11,10 +13,31 @@ from engram.config.models import (
     SyncConfig,
 )
 from engram.diagnostics.doctor import CheckStatus, run_diagnostics
+from engram.embedding.model_hashes import KNOWN_MODEL_HASHES
 from engram.embedding.protocol import EmbeddingProvider
 from engram.storage.facade import VaultStorage
 
 _DIM = 384
+
+
+@pytest.fixture(autouse=True)
+def _isolate_fastembed_cache(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    """Point FastEmbed's default cache resolution at a clean per-test directory.
+
+    The ``embedding_cache_integrity`` doctor check resolves the cache via
+    :func:`engram.embedding.fastembed.default_fastembed_cache_dir`.
+    Monkeypatching the stdlib ``tempfile`` module is insufficient because
+    its tempdir is cached early in the process; monkeypatching our
+    explicit helper instead is surgical and reliable. Without this
+    isolation the developer's actual FastEmbed cache leaks into test
+    outcomes and the same suite produces different statuses on different
+    machines.
+    """
+    fake_cache = tmp_path / "fastembed_cache"
+    monkeypatch.setattr(
+        "engram.embedding.fastembed.default_fastembed_cache_dir",
+        lambda: fake_cache,
+    )
 
 
 class _StubEmbedder:
@@ -229,3 +252,126 @@ def test_exit_code_two_when_any_fail(tmp_path: Path):
     config.thoughts_dir.rmdir()  # induces a FAIL
     report = run_diagnostics(config, embedder_factory=_stub_factory)
     assert report.exit_code == 2
+
+
+# === embedding_cache_integrity check ===
+
+
+def _seed_snapshot(cache_root: Path, *, files: list[str]) -> Path:
+    """Materialize a fake HF-cache snapshot under ``cache_root/fastembed_cache``.
+
+    Mirrors the on-disk layout FastEmbed itself uses for
+    BAAI/bge-small-en-v1.5 so the doctor check resolves the same snapshot
+    it would in production. Each entry in ``files`` becomes a present
+    regular file; entries the test omits stay absent (the broken-partial
+    state we're trying to surface).
+    """
+    snapshot = (
+        cache_root
+        / "fastembed_cache"
+        / "models--qdrant--bge-small-en-v1.5-onnx-q"
+        / "snapshots"
+        / "test-snapshot-id"
+    )
+    snapshot.mkdir(parents=True)
+    for filename in files:
+        (snapshot / filename).write_bytes(b"stub")
+    return snapshot
+
+
+def test_cache_integrity_ok_when_no_cache_exists(tmp_path: Path):
+    config = _make_config(tmp_path)
+    storage = VaultStorage(
+        thoughts_dir=config.thoughts_dir,
+        index_db_path=config.index_dir / "engram.db",
+        embedding_dim=_DIM,
+        embedding_model_name=DEFAULT_EMBEDDING_MODEL,
+    )
+    storage.close()
+
+    report = run_diagnostics(config, embedder_factory=_stub_factory)
+    check = next(c for c in report.checks if c.name == "embedding_cache_integrity")
+    assert check.status is CheckStatus.OK
+    assert "no FastEmbed cache yet" in check.message
+
+
+def test_cache_integrity_ok_when_snapshot_intact(tmp_path: Path):
+    config = _make_config(tmp_path)
+    storage = VaultStorage(
+        thoughts_dir=config.thoughts_dir,
+        index_db_path=config.index_dir / "engram.db",
+        embedding_dim=_DIM,
+        embedding_model_name=DEFAULT_EMBEDDING_MODEL,
+    )
+    storage.close()
+
+    expected = list(KNOWN_MODEL_HASHES[DEFAULT_EMBEDDING_MODEL].keys())
+    _seed_snapshot(tmp_path, files=expected)
+
+    report = run_diagnostics(config, embedder_factory=_stub_factory)
+    check = next(c for c in report.checks if c.name == "embedding_cache_integrity")
+    assert check.status is CheckStatus.OK
+    assert "snapshot intact" in check.message
+
+
+def test_cache_integrity_warn_when_snapshot_partial(tmp_path: Path):
+    """Reproduces the broken-partial cache mode: symlinks exist, blobs don't."""
+    config = _make_config(tmp_path)
+    storage = VaultStorage(
+        thoughts_dir=config.thoughts_dir,
+        index_db_path=config.index_dir / "engram.db",
+        embedding_dim=_DIM,
+        embedding_model_name=DEFAULT_EMBEDDING_MODEL,
+    )
+    storage.close()
+
+    expected = list(KNOWN_MODEL_HASHES[DEFAULT_EMBEDDING_MODEL].keys())
+    # Drop the model_optimized.onnx file - the exact failure mode that triggers
+    # ONNX NO_SUCHFILE on first embed call.
+    partial = [f for f in expected if f != "model_optimized.onnx"]
+    _seed_snapshot(tmp_path, files=partial)
+
+    report = run_diagnostics(config, embedder_factory=_stub_factory)
+    check = next(c for c in report.checks if c.name == "embedding_cache_integrity")
+    assert check.status is CheckStatus.WARN
+    assert "incomplete" in check.message
+    assert check.detail is not None
+    assert "model_optimized.onnx" in check.detail
+    assert report.exit_code == 1
+
+
+def test_cache_integrity_warn_when_symlink_target_missing(tmp_path: Path):
+    """A symlink whose target blob is gone counts as missing.
+
+    HuggingFace's cache layout stores files as symlinks into ``blobs/``.
+    When the snapshot exists but the underlying blob is removed (the
+    failure shape we hit in the wild), ``Path.exists`` returns False on
+    the dangling symlink and the check should report WARN.
+    """
+    config = _make_config(tmp_path)
+    storage = VaultStorage(
+        thoughts_dir=config.thoughts_dir,
+        index_db_path=config.index_dir / "engram.db",
+        embedding_dim=_DIM,
+        embedding_model_name=DEFAULT_EMBEDDING_MODEL,
+    )
+    storage.close()
+
+    intact_files = [
+        f for f in KNOWN_MODEL_HASHES[DEFAULT_EMBEDDING_MODEL] if f != "model_optimized.onnx"
+    ]
+    snapshot = _seed_snapshot(tmp_path, files=intact_files)
+    # Add the model_optimized.onnx as a symlink whose target was deleted.
+    blob = tmp_path / "missing_blob"
+    blob.write_bytes(b"placeholder")
+    symlink = snapshot / "model_optimized.onnx"
+    symlink.symlink_to(blob)
+    blob.unlink()
+    assert symlink.is_symlink()
+    assert not symlink.exists()  # dangling
+
+    report = run_diagnostics(config, embedder_factory=_stub_factory)
+    check = next(c for c in report.checks if c.name == "embedding_cache_integrity")
+    assert check.status is CheckStatus.WARN
+    assert check.detail is not None
+    assert "model_optimized.onnx" in check.detail

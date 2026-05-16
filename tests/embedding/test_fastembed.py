@@ -239,6 +239,120 @@ def test_list_cached_files_returns_empty_when_no_snapshot(tmp_path: Path):
     assert provider.list_cached_files() == {}
 
 
+# === cache integrity (read-only, never triggers download) ===
+
+
+def test_check_cache_integrity_reports_no_cache_when_dir_missing(tmp_path: Path):
+    """No cache root on disk -> ``cache_dir`` is None in the report."""
+    cache_dir = tmp_path / "never-created"
+    provider = FastEmbedProvider(cache_dir=cache_dir)
+    report = provider.check_cache_integrity()
+    assert report.cache_dir is None
+    assert report.snapshot_dir is None
+    assert report.missing_files == ()
+    assert report.is_intact is False
+    assert report.has_snapshot is False
+
+
+def test_check_cache_integrity_reports_no_snapshot_when_cache_empty(tmp_path: Path):
+    """Cache root exists but no snapshots yet -> snapshot_dir None, no missing."""
+    cache_dir = tmp_path / "empty-cache"
+    cache_dir.mkdir()
+    provider = FastEmbedProvider(cache_dir=cache_dir)
+    report = provider.check_cache_integrity()
+    assert report.cache_dir == cache_dir
+    assert report.snapshot_dir is None
+    assert report.missing_files == ()
+
+
+def test_check_cache_integrity_reports_intact_when_all_files_present(tmp_path: Path):
+    """Snapshot dir with every manifest file present -> is_intact True, no missing."""
+    cache_dir = tmp_path / "cache"
+    cache_dir.mkdir()
+    snapshot = _make_hf_snapshot_dir(cache_dir)
+    from engram.embedding.model_hashes import BGE_SMALL_EN_V1_5_HASHES
+
+    for filename in BGE_SMALL_EN_V1_5_HASHES:
+        (snapshot / filename).write_bytes(b"stub")
+
+    provider = FastEmbedProvider(cache_dir=cache_dir)
+    report = provider.check_cache_integrity()
+    assert report.manifest_populated is True
+    assert report.snapshot_dir == snapshot
+    assert report.missing_files == ()
+    assert report.is_intact is True
+
+
+def test_check_cache_integrity_reports_missing_files_when_snapshot_partial(tmp_path: Path):
+    """Partial snapshot (some files absent) -> missing_files lists the gaps."""
+    cache_dir = tmp_path / "cache"
+    cache_dir.mkdir()
+    snapshot = _make_hf_snapshot_dir(cache_dir)
+    from engram.embedding.model_hashes import BGE_SMALL_EN_V1_5_HASHES
+
+    # Write everything EXCEPT model_optimized.onnx - the exact failure shape
+    # that triggers ONNX NO_SUCHFILE at first embed call.
+    for filename in BGE_SMALL_EN_V1_5_HASHES:
+        if filename == "model_optimized.onnx":
+            continue
+        (snapshot / filename).write_bytes(b"stub")
+
+    provider = FastEmbedProvider(cache_dir=cache_dir)
+    report = provider.check_cache_integrity()
+    assert "model_optimized.onnx" in report.missing_files
+    assert report.is_intact is False
+
+
+def test_check_cache_integrity_detects_dangling_symlink(tmp_path: Path):
+    """A symlink whose target blob is gone counts as missing.
+
+    HuggingFace's cache layout stores file contents as blobs and the
+    snapshot dir as symlinks into ``blobs/``. When the blob is deleted
+    but the snapshot symlink remains, ``Path.exists`` returns False
+    on the dangling link and we count it as missing.
+    """
+    cache_dir = tmp_path / "cache"
+    cache_dir.mkdir()
+    snapshot = _make_hf_snapshot_dir(cache_dir)
+    from engram.embedding.model_hashes import BGE_SMALL_EN_V1_5_HASHES
+
+    for filename in BGE_SMALL_EN_V1_5_HASHES:
+        if filename == "model_optimized.onnx":
+            continue
+        (snapshot / filename).write_bytes(b"stub")
+
+    # Add a dangling symlink for model_optimized.onnx.
+    blob = tmp_path / "blob_will_be_deleted"
+    blob.write_bytes(b"placeholder")
+    (snapshot / "model_optimized.onnx").symlink_to(blob)
+    blob.unlink()
+
+    provider = FastEmbedProvider(cache_dir=cache_dir)
+    report = provider.check_cache_integrity()
+    assert "model_optimized.onnx" in report.missing_files
+
+
+def test_check_cache_integrity_uses_fastembed_default_when_no_cache_dir(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """When ``cache_dir`` is None, resolution falls through to the module default.
+
+    Monkeypatches ``default_fastembed_cache_dir`` directly rather than the
+    stdlib ``tempfile`` module, because ``tempfile.gettempdir`` caches its
+    result early in the process and a TMPDIR env tweak does not reach it.
+    """
+    fake_cache = tmp_path / "fastembed_cache"  # does not exist
+    monkeypatch.setattr(
+        "engram.embedding.fastembed.default_fastembed_cache_dir",
+        lambda: fake_cache,
+    )
+    provider = FastEmbedProvider()  # no explicit cache_dir
+    report = provider.check_cache_integrity()
+    # The path does not exist -> cache_dir resolves to None in the report.
+    assert report.cache_dir is None
+    assert report.snapshot_dir is None
+
+
 # === sha256 helper ===
 
 
@@ -247,7 +361,8 @@ def test_sha256_of_file(tmp_path: Path):
     file_path = tmp_path / "blob.bin"
     file_path.write_bytes(b"hello")
     digest = _sha256_of_file(file_path)
-    assert digest == "2cf24dba5fb0a30e26e83b2ac5b9e29e1b161e5c1fa7425e73043362938b9824"
+    expected = "2cf24dba5fb0a30e26e83b2ac5b9e29e1b161e5c1fa7425e73043362938b9824"  # pii-allow: hash
+    assert digest == expected
 
 
 def test_sha256_of_file_handles_large_files(tmp_path: Path):

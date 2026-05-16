@@ -15,8 +15,10 @@ from __future__ import annotations
 import asyncio
 import hashlib
 import logging
+import tempfile
 import threading
 from collections.abc import Iterable
+from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
@@ -28,6 +30,42 @@ DEFAULT_MODEL_NAME = "BAAI/bge-small-en-v1.5"
 DEFAULT_DIMENSION = 384
 
 
+@dataclass(frozen=True, slots=True)
+class CacheIntegrityReport:
+    """Outcome of a read-only FastEmbed cache integrity check.
+
+    Reports whether the configured model's cache snapshot is present and
+    intact, without triggering a download. Consumed by the
+    ``embedding_cache_integrity`` doctor check.
+    """
+
+    #: Resolved cache root (explicit or FastEmbed default); ``None`` if even
+    #: the cache root cannot be located on this machine.
+    cache_dir: Path | None
+    #: Snapshot directory for the configured model, if one has been
+    #: downloaded; ``None`` when the model has never been cached here.
+    snapshot_dir: Path | None
+    #: Files the manifest expects in the snapshot. Empty when the model
+    #: has no pinned manifest (trust-on-first-use mode).
+    expected_files: tuple[str, ...]
+    #: Subset of ``expected_files`` that are either absent or broken
+    #: symlinks. Empty when the snapshot is intact.
+    missing_files: tuple[str, ...]
+    #: ``True`` when ``expected_files`` came from a populated manifest
+    #: rather than a fallback heuristic. Drives doctor's severity choice.
+    manifest_populated: bool
+
+    @property
+    def has_snapshot(self) -> bool:
+        """Whether a model snapshot exists at all."""
+        return self.snapshot_dir is not None
+
+    @property
+    def is_intact(self) -> bool:
+        """Snapshot is present AND every expected file is present."""
+        return self.has_snapshot and not self.missing_files
+
+
 def _sha256_of_file(path: Path) -> str:
     """Stream-hash a file in 64 KiB chunks; returns lowercase hex digest."""
     digest = hashlib.sha256()
@@ -35,6 +73,17 @@ def _sha256_of_file(path: Path) -> str:
         while chunk := fh.read(65536):
             digest.update(chunk)
     return digest.hexdigest()
+
+
+def default_fastembed_cache_dir() -> Path:
+    """Return FastEmbed's default cache root: ``<TMPDIR>/fastembed_cache``.
+
+    Mirrors FastEmbed's own resolution so the engram doctor check inspects
+    the same directory the embedding loader would. Factored out as a
+    module-level function so tests can monkeypatch this single point
+    rather than the stdlib ``tempfile`` module.
+    """
+    return Path(tempfile.gettempdir()) / "fastembed_cache"
 
 
 class FastEmbedProvider:
@@ -171,14 +220,85 @@ class FastEmbedProvider:
         """
         if self._cache_dir is None:
             return None
+        return self._scan_snapshots_under(self._cache_dir)
+
+    def _resolve_effective_cache_dir(self) -> Path:
+        """Resolve the cache root used by FastEmbed for this provider.
+
+        Mirrors FastEmbed's own resolution: explicit ``cache_dir`` if set,
+        else :func:`default_fastembed_cache_dir`. The returned path may
+        not yet exist on disk; callers should check before iterating it.
+        """
+        if self._cache_dir is not None:
+            return self._cache_dir
+        return default_fastembed_cache_dir()
+
+    @staticmethod
+    def _scan_snapshots_under(cache_dir: Path) -> Path | None:
+        """Find the most-recently-modified snapshot directory under ``cache_dir``."""
+        if not cache_dir.exists():
+            return None
         snapshots: list[Path] = []
-        for repo_dir in self._cache_dir.glob("models--*"):
+        for repo_dir in cache_dir.glob("models--*"):
             snap_root = repo_dir / "snapshots"
             if snap_root.exists():
                 snapshots.extend(d for d in snap_root.iterdir() if d.is_dir())
         if not snapshots:
             return None
         return max(snapshots, key=lambda d: d.stat().st_mtime)
+
+    def check_cache_integrity(self) -> CacheIntegrityReport:
+        """Read-only check that the configured model's cache snapshot is intact.
+
+        Never triggers a download. Resolves the FastEmbed cache root
+        (explicit override or the default ``<TMPDIR>/fastembed_cache``),
+        locates the snapshot for the configured model, and verifies that
+        every file listed in the pinned manifest is present and follows
+        through to an existing blob.
+
+        The doctor command surfaces a WARN row when this returns missing
+        files; load-time integrity is enforced separately via
+        :meth:`verify_model_files`.
+        """
+        effective_cache = self._resolve_effective_cache_dir()
+        if not effective_cache.exists():
+            return CacheIntegrityReport(
+                cache_dir=None,
+                snapshot_dir=None,
+                expected_files=(),
+                missing_files=(),
+                manifest_populated=False,
+            )
+
+        snapshot_dir = self._scan_snapshots_under(effective_cache)
+        manifest = KNOWN_MODEL_HASHES.get(self._model_name, {})
+        manifest_populated = bool(manifest)
+        expected = tuple(manifest.keys()) if manifest else ()
+
+        if snapshot_dir is None:
+            return CacheIntegrityReport(
+                cache_dir=effective_cache,
+                snapshot_dir=None,
+                expected_files=expected,
+                missing_files=(),
+                manifest_populated=manifest_populated,
+            )
+
+        missing: list[str] = []
+        for filename in expected:
+            path = snapshot_dir / filename
+            if not path.exists():
+                # Catches both absent entries AND symlinks whose target blob is gone -
+                # ``Path.exists`` follows symlinks and returns False on dangling ones.
+                missing.append(filename)
+
+        return CacheIntegrityReport(
+            cache_dir=effective_cache,
+            snapshot_dir=snapshot_dir,
+            expected_files=expected,
+            missing_files=tuple(missing),
+            manifest_populated=manifest_populated,
+        )
 
     def list_cached_files(self) -> dict[str, Path]:
         """Return ``{filename: path}`` for the currently cached model files.
@@ -206,4 +326,10 @@ class FastEmbedProvider:
         return await asyncio.to_thread(self.embed, text)
 
 
-__all__ = ["DEFAULT_DIMENSION", "DEFAULT_MODEL_NAME", "FastEmbedProvider"]
+__all__ = [
+    "DEFAULT_DIMENSION",
+    "DEFAULT_MODEL_NAME",
+    "CacheIntegrityReport",
+    "FastEmbedProvider",
+    "default_fastembed_cache_dir",
+]

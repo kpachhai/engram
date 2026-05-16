@@ -202,6 +202,73 @@ def _check_embedding_dimension_recorded(
     )
 
 
+def _check_embedding_cache_integrity(
+    report: DoctorReport,
+    config: EffectiveConfig,
+) -> None:
+    """Surface FastEmbed cache snapshots that are present but incomplete.
+
+    Counters a silent half-failure mode: when a previous download was
+    interrupted (sleep, network blip, process kill), the snapshot dir
+    can end up with the symlinks but not the blobs they point at. The
+    next ``engram serve`` brings up an embedding provider that loads
+    fine until the first search call - then ONNX runtime fails with a
+    cryptic ``NO_SUCHFILE``. This check makes that state visible during
+    ``engram doctor`` without triggering a re-download.
+    """
+    provider = FastEmbedProvider(model_name=config.embedding_model)
+    integrity = provider.check_cache_integrity()
+
+    if integrity.cache_dir is None:
+        report.add(
+            "embedding_cache_integrity",
+            CheckStatus.OK,
+            "no FastEmbed cache yet (model will lazy-download on first use)",
+        )
+        return
+    if not integrity.has_snapshot:
+        report.add(
+            "embedding_cache_integrity",
+            CheckStatus.OK,
+            f"no cached snapshot for {config.embedding_model!r} yet (will lazy-download)",
+        )
+        return
+    if not integrity.manifest_populated:
+        report.add(
+            "embedding_cache_integrity",
+            CheckStatus.OK,
+            (
+                f"snapshot present at {integrity.snapshot_dir} but model has no pinned "
+                f"manifest; skipping presence check (trust-on-first-use)"
+            ),
+        )
+        return
+    if integrity.is_intact:
+        report.add(
+            "embedding_cache_integrity",
+            CheckStatus.OK,
+            (
+                f"FastEmbed snapshot intact "
+                f"({len(integrity.expected_files)} files present at {integrity.snapshot_dir})"
+            ),
+        )
+        return
+
+    missing_count = len(integrity.missing_files)
+    expected_count = len(integrity.expected_files)
+    report.add(
+        "embedding_cache_integrity",
+        CheckStatus.WARN,
+        (
+            f"FastEmbed snapshot incomplete ({missing_count} of {expected_count} files "
+            f"missing or broken-symlink); embedding load will fail at first use. "
+            f"Remediation: delete {integrity.snapshot_dir} and rerun "
+            f"`engram doctor --download-model` to re-fetch."
+        ),
+        detail=", ".join(integrity.missing_files),
+    )
+
+
 def _check_embedding_model(
     report: DoctorReport,
     config: EffectiveConfig,
@@ -541,6 +608,7 @@ def run_diagnostics(
 
     try:
         _check_embedding_dimension_recorded(report, storage, config.embedding_model)
+        _check_embedding_cache_integrity(report, config)
         if embedder_factory is not None:
             try:
                 embedder: EmbeddingProvider | None = embedder_factory(config)
