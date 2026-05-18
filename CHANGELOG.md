@@ -32,6 +32,14 @@ The MCP tool surface is committed-stable for the v1.x lifetime per the API stabi
   held), without acquiring the underlying `flock`. Used by one-shot
   CLI mutating commands to detect a running daemon before opening a
   second SQLite connection.
+- **`CaptureOutput.index_state`** field (`"ok"` | `"failed"`) on the
+  MCP `capture_thought` response. Surfaces when the markdown was
+  written but the SQLite index insert raised so AI clients can warn
+  the operator that the thought won't appear in search/list until
+  `engram reindex` runs. Markdown SoT is unchanged. Additive to the
+  wire format with a safe default (`"ok"`) per the v1.x stability
+  commitment - existing clients ignore the field with no behavior
+  change.
 
 ### Changed
 
@@ -56,6 +64,17 @@ The MCP tool surface is committed-stable for the v1.x lifetime per the API stabi
   `engram bundle` retain their existing bespoke implementations; both
   can migrate to the shared `serve_lock_metadata` helper in a future
   cleanup pass.)
+- **`VaultStorage.capture()` accepts an optional `on_index_failure`
+  callback** (`Callable[[Thought, sqlite3.Error], None] | None`,
+  default `None`). When supplied, the callback fires if the SQLite
+  insert raises - the capture still returns the Thought, the markdown
+  is still on disk, and the historical log-and-continue behavior is
+  preserved when no callback is registered. Used by the MCP
+  `capture_thought` handler to populate the new `index_state` field;
+  internal callers (`move_thought`, `reindex`, migration, tests) keep
+  their existing semantics with zero signature changes. Callback
+  exceptions are caught and logged so they cannot mask the original
+  capture outcome.
 
 ## [0.5.0] - 2026-05-13 — Phase 5: Daemon Mode (multi-session support)
 

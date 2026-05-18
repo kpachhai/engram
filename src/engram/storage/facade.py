@@ -260,12 +260,22 @@ class VaultStorage:
         thought_id: UUID | None = None,
         created_at: datetime | None = None,
         captured_by: str | None = None,
+        on_index_failure: Callable[[Thought, sqlite3.Error], None] | None = None,
     ) -> Thought:
         """Capture a thought: write markdown SoT, then insert SQLite row.
 
         Per Flow A: markdown write must succeed first. If embedding is provided,
         it lands in the same SQLite transaction as the row. If omitted, the row
         is marked ``embedding_status='pending'`` for later repair.
+
+        ``on_index_failure`` is an optional callback invoked when the SQLite
+        insert raises (``sqlite3.Error``). The capture STILL succeeds: the
+        markdown remains the source of truth and ``engram reindex`` recovers
+        the row. Callers that need a real-time signal of degraded index state
+        (notably the MCP ``capture_thought`` handler) can register a
+        callback. Default ``None`` preserves the historical log-and-continue
+        behavior. If the callback itself raises, the error is logged and
+        swallowed - it must not mask the original capture outcome.
 
         Raises:
             VaultError: if content exceeds 1 MB (Q1 default) or markdown write fails.
@@ -347,7 +357,7 @@ class VaultStorage:
                 embedding=embedding,
                 captured_by=thought.captured_by,
             )
-        except sqlite3.Error:
+        except sqlite3.Error as exc:
             # Markdown is on disk (SoT); SQLite is out of sync. Doctor will reconcile.
             # Per Flow A step 3 commentary: log and continue; capture still succeeds.
             _log.exception(
@@ -356,6 +366,15 @@ class VaultStorage:
                 thought.id,
                 absolute_path,
             )
+            if on_index_failure is not None:
+                try:
+                    on_index_failure(thought, exc)
+                except Exception:
+                    # The callback's failure must not mask the original outcome.
+                    _log.exception(
+                        "on_index_failure callback raised for capture %s",
+                        thought.id,
+                    )
 
         # Step 4: git commit/push hook (forwards to sync coordinator if attached).
         self._post_capture_sync(thought)

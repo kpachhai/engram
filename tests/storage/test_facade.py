@@ -403,6 +403,94 @@ def test_repair_skips_if_no_pending(vault: VaultStorage):
 # === content size cap (Q1: warn 100KB, reject 1MB) ===
 
 
+def test_capture_invokes_on_index_failure_callback_on_sqlite_error(
+    vault: VaultStorage, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """SQLite insert failure fires the callback with thought + exception.
+
+    Regression: prior to 2026-05-18 the daemon was silently swallowing
+    SQLite EIOs on capture for 3 days; 38 markdown-only orphan rows
+    accumulated before reindex recovered them. The callback channel
+    lets the MCP capture handler surface ``index_state='failed'`` to
+    AI clients in real time.
+    """
+    import sqlite3
+
+    from engram.storage import facade as facade_mod
+
+    captured_signals: list[tuple[object, sqlite3.Error]] = []
+
+    def _on_failure(t: object, exc: sqlite3.Error) -> None:
+        captured_signals.append((t, exc))
+
+    # Force the SQLite insert to raise once.
+    fake_exc = sqlite3.OperationalError("disk I/O error")
+
+    def _raising_insert(*_args: object, **_kw: object) -> None:
+        raise fake_exc
+
+    monkeypatch.setattr(facade_mod, "_q_insert_thought", _raising_insert)
+
+    thought = vault.capture(
+        content="[Lesson] callback signal test",
+        embedding=_zero_vec(),
+        on_index_failure=_on_failure,
+    )
+
+    # Markdown is on disk (SoT survives the SQLite failure).
+    assert thought.file_path.exists()
+    # SQLite row is absent (the row insert never landed).
+    assert vault.get_by_id(thought.id) is None
+    # Callback fired with the right shape.
+    assert len(captured_signals) == 1
+    signal_thought, signal_exc = captured_signals[0]
+    assert getattr(signal_thought, "id", None) == thought.id
+    assert signal_exc is fake_exc
+
+
+def test_capture_callback_exceptions_do_not_propagate(
+    vault: VaultStorage, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """A misbehaving callback must not mask the original capture outcome."""
+    import sqlite3
+
+    from engram.storage import facade as facade_mod
+
+    def _raising_insert(*_args: object, **_kw: object) -> None:
+        raise sqlite3.OperationalError("disk I/O error")
+
+    monkeypatch.setattr(facade_mod, "_q_insert_thought", _raising_insert)
+
+    def _bad_callback(_t: object, _exc: object) -> None:
+        raise RuntimeError("callback boom")
+
+    # capture should still return cleanly with the markdown intact.
+    thought = vault.capture(
+        content="[Lesson] bad callback test",
+        embedding=_zero_vec(),
+        on_index_failure=_bad_callback,
+    )
+    assert thought.file_path.exists()
+
+
+def test_capture_without_callback_preserves_legacy_log_and_continue(
+    vault: VaultStorage, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """No callback registered: SQLite failure is logged but capture succeeds."""
+    import sqlite3
+
+    from engram.storage import facade as facade_mod
+
+    def _raising_insert(*_args: object, **_kw: object) -> None:
+        raise sqlite3.OperationalError("disk I/O error")
+
+    monkeypatch.setattr(facade_mod, "_q_insert_thought", _raising_insert)
+
+    thought = vault.capture(content="[Lesson] no-callback path", embedding=_zero_vec())
+    assert thought.file_path.exists()
+    assert vault.get_by_id(thought.id) is None
+
+
 def test_capture_rejects_oversized_content(vault: VaultStorage):
     huge = "x" * (1 * 1024 * 1024 + 1)  # 1 MB + 1 byte
     with pytest.raises(VaultError, match="too large"):

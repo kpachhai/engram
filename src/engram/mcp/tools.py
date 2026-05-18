@@ -111,6 +111,11 @@ async def capture_thought_handler(
     still captured with ``embedding_status='pending'`` and the next
     ``engram doctor --repair`` regenerates the vector.
 
+    SQLite index failure is also non-fatal (markdown remains the source of
+    truth) but is surfaced to the MCP client via ``index_state='failed'`` in
+    the response so the AI assistant can warn the operator that the thought
+    won't appear in search results until ``engram reindex`` runs.
+
     When the target is a team-write vault, ``captured_by`` carries the
     operator's GPG primary fingerprint (40 hex; canonical upper-case)
     set by the team-vault capture gate before this handler runs.
@@ -121,6 +126,12 @@ async def capture_thought_handler(
     except (EmbeddingError, Exception) as exc:
         _log.warning("capture_thought: embedding failed; capturing as pending. error=%s", exc)
 
+    index_failed = False
+
+    def _on_index_failure(_thought: object, _exc: object) -> None:
+        nonlocal index_failed
+        index_failed = True
+
     metadata = payload.metadata
     thought = storage.capture(
         content=payload.content,
@@ -130,11 +141,13 @@ async def capture_thought_handler(
         tags=metadata.tags if metadata else None,
         embedding=embedding,
         captured_by=captured_by,
+        on_index_failure=_on_index_failure,
     )
     return CaptureOutput(
         id=thought.id,
         file_path=_relative_file_path(storage, thought.file_path),
         fingerprint=thought.fingerprint,
+        index_state="failed" if index_failed else "ok",
     )
 
 

@@ -129,6 +129,41 @@ def test_capture_thought_embedding_failure_falls_through_to_pending(vault):
     assert row[0] == "pending"
 
 
+def test_capture_thought_output_default_index_state_is_ok(vault, embedder):
+    """A successful capture surfaces ``index_state='ok'`` in the MCP response."""
+    payload = CaptureInput(content="[Lesson] ok-state default")
+    result = asyncio.run(capture_thought_handler(vault, embedder, payload=payload))
+    assert result.index_state == "ok"
+
+
+def test_capture_thought_output_index_state_failed_on_sqlite_error(vault, embedder, monkeypatch):
+    """SQLite insert failure surfaces as ``index_state='failed'`` to MCP clients.
+
+    Regression for the 2026-05-13 -> 2026-05-16 silent-swallow bug: prior
+    to this signal, AI clients got a successful CaptureOutput while the
+    SQLite row never landed and the thought wouldn't appear in search.
+    """
+    import sqlite3
+
+    from engram.storage import facade as facade_mod
+
+    def _raising_insert(*_args, **_kw):
+        raise sqlite3.OperationalError("disk I/O error")
+
+    monkeypatch.setattr(facade_mod, "_q_insert_thought", _raising_insert)
+
+    payload = CaptureInput(content="[Lesson] failed-index path")
+    result = asyncio.run(capture_thought_handler(vault, embedder, payload=payload))
+    # Capture succeeds from the MCP client's perspective (markdown is SoT,
+    # the id + file_path are reachable) - but index_state surfaces the
+    # degraded state so the AI client can warn the operator.
+    assert result.id is not None
+    assert result.file_path
+    assert result.index_state == "failed"
+    # Verify SQLite row really is absent.
+    assert vault.get_by_id(result.id) is None
+
+
 def test_capture_thought_metadata_prefix_overrides_parsed(vault, embedder):
     payload = CaptureInput(
         content="[Lesson] body",

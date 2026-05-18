@@ -75,13 +75,23 @@ class CaptureInput(BaseModel):
 
 
 class CaptureOutput(BaseModel):
-    """Output of ``capture_thought``: the freshly captured thought's identity."""
+    """Output of ``capture_thought``: the freshly captured thought's identity.
+
+    ``index_state`` is additive in the v1.x stability commitment: clients that
+    ignore the field continue to work, clients that read it get a real-time
+    signal when the SQLite index write failed. ``"ok"`` means the row was
+    inserted; ``"failed"`` means the markdown is on disk but the index row
+    is absent and the thought won't appear in search/list until
+    ``engram reindex`` runs. The markdown source-of-truth is always
+    preserved either way.
+    """
 
     model_config = ConfigDict(extra="ignore")
 
     id: UUID
     file_path: str
     fingerprint: str
+    index_state: Literal["ok", "failed"] = "ok"
 
 
 class SearchInput(BaseModel):
