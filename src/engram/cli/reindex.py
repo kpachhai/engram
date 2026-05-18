@@ -12,6 +12,7 @@ from engram.errors import ConfigError
 from engram.errors import IndexError as EngramIndexError
 from engram.storage.facade import VaultStorage
 from engram.storage.reindex import ReindexMode, reindex_vault
+from engram.utils.lock import serve_lock_metadata
 
 
 def register(app: typer.Typer) -> None:
@@ -55,6 +56,26 @@ def register(app: typer.Typer) -> None:
         except ConfigError as exc:
             typer.secho(f"engram reindex: {exc}", fg=typer.colors.RED, err=True)
             raise typer.Exit(2) from exc
+
+        # Refuse if a daemon / serve loop holds the vault. Reindex opens a
+        # second SQLite connection and walks the full thoughts tree; running
+        # it concurrently with serve can wedge the daemon's WAL handle and
+        # silently drop in-flight captures (markdown remains as SoT, but
+        # the operator has no signal at write time).
+        lock_meta = serve_lock_metadata(config.vault_path)
+        if lock_meta is not None:
+            pid = lock_meta.get("pid", "?")
+            typer.secho(
+                (
+                    "engram reindex: vault lock at "
+                    f"{config.index_dir / 'engram.lock'} is held "
+                    f"(pid={pid}); stop the serve loop first "
+                    "(`engram daemon stop`, or stop `engram serve`)."
+                ),
+                fg=typer.colors.RED,
+                err=True,
+            )
+            raise typer.Exit(2)
 
         if full and repair:
             typer.secho(

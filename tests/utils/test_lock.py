@@ -21,7 +21,7 @@ from unittest.mock import patch
 import pytest
 
 from engram.errors import LockError
-from engram.utils.lock import LOCK_FORMAT_VERSION, VaultLock
+from engram.utils.lock import LOCK_FORMAT_VERSION, VaultLock, serve_lock_metadata
 
 
 def _make_vault(tmp_path: Path) -> Path:
@@ -259,3 +259,39 @@ def test_signal_handlers_restored_on_release(tmp_path: Path) -> None:
 
     assert signal.getsignal(signal.SIGTERM) is initial_sigterm
     assert signal.getsignal(signal.SIGINT) is initial_sigint
+
+
+# === serve_lock_metadata ===
+
+
+def test_serve_lock_metadata_absent_returns_none(tmp_path: Path) -> None:
+    """No lock marker -> None (caller knows the vault is idle)."""
+    vault = _make_vault(tmp_path)
+    assert serve_lock_metadata(vault) is None
+
+
+def test_serve_lock_metadata_present_returns_dict(tmp_path: Path) -> None:
+    """Active VaultLock surfaces as a populated metadata dict."""
+    vault = _make_vault(tmp_path)
+    lock = VaultLock(vault, install_signal_handlers=False)
+    lock.acquire()
+    try:
+        meta = serve_lock_metadata(vault)
+        assert meta is not None
+        assert meta.get("pid") == os.getpid()
+        # Standard VaultLock metadata fields.
+        assert "hostname" in meta
+        assert "acquired_at" in meta
+        assert meta.get("version") == LOCK_FORMAT_VERSION
+    finally:
+        lock.release()
+
+
+def test_serve_lock_metadata_malformed_returns_empty_dict(tmp_path: Path) -> None:
+    """Unreadable / non-JSON lock body -> {} (still signals 'held')."""
+    vault = _make_vault(tmp_path)
+    lock_path = vault / ".indexes" / "engram.lock"
+    lock_path.parent.mkdir(parents=True, exist_ok=True)
+    lock_path.write_text("not a json document", encoding="utf-8")
+    meta = serve_lock_metadata(vault)
+    assert meta == {}

@@ -147,6 +147,57 @@ def test_engram_delete_unknown_id_exits_1(smoke_vault: Path) -> None:
     assert "not found" in result.stderr.lower()
 
 
+def _write_serve_lock(smoke_vault: Path, *, pid: int = 99999) -> Path:
+    """Drop a synthetic serve-lock marker into the vault for refusal tests."""
+    lock_path = smoke_vault / ".indexes" / "engram.lock"
+    lock_path.parent.mkdir(parents=True, exist_ok=True)
+    lock_path.write_text(
+        json.dumps(
+            {
+                "pid": pid,
+                "hostname": "test-host",
+                "acquired_at": "2026-05-18T00:00:00+00:00",
+                "version": "1",
+            }
+        ),
+        encoding="utf-8",
+    )
+    return lock_path
+
+
+def test_engram_delete_refuses_when_serve_lock_held(smoke_vault: Path) -> None:
+    """``engram delete`` refuses (exit 2) if the per-vault serve lock is held."""
+    _write_serve_lock(smoke_vault)
+    result = _run(
+        [
+            "delete",
+            "00000000-0000-0000-0000-000000000000",
+            "--config",
+            str(smoke_vault / "engram.config.yaml"),
+        ],
+        expect_zero=False,
+    )
+    assert result.returncode == 2
+    assert "vault lock" in result.stderr.lower()
+    assert "pid=99999" in result.stderr
+
+
+def test_engram_reindex_refuses_when_serve_lock_held(smoke_vault: Path) -> None:
+    """``engram reindex`` refuses (exit 2) if the per-vault serve lock is held."""
+    _write_serve_lock(smoke_vault)
+    result = _run(
+        [
+            "reindex",
+            "--config",
+            str(smoke_vault / "engram.config.yaml"),
+        ],
+        expect_zero=False,
+    )
+    assert result.returncode == 2
+    assert "vault lock" in result.stderr.lower()
+    assert "pid=99999" in result.stderr
+
+
 # ----- status / stop / logs on a cold vault -------------------------
 
 

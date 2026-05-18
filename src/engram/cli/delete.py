@@ -32,6 +32,7 @@ from engram.embedding.fastembed import FastEmbedProvider
 from engram.errors import ConfigError, ThoughtNotFoundError, VaultReadOnlyError
 from engram.errors import IndexError as EngramIndexError
 from engram.storage.facade import VaultStorage
+from engram.utils.lock import serve_lock_metadata
 
 _TYPED_CONFIRMATION_TOKEN = "delete"  # noqa: S105 - confirmation word, not a credential
 
@@ -114,6 +115,27 @@ def register(app: typer.Typer) -> None:
         except ConfigError as exc:
             typer.secho(f"engram delete: {exc}", fg=typer.colors.RED, err=True)
             raise typer.Exit(2) from exc
+
+        # Refuse if the daemon / serve loop holds the vault. Opening a second
+        # SQLite connection in this process while the daemon owns the WAL can
+        # wedge the daemon's handle - on one observed incident, 38 in-flight
+        # capture rows were silently lost (recovered via `engram reindex`
+        # since markdown is SoT, but the operator got no signal at write
+        # time). Better to refuse here than risk it.
+        lock_meta = serve_lock_metadata(config.vault_path)
+        if lock_meta is not None:
+            pid = lock_meta.get("pid", "?")
+            typer.secho(
+                (
+                    "engram delete: vault lock at "
+                    f"{config.index_dir / 'engram.lock'} is held "
+                    f"(pid={pid}); stop the serve loop first "
+                    "(`engram daemon stop`, or stop `engram serve`)."
+                ),
+                fg=typer.colors.RED,
+                err=True,
+            )
+            raise typer.Exit(2)
 
         embedder = FastEmbedProvider(model_name=config.embedding_model)
 

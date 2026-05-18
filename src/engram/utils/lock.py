@@ -320,4 +320,31 @@ class MigrationLock:
                 os.close(fd)
 
 
-__all__ = ["LOCK_FORMAT_VERSION", "MigrationLock", "VaultLock"]
+def serve_lock_metadata(vault_path: Path) -> dict[str, Any] | None:
+    """Return the serve-lock metadata dict if the lock marker is present, else None.
+
+    Used by one-shot CLI commands (``engram delete``, ``engram reindex``,
+    ``engram bundle``, ``engram sync``) to detect a running daemon /
+    serve-loop before opening a second SQLite connection that would race
+    the daemon's WAL handle. The check is advisory: presence of the
+    marker file is the signal; this function does NOT try to acquire
+    the underlying flock (which would surface as a transient failure
+    when the daemon momentarily releases for housekeeping).
+
+    Returns:
+        None if no lock marker exists.
+        A dict of lock metadata (``pid``, ``hostname``, ``acquired_at``,
+        ``vault_path``, etc.) when the marker exists. Returns an empty
+        dict if the marker exists but its content is unreadable or
+        malformed.
+    """
+    lock_path = vault_path / _INDEXES_SUBDIR / _LOCK_FILENAME
+    if not lock_path.exists():
+        return None
+    try:
+        return dict(json.loads(lock_path.read_text(encoding="utf-8")))
+    except (OSError, json.JSONDecodeError, ValueError):
+        return {}
+
+
+__all__ = ["LOCK_FORMAT_VERSION", "MigrationLock", "VaultLock", "serve_lock_metadata"]

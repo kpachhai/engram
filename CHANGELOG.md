@@ -27,6 +27,11 @@ The MCP tool surface is committed-stable for the v1.x lifetime per the API stabi
   `thought_not_found`) — raised by `VaultStorage.delete()` when the id
   is absent. The MCP and CLI handlers shield callers from the exception
   and surface a user-visible "Not found" message instead.
+- **`engram.utils.lock.serve_lock_metadata(vault_path)`** helper that
+  returns the per-vault serve-lock metadata dict (or `None` if not
+  held), without acquiring the underlying `flock`. Used by one-shot
+  CLI mutating commands to detect a running daemon before opening a
+  second SQLite connection.
 
 ### Changed
 
@@ -40,6 +45,17 @@ The MCP tool surface is committed-stable for the v1.x lifetime per the API stabi
   Existing callers that ignored the return value (CLI move-thought)
   continue to work; callers that relied on the boolean falsy return
   for "not found" must catch `ThoughtNotFoundError` instead.
+- **`engram delete` and `engram reindex` now refuse (exit 2) when the
+  per-vault serve lock is held.** Both commands open a fresh SQLite
+  connection and walk the index; running concurrently with the daemon
+  can wedge the daemon's WAL handle and silently drop in-flight
+  capture rows. The error message names the lock path + PID and
+  directs the operator to stop the serve loop first. `engram sync`
+  and `engram bundle` already had equivalent refusals; this brings the
+  remaining two mutating one-shot CLIs into line. (`engram sync` and
+  `engram bundle` retain their existing bespoke implementations; both
+  can migrate to the shared `serve_lock_metadata` helper in a future
+  cleanup pass.)
 
 ## [0.5.0] - 2026-05-13 — Phase 5: Daemon Mode (multi-session support)
 
