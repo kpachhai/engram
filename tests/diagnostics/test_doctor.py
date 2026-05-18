@@ -104,6 +104,7 @@ def test_fresh_vault_all_ok(tmp_path: Path):
     assert statuses["embedding_model"] is CheckStatus.OK
     assert statuses["index_consistency"] is CheckStatus.OK
     assert statuses["orphan_rows"] is CheckStatus.OK
+    assert statuses["orphan_markdown"] is CheckStatus.OK
     assert statuses["orphan_tempfiles"] is CheckStatus.OK
     assert statuses["pending_embeddings"] is CheckStatus.OK
     assert report.exit_code == 0
@@ -150,6 +151,36 @@ def test_orphan_row_detected(tmp_path: Path):
     report = run_diagnostics(config, embedder_factory=_stub_factory)
     orphan_check = next(c for c in report.checks if c.name == "orphan_rows")
     assert orphan_check.status is CheckStatus.WARN
+
+
+def test_orphan_markdown_detected(tmp_path: Path):
+    """Markdown-on-disk with no SQLite row -> orphan_markdown WARN.
+
+    Reproduces the 2026-05-13 -> 2026-05-16 incident class by hand:
+    capture writes both, then we drop the SQLite row directly (mimicking
+    the silent-swallow path where ``_q_insert_thought`` raised but
+    markdown was already on disk).
+    """
+    config = _make_config(tmp_path)
+    storage = VaultStorage(
+        thoughts_dir=config.thoughts_dir,
+        index_db_path=config.index_dir / "engram.db",
+        embedding_dim=_DIM,
+        embedding_model_name=DEFAULT_EMBEDDING_MODEL,
+    )
+    captured = storage.capture(content="[Lesson] mdorphan", embedding=[0.0] * _DIM)
+    # Drop both SQLite rows for this thought; the markdown stays on disk.
+    storage.conn.execute("DELETE FROM thoughts WHERE id = ?", (str(captured.id),))
+    storage.conn.execute("DELETE FROM thought_embeddings WHERE thought_id = ?", (str(captured.id),))
+    assert captured.file_path.exists()
+    storage.close()
+
+    report = run_diagnostics(config, embedder_factory=_stub_factory)
+    orphan_md = next(c for c in report.checks if c.name == "orphan_markdown")
+    assert orphan_md.status is CheckStatus.WARN
+    assert "engram reindex" in orphan_md.message
+    assert orphan_md.detail is not None
+    assert str(captured.id) in orphan_md.detail
 
 
 def test_orphan_tempfiles_warn(tmp_path: Path):

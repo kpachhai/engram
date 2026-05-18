@@ -27,6 +27,7 @@ from engram.embedding.protocol import EmbeddingProvider
 from engram.errors import EmbeddingError
 from engram.errors import IndexError as EngramIndexError
 from engram.storage.facade import VaultStorage
+from engram.storage.markdown import read_thought
 from engram.storage.reindex import ReindexMode, reindex_vault
 from engram.storage.sqlite import (
     SETTING_EMBEDDING_DIM,
@@ -372,6 +373,55 @@ def _check_orphan_sqlite_rows(
     )
 
 
+def _check_orphan_markdown_files(
+    report: DoctorReport,
+    storage: VaultStorage,
+) -> None:
+    """Inverse of `_check_orphan_sqlite_rows`: markdown files with no SQLite row.
+
+    Markdown SoT can drift "above" SQLite when the SQLite insert raises but
+    the markdown write succeeds - the capture path is intentionally
+    log-and-continue (Flow A step 3 commentary), so the operator gets no
+    signal at write time. Over a multi-day window of disk pressure /
+    transient I/O errors, these silent failures accumulate (38 orphans
+    observed in the 2026-05-13 -> 2026-05-16 incident class before
+    ``engram reindex`` recovered them).
+
+    This check surfaces the count so the operator can run reindex
+    proactively. The MCP ``CaptureOutput.index_state`` field carries the
+    same signal at write time for clients that read it; this is the
+    backstop for accumulated drift that escaped the in-the-moment signal
+    (vaults imported from another tool, vaults that ran on an older
+    engram before the field existed, etc.).
+    """
+    orphans: list[str] = []
+    for md_path in sorted(storage.thoughts_dir.rglob("*.md")):
+        if not md_path.is_file():
+            continue
+        result = read_thought(md_path)
+        if result is None:
+            continue
+        thought, _drifts = result
+        if thought is None:
+            continue
+        if storage.get_by_id(thought.id) is None:
+            rel = md_path.relative_to(storage.thoughts_dir)
+            orphans.append(f"{thought.id} -> {rel}")
+    if not orphans:
+        report.add("orphan_markdown", CheckStatus.OK, "no orphan markdown files")
+        return
+    report.add(
+        "orphan_markdown",
+        CheckStatus.WARN,
+        (
+            f"{len(orphans)} markdown file(s) have no SQLite row; "
+            "run `engram reindex` to recover (or `engram reindex --full` "
+            "to fully rebuild the index)"
+        ),
+        detail=", ".join(orphans[:10]) + ("..." if len(orphans) > 10 else ""),
+    )
+
+
 def _check_orphan_tempfiles(
     report: DoctorReport,
     config: EffectiveConfig,
@@ -629,6 +679,7 @@ def run_diagnostics(
             embedder = _check_embedding_model(report, config, download=download_model)
         _check_index_disk_consistency(report, storage)
         _check_orphan_sqlite_rows(report, storage)
+        _check_orphan_markdown_files(report, storage)
         _check_orphan_tempfiles(report, config)
         _check_pending_embeddings(report, storage)
 

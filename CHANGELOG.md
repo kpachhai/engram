@@ -40,6 +40,14 @@ The MCP tool surface is committed-stable for the v1.x lifetime per the API stabi
   wire format with a safe default (`"ok"`) per the v1.x stability
   commitment - existing clients ignore the field with no behavior
   change.
+- **`engram doctor` `orphan_markdown` check** that walks the markdown
+  tree and counts files whose ID has no SQLite row. Surfaces as a
+  WARN with up to 10 example IDs and the remediation hint to run
+  `engram reindex`. Complements the existing `orphan_rows` check
+  (SQLite-rows-pointing-to-missing-markdown). Catches accumulated
+  drift that escaped the in-the-moment `CaptureOutput.index_state`
+  signal (e.g. vaults imported from another tool, or vaults that
+  ran on an older engram before the field existed).
 
 ### Changed
 
