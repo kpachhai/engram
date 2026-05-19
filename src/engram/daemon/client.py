@@ -125,6 +125,14 @@ class DaemonClient:
         self._retry_delays = tuple(retry_delays)
         self._spawn_fn: SpawnFn = spawn_fn or _spawn_daemon_process
         self._stdin_drain_budget_seconds = stdin_drain_budget_seconds
+        # stdin / stdout asyncio wrappers are created lazily on first
+        # shuffle and cached across reconnects. ``_wrap_stdin`` /
+        # ``_wrap_stdout`` call ``loop.connect_read_pipe`` /
+        # ``connect_write_pipe`` on the real FDs; calling either a
+        # second time raises ``ValueError`` because the FD is already
+        # owned by an asyncio transport. So we only call them once.
+        self._cached_stdin: asyncio.StreamReader | None = None
+        self._cached_stdout: _SupportsWrite | None = None
 
     # -- top-level proxy entry ----------------------------------------
 
@@ -274,8 +282,21 @@ class DaemonClient:
           reading more from Claude when we can't deliver) and return so
           the proxy loop can reconnect.
         """
-        stdin = self._stdin_reader or await _wrap_stdin()
-        stdout = self._stdout_writer or await _wrap_stdout()
+        # Use injected streams (tests) if provided; otherwise cache the
+        # real stdio wrappers across reconnects so we don't re-bind the
+        # same FD on every shuffle iteration.
+        if self._stdin_reader is not None:
+            stdin = self._stdin_reader
+        else:
+            if self._cached_stdin is None:
+                self._cached_stdin = await _wrap_stdin()
+            stdin = self._cached_stdin
+        if self._stdout_writer is not None:
+            stdout = self._stdout_writer
+        else:
+            if self._cached_stdout is None:
+                self._cached_stdout = await _wrap_stdout()
+            stdout = self._cached_stdout
 
         async def stdin_to_socket() -> _ShuffleExit:
             try:
