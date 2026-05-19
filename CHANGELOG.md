@@ -11,6 +11,30 @@ The MCP tool surface is committed-stable for the v1.x lifetime per the API stabi
 
 ### Fixed
 
+- **Daemon readiness pipe survives `exec`; defensive guard against
+  stale-fd writes.** Latent bug exposed by the MCP-aware proxy: every
+  MCP tool call against a proxy-spawned daemon returned
+  ``disk I/O error`` from SQLite. Root cause: in
+  ``_spawn_daemon_process`` (``src/engram/daemon/client.py``), the
+  proxy creates the readiness pipe via ``os.pipe()`` and passes the
+  write-end's fd number to the daemon via ``--readiness-fd N``. Since
+  PEP 446 (Python 3.4+), ``os.pipe()`` fds are non-inheritable by
+  default — the kernel closes them at ``exec``. The daemon received
+  a stale fd number; SQLite later opened ``engram.db`` at that
+  (now-free) fd; the daemon's subsequent
+  ``os.write(N, b"ready\n")`` corrupted the first 6 bytes of the db
+  file and ``os.close(N)`` closed SQLite's main-db descriptor from
+  the OS's view. SQLite continued to think fd N was open, and every
+  subsequent query failed with EBADF surfaced as
+  ``sqlite3.OperationalError("disk I/O error")``. Fix (primary):
+  call ``os.set_inheritable(wfd, True)`` in the child branch before
+  ``execvpe``. Fix (defensive): in ``DaemonServer.serve_forever``,
+  ``os.fstat`` the readiness_fd and verify ``stat.S_ISFIFO`` before
+  writing; on non-pipe, log a warning and skip — preventing the same
+  class of bug from ever clobbering a reused fd again. Regression
+  tests cover both the inheritability contract and the defensive
+  skip path.
+
 - **`engram serve` proxy is now MCP-aware enough to survive daemon
   restarts without losing the MCP session.** Follow-up to the reconnect
   fix below. Even after the proxy reconnects to a freshly-restarted
