@@ -33,7 +33,9 @@ trap that ``LIKE '%"x"%"`` would have (Risk R24).
 from __future__ import annotations
 
 import json
+import logging
 import sqlite3
+import time
 from collections.abc import Iterable, Sequence
 from datetime import datetime
 from pathlib import Path
@@ -43,8 +45,40 @@ from uuid import UUID
 from engram.models.frontmatter import Portability
 from engram.models.mcp import Filter, SortOption
 
+_log = logging.getLogger("engram.storage.sqlite_queries")
+
 #: Default vault name for thoughts captured without an explicit vault override.
 DEFAULT_VAULT_NAME = "default"
+
+#: Number of attempts (including the first) when retrying a transient
+#: SQLite error during ``insert_thought``. Three covers the typical
+#: contention window after the ``busy_timeout`` PRAGMA has already done
+#: its work; persistent errors still propagate.
+_INSERT_RETRY_ATTEMPTS = 3
+
+#: Initial backoff between retry attempts (seconds). Each subsequent
+#: attempt doubles the wait.
+_INSERT_RETRY_INITIAL_BACKOFF_S = 0.1
+
+
+def _is_transient_sqlite_error(exc: sqlite3.Error) -> bool:
+    """Return True iff the error is worth retrying.
+
+    Uses ``sqlite_errorcode`` (Python 3.11+) to distinguish transient
+    contention / disk-pressure errors (``SQLITE_BUSY``, ``SQLITE_LOCKED``,
+    ``SQLITE_IOERR`` family) from logic errors (``SQLITE_CORRUPT``,
+    ``SQLITE_CONSTRAINT``, ``SQLITE_SCHEMA``, etc.) where retrying
+    cannot help.
+
+    Returns False when ``sqlite_errorcode`` is unavailable on the
+    exception (defensive; should not happen on Python 3.11+).
+    """
+    code = getattr(exc, "sqlite_errorcode", None)
+    if code is None:
+        return False
+    base = code & 0xFF
+    # 5 = SQLITE_BUSY, 6 = SQLITE_LOCKED, 10 = SQLITE_IOERR (incl. subcodes).
+    return base in (5, 6, 10)
 
 
 def _serialize_tags(tags: Sequence[str] | None) -> str:
@@ -117,38 +151,61 @@ def insert_thought(
     else:
         resolved_status = embedding_status or "pending"
 
-    with conn:
-        conn.execute(
-            "INSERT INTO thoughts("
-            "id, schema_version, prefix, portability, source, "
-            "created_at, updated_at, fingerprint, file_path, vault_name, "
-            "tags, legacy_id, legacy_created_at, embedding_status, embedding_error, "
-            "captured_by"
-            ") VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
-            (
-                _normalize_id(thought_id),
-                schema_version,
-                prefix,
-                portability,
-                source,
-                _normalize_dt(created_at),
-                _normalize_dt(updated_at),
-                fingerprint,
-                str(file_path),
-                vault_name,
-                _serialize_tags(tags),
-                legacy_id,
-                _normalize_dt(legacy_created_at) if legacy_created_at else None,
-                resolved_status,
-                embedding_error,
-                captured_by,
-            ),
-        )
-        if embedding is not None:
-            conn.execute(
-                "INSERT INTO thought_embeddings(thought_id, embedding) VALUES (?, ?)",
-                (_normalize_id(thought_id), _serialize_vector(embedding)),
+    # Retry on transient SQLite errors (BUSY / LOCKED / IOERR). The
+    # ``busy_timeout`` PRAGMA already rides out short contention; this
+    # second layer handles disk-pressure EIO bursts (the
+    # 2026-05-13 -> 2026-05-16 incident class) where a momentary
+    # filesystem hiccup would otherwise drop the row silently.
+    backoff_s = _INSERT_RETRY_INITIAL_BACKOFF_S
+    for attempt in range(1, _INSERT_RETRY_ATTEMPTS + 1):
+        try:
+            with conn:
+                conn.execute(
+                    "INSERT INTO thoughts("
+                    "id, schema_version, prefix, portability, source, "
+                    "created_at, updated_at, fingerprint, file_path, vault_name, "
+                    "tags, legacy_id, legacy_created_at, embedding_status, embedding_error, "
+                    "captured_by"
+                    ") VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+                    (
+                        _normalize_id(thought_id),
+                        schema_version,
+                        prefix,
+                        portability,
+                        source,
+                        _normalize_dt(created_at),
+                        _normalize_dt(updated_at),
+                        fingerprint,
+                        str(file_path),
+                        vault_name,
+                        _serialize_tags(tags),
+                        legacy_id,
+                        _normalize_dt(legacy_created_at) if legacy_created_at else None,
+                        resolved_status,
+                        embedding_error,
+                        captured_by,
+                    ),
+                )
+                if embedding is not None:
+                    conn.execute(
+                        "INSERT INTO thought_embeddings(thought_id, embedding) VALUES (?, ?)",
+                        (_normalize_id(thought_id), _serialize_vector(embedding)),
+                    )
+            return
+        except sqlite3.Error as exc:
+            if attempt >= _INSERT_RETRY_ATTEMPTS or not _is_transient_sqlite_error(exc):
+                raise
+            _log.warning(
+                "transient SQLite error on insert (attempt %d/%d, code=%s): %s; "
+                "retrying after %.0fms",
+                attempt,
+                _INSERT_RETRY_ATTEMPTS,
+                getattr(exc, "sqlite_errorname", "?"),
+                exc,
+                backoff_s * 1000,
             )
+            time.sleep(backoff_s)
+            backoff_s *= 2
 
 
 def get_thought_row(conn: sqlite3.Connection, thought_id: UUID | str) -> dict[str, Any] | None:

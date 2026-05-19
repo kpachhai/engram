@@ -403,6 +403,147 @@ def test_repair_skips_if_no_pending(vault: VaultStorage):
 # === content size cap (Q1: warn 100KB, reject 1MB) ===
 
 
+class _FlakyConn:
+    """Connection stub that raises N times on INSERT then delegates to the real conn.
+
+    Used to exercise the retry-with-backoff path in ``insert_thought`` since
+    ``sqlite3.Connection.execute`` is a read-only attribute and can't be
+    monkeypatched directly.
+    """
+
+    def __init__(
+        self,
+        real_conn,
+        *,
+        fail_attempts: int,
+        error: Exception,
+        target_sql_fragment: str = "INSERT INTO thoughts",
+    ) -> None:
+        self._real = real_conn
+        self._remaining = fail_attempts
+        self._error = error
+        self._target = target_sql_fragment
+        self.execute_calls = 0
+
+    def __enter__(self):
+        return self
+
+    def __exit__(self, exc_type, exc_val, exc_tb):
+        # sqlite3's `with conn:` commits-or-rolls-back the implicit transaction;
+        # the real conn is in autocommit (isolation_level=None) so this is a
+        # no-op for our purposes.
+        return False
+
+    def execute(self, sql, params=()):
+        self.execute_calls += 1
+        if self._remaining > 0 and self._target in sql:
+            self._remaining -= 1
+            raise self._error
+        return self._real.execute(sql, params)
+
+
+def test_insert_thought_retries_transient_sqlite_io_error(vault: VaultStorage) -> None:
+    """Transient SQLITE_IOERR on the first attempts retries and eventually succeeds.
+
+    Regression: the 2026-05-13 -> 2026-05-16 incident class showed SQLite
+    sporadically returning ``SQLITE_IOERR`` under disk pressure. The retry
+    layer in ``insert_thought`` rides these out so the capture lands
+    cleanly without operator intervention.
+    """
+    import sqlite3
+
+    from engram.storage.sqlite_queries import insert_thought
+
+    err = sqlite3.OperationalError("disk I/O error")
+    err.sqlite_errorcode = 10  # SQLITE_IOERR
+    flaky = _FlakyConn(vault.conn, fail_attempts=2, error=err)
+
+    insert_thought(
+        flaky,  # type: ignore[arg-type]
+        thought_id="06a00000-0000-7000-8000-aaaabbbbcccc",
+        prefix="Lesson",
+        portability="portable",
+        source="test",
+        created_at=datetime(2026, 1, 1, tzinfo=UTC),
+        updated_at=datetime(2026, 1, 1, tzinfo=UTC),
+        fingerprint="x" * 64,
+        file_path="lesson/x.md",
+    )
+    # The row landed via the third attempt - verify it actually inserted.
+    cur = vault.conn.execute(
+        "SELECT id FROM thoughts WHERE id = ?",
+        ("06a00000-0000-7000-8000-aaaabbbbcccc",),
+    )
+    assert cur.fetchone() is not None
+
+
+def test_insert_thought_does_not_retry_non_transient_errors(
+    vault: VaultStorage, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Logic errors (e.g. SQLITE_CONSTRAINT) propagate without retries."""
+    import sqlite3
+
+    from engram.storage.sqlite_queries import insert_thought
+
+    err = sqlite3.IntegrityError("UNIQUE constraint failed: thoughts.id")
+    err.sqlite_errorcode = 19  # SQLITE_CONSTRAINT
+    flaky = _FlakyConn(vault.conn, fail_attempts=5, error=err)
+
+    sleeps: list[float] = []
+    monkeypatch.setattr("engram.storage.sqlite_queries.time.sleep", lambda s: sleeps.append(s))
+
+    with pytest.raises(sqlite3.IntegrityError):
+        insert_thought(
+            flaky,  # type: ignore[arg-type]
+            thought_id="06a00000-0000-7000-8000-ddddeeeeffff",
+            prefix="Lesson",
+            portability="portable",
+            source="test",
+            created_at=datetime(2026, 1, 1, tzinfo=UTC),
+            updated_at=datetime(2026, 1, 1, tzinfo=UTC),
+            fingerprint="y" * 64,
+            file_path="lesson/y.md",
+        )
+    # Non-transient errors raise on the first attempt -> no sleeps.
+    assert sleeps == []
+    # Exactly one INSERT INTO thoughts call happened.
+    assert flaky.execute_calls == 1
+
+
+def test_insert_thought_exhausts_retries_on_persistent_io_error(
+    vault: VaultStorage, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """If every attempt fails with a transient error, the last exception propagates."""
+    import sqlite3
+
+    from engram.storage.sqlite_queries import insert_thought
+
+    err = sqlite3.OperationalError("disk I/O error")
+    err.sqlite_errorcode = 10
+    flaky = _FlakyConn(vault.conn, fail_attempts=99, error=err)
+
+    sleeps: list[float] = []
+    monkeypatch.setattr("engram.storage.sqlite_queries.time.sleep", lambda s: sleeps.append(s))
+
+    with pytest.raises(sqlite3.OperationalError, match="disk I/O error"):
+        # The stub satisfies the call surface that insert_thought uses
+        # (`with conn:` + `conn.execute(...)`); mypy can't see the
+        # structural compatibility against sqlite3.Connection.
+        insert_thought(
+            flaky,  # type: ignore[arg-type]
+            thought_id="06a00000-0000-7000-8000-111122223333",
+            prefix="Lesson",
+            portability="portable",
+            source="test",
+            created_at=datetime(2026, 1, 1, tzinfo=UTC),
+            updated_at=datetime(2026, 1, 1, tzinfo=UTC),
+            fingerprint="z" * 64,
+            file_path="lesson/z.md",
+        )
+    # Three total attempts -> two backoff sleeps between them.
+    assert len(sleeps) == 2
+
+
 def test_capture_invokes_on_index_failure_callback_on_sqlite_error(
     vault: VaultStorage, monkeypatch: pytest.MonkeyPatch
 ) -> None:

@@ -48,6 +48,23 @@ The MCP tool surface is committed-stable for the v1.x lifetime per the API stabi
   drift that escaped the in-the-moment `CaptureOutput.index_state`
   signal (e.g. vaults imported from another tool, or vaults that
   ran on an older engram before the field existed).
+- **`PRAGMA busy_timeout=5000` on every SQLite connection.** Rides
+  out brief contention (concurrent writer / WAL checkpoint) before
+  raising `SQLITE_BUSY`. Five seconds covers typical contention;
+  persistent failures still surface as exceptions to the caller.
+- **Retry-with-backoff on transient SQLite errors in `insert_thought`.**
+  Three attempts total with exponential backoff (100ms -> 200ms).
+  Retries on `SQLITE_BUSY` (5), `SQLITE_LOCKED` (6), and the
+  `SQLITE_IOERR` family (10) via Python 3.11's `sqlite_errorcode`
+  attribute. Logic errors (`SQLITE_CONSTRAINT`, `SQLITE_CORRUPT`,
+  etc.) propagate immediately - retrying cannot help. Each retry
+  emits a WARN log line so the operator can see contention bursts
+  in the daemon log.
+- **`engram doctor` `disk_usage` check** that surfaces volume-level
+  disk pressure (root cause of the 2026-05-13 -> 2026-05-16
+  silent-swallow incident). WARN at >=90% used; FAIL at >=95%.
+  Stat failures surface as WARN rather than crashing the doctor
+  run.
 
 ### Changed
 

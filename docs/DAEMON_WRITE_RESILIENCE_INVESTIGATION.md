@@ -1,14 +1,17 @@
 # Investigation: Silent SQLite write failures during capture
 
-**Status:** Options A + B shipped. Option C deferred.
+**Status:** Closed. Options A + B + C all shipped.
 **Filed:** 2026-05-18
 **Severity:** Operational data-quality bug. No data loss (markdown SoT held).
 The bug was "operator gets no signal at write time."
 
 **Update 2026-05-18:** Option A shipped in commit `77e14a0`
 (`CaptureOutput.index_state` field + `on_index_failure` callback). Option B
-shipped immediately after (`engram doctor` `orphan_markdown` check). Both
-are described below; Option C remains open as a future investigation.
+shipped immediately after (`engram doctor` `orphan_markdown` check).
+Option C shipped in the next pass (`PRAGMA busy_timeout=5000`,
+retry-with-backoff on transient SQLITE_BUSY / LOCKED / IOERR inside
+`insert_thought`, and an `engram doctor` `disk_usage` check that WARNs
+at 90% / FAILs at 95%).
 
 ---
 

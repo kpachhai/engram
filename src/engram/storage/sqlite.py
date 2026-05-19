@@ -157,6 +157,11 @@ def open_connection(
     try:
         conn.execute("PRAGMA journal_mode=WAL")
         conn.execute("PRAGMA foreign_keys=ON")
+        # Ride out brief SQLITE_BUSY windows (concurrent writer / WAL
+        # checkpoint contention) before raising. Five seconds covers
+        # typical contention; persistent failures still surface as
+        # sqlite3.OperationalError on the caller's path.
+        conn.execute("PRAGMA busy_timeout=5000")
         try:
             conn.enable_load_extension(True)
             try:
