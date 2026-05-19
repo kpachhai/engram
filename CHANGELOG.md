@@ -68,10 +68,13 @@ The MCP tool surface is committed-stable for the v1.x lifetime per the API stabi
   capture rows. The error message names the lock path + PID and
   directs the operator to stop the serve loop first. `engram sync`
   and `engram bundle` already had equivalent refusals; this brings the
-  remaining two mutating one-shot CLIs into line. (`engram sync` and
-  `engram bundle` retain their existing bespoke implementations; both
-  can migrate to the shared `serve_lock_metadata` helper in a future
-  cleanup pass.)
+  remaining two mutating one-shot CLIs into line.
+- **`engram sync` and `engram bundle` migrated to the shared
+  `serve_lock_metadata` helper** (no behavior change). Replaces the
+  two bespoke per-CLI implementations of the lock check with a single
+  source of truth. `engram bundle`'s refusal message now also shows
+  the holder PID for parity with the other three (`sync`, `delete`,
+  `reindex`); exit code (2) and lock-not-held behavior unchanged.
 - **`VaultStorage.capture()` accepts an optional `on_index_failure`
   callback** (`Callable[[Thought, sqlite3.Error], None] | None`,
   default `None`). When supplied, the callback fires if the SQLite

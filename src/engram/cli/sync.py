@@ -16,7 +16,6 @@ Subcommand surface:
 from __future__ import annotations
 
 import asyncio
-import json
 from pathlib import Path
 
 import typer
@@ -27,15 +26,8 @@ from engram.errors import ConfigError
 from engram.sync import gitops
 from engram.sync.coordinator import CoordinatorConfig, SyncCoordinator
 from engram.sync.gitops import GitErrorClass
-from engram.utils.lock import VaultLock
+from engram.utils.lock import VaultLock, serve_lock_metadata
 from engram.utils.run_command import run_git
-
-_VAULT_LOCK_RELATIVE = Path(".indexes") / "engram.lock"
-
-
-def _vault_lock_held(vault_path: Path) -> bool:
-    """True iff the per-vault lock JSON exists - a serve loop is likely running."""
-    return (vault_path / _VAULT_LOCK_RELATIVE).exists()
 
 
 def _coordinator_config(config: EffectiveConfig) -> CoordinatorConfig:
@@ -194,16 +186,14 @@ def _load_or_die(config_path: Path | None, vault_name: str | None) -> EffectiveC
 
 
 def _refuse_if_serve_running(vault_path: Path) -> None:
-    if not _vault_lock_held(vault_path):
+    meta = serve_lock_metadata(vault_path)
+    if meta is None:
         return
-    try:
-        meta = json.loads((vault_path / _VAULT_LOCK_RELATIVE).read_text(encoding="utf-8"))
-    except (OSError, json.JSONDecodeError, ValueError):
-        meta = {}
+    lock_path = vault_path / ".indexes" / "engram.lock"
     typer.secho(
         (
-            "engram sync: vault lock at "
-            f"{vault_path / _VAULT_LOCK_RELATIVE} is held (pid={meta.get('pid', '?')}); "
+            f"engram sync: vault lock at {lock_path} is held "
+            f"(pid={meta.get('pid', '?')}); "
             "stop the serve loop OR rely on its automatic sync"
         ),
         fg=typer.colors.RED,

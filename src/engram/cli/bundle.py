@@ -28,13 +28,11 @@ from engram.config import load_config
 from engram.config.loader import _load_user_config_if_present
 from engram.errors import EngramError
 from engram.storage.facade import VaultStorage
+from engram.utils.lock import serve_lock_metadata
 
 if TYPE_CHECKING:
     from engram.config.models import EffectiveConfig
     from engram.models.frontmatter import Portability
-
-
-_LOCK_FILENAME = "engram.lock"
 
 
 def _resolve_vault_effective(*, vault_name: str | None) -> EffectiveConfig:
@@ -43,15 +41,20 @@ def _resolve_vault_effective(*, vault_name: str | None) -> EffectiveConfig:
 
 
 def _abort_if_serve_lock_held(effective: EffectiveConfig) -> None:
-    lock_path = effective.index_dir / _LOCK_FILENAME
-    if lock_path.exists():
-        typer.secho(
-            f"engram bundle: vault lock {lock_path} is held; refuse to operate while "
-            "engram serve is running. Stop serve first, then retry.",
-            fg=typer.colors.RED,
-            err=True,
-        )
-        raise typer.Exit(2)
+    meta = serve_lock_metadata(effective.vault_path)
+    if meta is None:
+        return
+    lock_path = effective.index_dir / "engram.lock"
+    typer.secho(
+        (
+            f"engram bundle: vault lock {lock_path} is held "
+            f"(pid={meta.get('pid', '?')}); refuse to operate while "
+            "engram serve is running. Stop serve first, then retry."
+        ),
+        fg=typer.colors.RED,
+        err=True,
+    )
+    raise typer.Exit(2)
 
 
 def _open_target_storage(effective: EffectiveConfig) -> VaultStorage:
