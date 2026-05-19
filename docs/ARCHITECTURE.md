@@ -18,8 +18,8 @@ Everything else is consequences of those four choices.
                               │ stdio MCP (JSON-RPC over stdin/stdout)
 ┌─────────────────────────────▼────────────────────────────────────────┐
 │                  engram serve  (proxy mode, default)                 │
-│       Stateless byte shuffler: stdio ↔ UDS. Auto-spawns the          │
-│       daemon on first invocation; attaches on subsequent ones.       │
+│   Byte shuffler stdio ↔ UDS + MCP-aware initialize replay across     │
+│   daemon reconnects. Auto-spawns the daemon on first invocation.     │
 └─────────────────────────────┬────────────────────────────────────────┘
                               │ Unix Domain Socket
                               │ <vault>/.indexes/engram.sock (0o600)
@@ -227,8 +227,14 @@ without requiring any MCP config changes — the proxy IS still
   any configured read-only or team-write extras (Phase 3 multi-vault
   semantics unchanged).
 - **N proxies per daemon.** Each AI session gets its own proxy
-  process; the proxy is stateless byte-shuffling between stdio (toward
-  the AI) and UDS (toward the daemon). ~200 LOC.
+  process. On the hot path the proxy is a pure byte-shuffler between
+  stdio (toward the AI) and UDS (toward the daemon). It also
+  observes — without modifying — client→server frames to cache the
+  latest MCP ``initialize`` + ``notifications/initialized`` so the
+  session can be replayed transparently to a freshly-restarted
+  daemon after a mid-session UDS EOF, avoiding the JSON-RPC
+  ``-32602`` "server not initialized" trip on the very next request.
+  ~250 LOC.
 - **No network listener.** UDS is local IPC, mode 0o600, plus
   ``SO_PEERCRED`` (Linux) / ``getpeereid`` (macOS) on every accepted
   connection. Same-UID is the trust boundary.

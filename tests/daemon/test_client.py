@@ -21,6 +21,7 @@ from engram.daemon.client import (
     _JITTER_MAX_SECONDS,
     _PROXY_RETRY_DELAYS_SECONDS,
     DaemonClient,
+    _FrameSnooper,
     _try_connect,
 )
 from engram.daemon.socket_paths import resolve_paths
@@ -383,15 +384,26 @@ async def test_run_proxy_loop_reconnects_after_daemon_eof(short_vault: Path) -> 
 async def test_run_proxy_loop_returns_1_when_reconnect_exhausts(
     short_vault: Path,
 ) -> None:
-    """If reconnect backoff is exhausted, the proxy returns 1 (was: 0 on bug)."""
+    """If reconnect backoff is exhausted, the proxy returns 1 (was: 0 on bug).
+
+    Closes the listener synchronously inside the connection handler — once
+    the first connection finishes echoing, the server stops accepting so
+    every subsequent proxy reconnect attempt fails (no listener + spawn
+    refuses). This is causally ordered with the proxy's first roundtrip,
+    so it does not race against ``_PROXY_RETRY_DELAYS_SECONDS[0]`` + the
+    up-to-2s jitter on attempt #1 — a sleep-based gate did (see git
+    history: CI flake on macOS arm).
+    """
     import contextlib as _contextlib
 
     paths = resolve_paths(short_vault)
     payload = b'{"jsonrpc":"2.0","id":1,"method":"ping"}\n'
 
+    server: asyncio.base_events.Server | None = None
+
     async def _one_shot_daemon(reader: asyncio.StreamReader, writer: asyncio.StreamWriter) -> None:
-        # Accept once, echo, close, then become unreachable (the
-        # ``finally`` after this handler closes the server below).
+        # Accept once, echo, close, then stop the listener so subsequent
+        # reconnect attempts fail.
         data = await reader.readline()
         if data:
             writer.write(data)
@@ -399,17 +411,10 @@ async def test_run_proxy_loop_returns_1_when_reconnect_exhausts(
         writer.close()
         with _contextlib.suppress(OSError):
             await writer.wait_closed()
+        if server is not None:
+            server.close()
 
     server = await asyncio.start_unix_server(_one_shot_daemon, path=str(paths.socket))
-    accepted_first = asyncio.Event()
-
-    # Close the server after the first connection so reconnect attempts
-    # fail (no listener accepting).
-    async def _close_after_first() -> None:
-        await accepted_first.wait()
-        server.close()
-
-    close_task = asyncio.create_task(_close_after_first())
     try:
         stdin = asyncio.StreamReader()
         stdin.feed_data(payload)
@@ -435,19 +440,267 @@ async def test_run_proxy_loop_returns_1_when_reconnect_exhausts(
         )
         proxy_task = asyncio.create_task(client.run_proxy_loop())
 
-        # As soon as the proxy has read the payload and starts shuffling,
-        # let the server close so reconnect attempts cannot succeed.
-        # Sleep briefly to let the first accept happen.
-        await asyncio.sleep(0.2)
-        accepted_first.set()
-        await close_task
-
-        rc = await asyncio.wait_for(proxy_task, timeout=5.0)
+        rc = await asyncio.wait_for(proxy_task, timeout=10.0)
         assert rc == 1, "exhausted reconnect should surface as non-zero exit"
     finally:
-        if not server.is_serving():
-            pass  # already closed
-        else:
+        if server is not None and server.is_serving():
             server.close()
-        with _contextlib.suppress(Exception):
-            await server.wait_closed()
+        if server is not None:
+            with _contextlib.suppress(Exception):
+                await server.wait_closed()
+
+
+# ----- MCP frame snooper (unit) --------------------------------------
+
+
+def test_snooper_captures_initialize_frame() -> None:
+    """A single-line ``initialize`` frame is cached verbatim (newline included)."""
+    snooper = _FrameSnooper()
+    frame = b'{"jsonrpc":"2.0","id":1,"method":"initialize","params":{}}\n'
+    snooper.feed(frame)
+    assert snooper.initialize_frame == frame
+
+
+def test_snooper_captures_notifications_initialized() -> None:
+    """``notifications/initialized`` is cached alongside initialize."""
+    snooper = _FrameSnooper()
+    frame = b'{"jsonrpc":"2.0","method":"notifications/initialized"}\n'
+    snooper.feed(frame)
+    assert snooper.initialized_frame == frame
+
+
+def test_snooper_overwrites_on_resent_initialize() -> None:
+    """Client may re-send initialize on a transport recovery; cache the latest."""
+    snooper = _FrameSnooper()
+    first = b'{"jsonrpc":"2.0","id":1,"method":"initialize","params":{"a":1}}\n'
+    second = b'{"jsonrpc":"2.0","id":2,"method":"initialize","params":{"a":2}}\n'
+    snooper.feed(first)
+    snooper.feed(second)
+    assert snooper.initialize_frame == second
+
+
+def test_snooper_ignores_non_protocol_methods() -> None:
+    """Regular MCP requests (tools/list, tools/call, ...) are not cached."""
+    snooper = _FrameSnooper()
+    frame = b'{"jsonrpc":"2.0","id":1,"method":"tools/list"}\n'
+    snooper.feed(frame)
+    assert snooper.initialize_frame is None
+    assert snooper.initialized_frame is None
+
+
+def test_snooper_handles_chunked_partial_frame() -> None:
+    """A frame split across two ``feed`` calls is reassembled at the newline."""
+    snooper = _FrameSnooper()
+    snooper.feed(b'{"jsonrpc":"2.0","id":1,"method":"initial')
+    assert snooper.initialize_frame is None  # not complete yet
+    snooper.feed(b'ize","params":{}}\n')
+    expected = b'{"jsonrpc":"2.0","id":1,"method":"initialize","params":{}}\n'
+    assert snooper.initialize_frame == expected
+
+
+def test_snooper_handles_multiple_frames_in_one_chunk() -> None:
+    """Two frames delivered in a single ``feed`` are split on newline."""
+    snooper = _FrameSnooper()
+    other = b'{"jsonrpc":"2.0","id":1,"method":"tools/list"}\n'
+    init = b'{"jsonrpc":"2.0","id":2,"method":"initialize"}\n'
+    snooper.feed(other + init)
+    assert snooper.initialize_frame == init
+
+
+def test_snooper_skips_invalid_json() -> None:
+    """Malformed JSON does not crash the snooper or leak into the cache."""
+    snooper = _FrameSnooper()
+    snooper.feed(b"not json at all\n")
+    snooper.feed(b"{not valid either}\n")
+    assert snooper.initialize_frame is None
+    assert snooper.initialized_frame is None
+
+
+def test_snooper_drops_buffer_past_cap() -> None:
+    """Pathological no-newline stream is bounded; cache stays empty + buffer drops."""
+    snooper = _FrameSnooper(max_buffer_bytes=128)
+    # 200 bytes with no newline: exceeds cap.
+    snooper.feed(b"a" * 200)
+    assert snooper.initialize_frame is None
+    # Subsequent valid frame still works after the buffer drop.
+    frame = b'{"jsonrpc":"2.0","id":1,"method":"initialize"}\n'
+    snooper.feed(frame)
+    assert snooper.initialize_frame == frame
+
+
+# ----- MCP-aware proxy: replay-on-reconnect (integration) ------------
+
+
+@pytest.mark.asyncio
+async def test_proxy_replays_initialize_on_reconnect(short_vault: Path) -> None:
+    """Across daemon restart, proxy transparently replays cached MCP session state.
+
+    Setup: client sends initialize + notifications/initialized + a tools/list.
+    First daemon connection echoes the init response, then drops. The proxy
+    reconnects to a fresh daemon. The fresh daemon would normally reject
+    tools/list with -32602; the proxy must replay initialize first.
+
+    Assertions:
+    - Second daemon connection sees the replayed initialize and initialized.
+    - The daemon's response to the REPLAYED initialize is swallowed by the
+      proxy (Claude already saw the original; a duplicate id=1 response
+      would break the MCP client).
+    """
+    import contextlib as _contextlib
+
+    paths = resolve_paths(short_vault)
+    initialize_frame = b'{"jsonrpc":"2.0","id":1,"method":"initialize","params":{}}\n'
+    initialized_frame = b'{"jsonrpc":"2.0","method":"notifications/initialized"}\n'
+    tools_list_frame = b'{"jsonrpc":"2.0","id":2,"method":"tools/list"}\n'
+    init_response = b'{"jsonrpc":"2.0","id":1,"result":{"capabilities":{}}}\n'
+    tools_response = b'{"jsonrpc":"2.0","id":2,"result":{"tools":[]}}\n'
+
+    accept_count = 0
+    frames_per_connection: list[list[bytes]] = []
+    second_connection_done = asyncio.Event()
+
+    async def _flaky_daemon(reader: asyncio.StreamReader, writer: asyncio.StreamWriter) -> None:
+        nonlocal accept_count
+        accept_count += 1
+        frames: list[bytes] = []
+        frames_per_connection.append(frames)
+        if accept_count == 1:
+            # Receive initialize, respond, receive initialized, then drop.
+            frames.append(await reader.readline())
+            writer.write(init_response)
+            await writer.drain()
+            frames.append(await reader.readline())
+            writer.close()
+            with _contextlib.suppress(OSError):
+                await writer.wait_closed()
+        else:
+            # Should receive REPLAYED initialize first; respond (proxy
+            # must swallow this). Then initialized. Then the real
+            # tools/list, which we answer.
+            frames.append(await reader.readline())
+            writer.write(init_response)
+            await writer.drain()
+            frames.append(await reader.readline())
+            frames.append(await reader.readline())
+            writer.write(tools_response)
+            await writer.drain()
+            second_connection_done.set()
+            # Hold open so the proxy can pump until stdin EOFs.
+            with _contextlib.suppress(OSError):
+                await reader.read()
+            writer.close()
+            with _contextlib.suppress(OSError):
+                await writer.wait_closed()
+
+    server = await asyncio.start_unix_server(_flaky_daemon, path=str(paths.socket))
+    try:
+        stdin = asyncio.StreamReader()
+        stdin.feed_data(initialize_frame + initialized_frame)
+        stdout = _CapturingWriter()
+        client = DaemonClient(
+            vault_path=short_vault,
+            daemon_config=DaemonConfig(),
+            stdin_reader=stdin,
+            stdout_writer=stdout,
+            retry_delays=(0.01,),
+        )
+        proxy_task = asyncio.create_task(client.run_proxy_loop())
+
+        # Give time for first connection's init exchange + drop.
+        await asyncio.sleep(0.3)
+        # Now send tools/list; it should land on the SECOND (post-reconnect) daemon.
+        stdin.feed_data(tools_list_frame)
+
+        await asyncio.wait_for(second_connection_done.wait(), timeout=5.0)
+        stdin.feed_eof()
+        rc = await asyncio.wait_for(proxy_task, timeout=5.0)
+        assert rc == 0
+
+        # First daemon saw initialize + initialized in order.
+        assert frames_per_connection[0][0] == initialize_frame
+        assert frames_per_connection[0][1] == initialized_frame
+
+        # Second daemon saw the SAME initialize + initialized (replayed by proxy),
+        # then the real tools/list request.
+        assert frames_per_connection[1][0] == initialize_frame
+        assert frames_per_connection[1][1] == initialized_frame
+        assert frames_per_connection[1][2] == tools_list_frame
+
+        # Critical: stdout must contain init_response ONCE (from the first daemon).
+        # The second daemon's init_response was discarded by the proxy.
+        assert stdout.buffer.getvalue() == init_response + tools_response
+    finally:
+        server.close()
+        await server.wait_closed()
+
+
+@pytest.mark.asyncio
+async def test_proxy_caches_latest_initialize_if_client_resends(
+    short_vault: Path,
+) -> None:
+    """When client re-sends initialize, the cached frame updates to the latest.
+
+    Realistic case: client recovers from a transport blip and re-initializes.
+    The proxy should replay the *most recent* initialize, not the first.
+    """
+    import contextlib as _contextlib
+
+    paths = resolve_paths(short_vault)
+    first_init = b'{"jsonrpc":"2.0","id":1,"method":"initialize","params":{"v":1}}\n'
+    second_init = b'{"jsonrpc":"2.0","id":2,"method":"initialize","params":{"v":2}}\n'
+    init_response = b'{"jsonrpc":"2.0","id":2,"result":{"capabilities":{}}}\n'
+
+    accept_count = 0
+    frames_per_connection: list[list[bytes]] = []
+    second_done = asyncio.Event()
+
+    async def _flaky_daemon(reader: asyncio.StreamReader, writer: asyncio.StreamWriter) -> None:
+        nonlocal accept_count
+        accept_count += 1
+        frames: list[bytes] = []
+        frames_per_connection.append(frames)
+        if accept_count == 1:
+            # Receive both initializes, respond once, then drop.
+            frames.append(await reader.readline())
+            frames.append(await reader.readline())
+            writer.write(init_response)
+            await writer.drain()
+            writer.close()
+            with _contextlib.suppress(OSError):
+                await writer.wait_closed()
+        else:
+            # Expect the LATEST initialize replayed.
+            frames.append(await reader.readline())
+            writer.write(init_response)
+            await writer.drain()
+            second_done.set()
+            with _contextlib.suppress(OSError):
+                await reader.read()
+            writer.close()
+            with _contextlib.suppress(OSError):
+                await writer.wait_closed()
+
+    server = await asyncio.start_unix_server(_flaky_daemon, path=str(paths.socket))
+    try:
+        stdin = asyncio.StreamReader()
+        stdin.feed_data(first_init + second_init)
+        stdout = _CapturingWriter()
+        client = DaemonClient(
+            vault_path=short_vault,
+            daemon_config=DaemonConfig(),
+            stdin_reader=stdin,
+            stdout_writer=stdout,
+            retry_delays=(0.01,),
+        )
+        proxy_task = asyncio.create_task(client.run_proxy_loop())
+
+        await asyncio.wait_for(second_done.wait(), timeout=5.0)
+        stdin.feed_eof()
+        rc = await asyncio.wait_for(proxy_task, timeout=5.0)
+        assert rc == 0
+
+        # Second daemon should have received the SECOND init (latest), not the first.
+        assert frames_per_connection[1][0] == second_init
+    finally:
+        server.close()
+        await server.wait_closed()

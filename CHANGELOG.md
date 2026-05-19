@@ -11,6 +11,28 @@ The MCP tool surface is committed-stable for the v1.x lifetime per the API stabi
 
 ### Fixed
 
+- **`engram serve` proxy is now MCP-aware enough to survive daemon
+  restarts without losing the MCP session.** Follow-up to the reconnect
+  fix below. Even after the proxy reconnects to a freshly-restarted
+  daemon, the new daemon has no record of the original ``initialize``
+  handshake; the very next client request (typically ``tools/list``)
+  was rejected with JSON-RPC ``-32602 Invalid params`` ("server not
+  initialized"). Fix: a new `_FrameSnooper` observes client→server
+  frames as a tee — the byte stream is not modified — and caches the
+  latest ``initialize`` request and ``notifications/initialized``
+  notification. On successful reconnect, `_replay_mcp_session`
+  re-sends both to the new daemon and swallows the duplicate
+  ``initialize`` response (Claude already received the original; a
+  second response with the same id would confuse its JSON-RPC client).
+  Failure modes degrade gracefully: snooper never raises, replay
+  timeout is bounded at 2s with a warning, and if no `initialize` was
+  ever seen the replay is a no-op. Also de-flaked the existing
+  ``test_run_proxy_loop_returns_1_when_reconnect_exhausts`` test,
+  which was racing the proxy's first reconnect attempt (jitter up to
+  2s) against a wall-clock ``asyncio.sleep(0.2)``; now closes the
+  listener synchronously inside the connection handler so the close is
+  causally ordered.
+
 - **`engram serve` proxy now reconnects across daemon restarts.** Prior
   behavior: when the daemon died mid-session (crash, restart, idle
   shutdown), the proxy's byte shuffler observed UDS EOF and exited

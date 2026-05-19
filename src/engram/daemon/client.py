@@ -1,14 +1,27 @@
 """Proxy client: stdio <-> UDS byte shuffler + spawn dance + crash retry.
 
 Each ``engram serve`` invocation (in default proxy mode) constructs a
-:class:`DaemonClient` and runs :meth:`run_proxy_loop`. The proxy does NOT
-parse MCP frames — it shuffles bytes between its stdin/stdout (which
-Claude Code talks to) and the per-vault daemon's UDS socket.
+:class:`DaemonClient` and runs :meth:`run_proxy_loop`. On the hot path
+the proxy shuffles raw bytes between its stdin/stdout (which Claude
+Code talks to) and the per-vault daemon's UDS socket — it does not
+parse or transform application traffic.
 
-On mid-session UDS EOF (daemon crashed, restarted, or idle-shut-down),
-the proxy retries 3 times with exponential backoff + jitter
-(``1s + jitter``, ``4s + jitter``, ``16s + jitter``) before surfacing an
-MCP-level error to Claude.
+Two small protocol-aware exceptions exist, both motivated by daemon-
+restart survival:
+
+1. A side-channel :class:`_FrameSnooper` observes client→server frames
+   and caches the latest ``initialize`` request and
+   ``notifications/initialized`` notification. The byte stream is not
+   modified — the snoop is purely a tee.
+2. On mid-session UDS EOF (daemon crashed, restarted, or idle-shut-down)
+   the proxy retries 3 times with exponential backoff + jitter
+   (``1s + jitter``, ``4s + jitter``, ``16s + jitter``) before surfacing
+   an MCP-level error to Claude. When a reconnect succeeds, the cached
+   ``initialize`` + ``notifications/initialized`` are replayed to the
+   new daemon (and the daemon's re-init response is swallowed, since
+   Claude already received the original). Without this step the new
+   daemon would reject Claude's next request with JSON-RPC
+   ``-32602 Invalid params``.
 
 When the WAL file at spawn time exceeds 10 MiB, the proxy extends
 the spawn timeout by ``wal_recovery_grace_seconds`` to give the
@@ -20,13 +33,14 @@ from __future__ import annotations
 import asyncio
 import contextlib
 import enum
+import json
 import logging
 import os
 import random
 import sys
 from collections.abc import Sequence
 from pathlib import Path
-from typing import Final, Protocol
+from typing import Any, Final, Protocol
 
 from engram.config.models import DaemonConfig
 from engram.daemon.socket_paths import resolve_paths
@@ -61,6 +75,17 @@ _STDIN_DRAIN_BUDGET_SECONDS = 2.0
 #: when ``engram.db-wal`` exceeds this size at proxy start time.
 _WAL_LARGE_THRESHOLD_BYTES = 10 * 1024 * 1024
 
+#: Cap the snooper's line buffer so a malformed (or hostile) stream with
+#: no newline cannot grow it without bound. Real ``initialize`` payloads
+#: are a few KB; 256 KB is generous.
+_SNOOPER_MAX_BUFFER_BYTES = 256 * 1024
+
+#: Bounded wait for the new daemon's response to the REPLAYED initialize.
+#: We discard whatever comes back (Claude already saw the original
+#: response). A healthy daemon answers in milliseconds; 2 s tolerates a
+#: just-restarted daemon under load before the proxy gives up + warns.
+_INITIALIZE_REPLAY_TIMEOUT_SECONDS = 2.0
+
 
 class _SupportsWrite(Protocol):
     """Minimal writer surface used by the proxy's socket→stdout pump."""
@@ -85,6 +110,84 @@ class _ShuffleExit(enum.StrEnum):
     SOCKET_CLOSED = "socket_closed"
 
 
+class _FrameSnooper:
+    r"""Tee-side snooper for MCP stdio frames.
+
+    The proxy stays a byte shuffler on the hot path: chunks flow stdin →
+    socket untouched. In parallel, every chunk is *also* fed into a
+    :class:`_FrameSnooper`, which line-buffers, parses each completed
+    JSON-RPC frame, and caches the latest ``initialize`` request and
+    ``notifications/initialized`` notification.
+
+    On daemon reconnect, :class:`DaemonClient` replays the cached frames
+    to the new daemon so subsequent requests don't trip the JSON-RPC
+    ``-32602 Invalid params`` "server not initialized" guard.
+
+    The snooper is purely observational. Any failure (malformed JSON,
+    buffer overflow, exception during parse) degrades to "no replay this
+    time" — the same behavior as before the MCP-aware fix landed. It
+    never modifies the byte stream and never raises to the caller.
+
+    MCP stdio framing is line-delimited JSON: one message per line,
+    ``\\n`` terminated, with literal newlines inside payloads forbidden
+    by the spec (JSON serializers emit ``\\\\n``). Hence safe to split
+    on ``b"\\n"``.
+    """
+
+    def __init__(self, *, max_buffer_bytes: int = _SNOOPER_MAX_BUFFER_BYTES) -> None:
+        self._max_buffer_bytes = max_buffer_bytes
+        self._buffer = bytearray()
+        self.initialize_frame: bytes | None = None
+        self.initialized_frame: bytes | None = None
+
+    def feed(self, data: bytes) -> None:
+        """Observe a chunk; never raises.
+
+        If a complete line lands, parse it and update the cache when the
+        method matches. Partial trailing data stays in the buffer for
+        the next ``feed``.
+        """
+        if not data:
+            return
+        self._buffer.extend(data)
+
+        if len(self._buffer) > self._max_buffer_bytes and b"\n" not in self._buffer:
+            # Pathological: a producer is streaming without newlines.
+            # Drop the buffer + warn; recovery resumes on the next newline.
+            _log.warning(
+                "frame snooper buffer exceeded %d bytes without a newline; dropping",
+                self._max_buffer_bytes,
+            )
+            self._buffer.clear()
+            return
+
+        while True:
+            newline_idx = self._buffer.find(b"\n")
+            if newline_idx < 0:
+                return
+            line = bytes(self._buffer[: newline_idx + 1])
+            del self._buffer[: newline_idx + 1]
+            self._handle_line(line)
+
+    def _handle_line(self, line: bytes) -> None:
+        # Strip trailing \n (and any \r) only for parsing; ``line``
+        # itself includes the newline so replay byte-equivalence holds.
+        stripped = line.rstrip(b"\r\n")
+        if not stripped:
+            return
+        try:
+            payload: Any = json.loads(stripped)
+        except (json.JSONDecodeError, ValueError):
+            return
+        if not isinstance(payload, dict):
+            return
+        method = payload.get("method")
+        if method == "initialize":
+            self.initialize_frame = line
+        elif method == "notifications/initialized":
+            self.initialized_frame = line
+
+
 class DaemonClient:
     """Proxy process: connect to the per-vault daemon and shuffle bytes."""
 
@@ -98,6 +201,7 @@ class DaemonClient:
         retry_delays: Sequence[float] = _PROXY_RETRY_DELAYS_SECONDS,
         spawn_fn: SpawnFn | None = None,
         stdin_drain_budget_seconds: float = _STDIN_DRAIN_BUDGET_SECONDS,
+        initialize_replay_timeout_seconds: float = _INITIALIZE_REPLAY_TIMEOUT_SECONDS,
     ) -> None:
         """Construct a proxy client.
 
@@ -116,6 +220,10 @@ class DaemonClient:
             stdin_drain_budget_seconds: How long to wait for the socket
                 pump to drain pending daemon response after stdin EOFs
                 (Claude closed). Default 2s; tests pass small values.
+            initialize_replay_timeout_seconds: How long to wait for the
+                new daemon's response to a replayed ``initialize`` before
+                logging a warning and continuing. Default 2s; tests pass
+                small values.
         """
         self.vault_path = vault_path
         self.daemon_config = daemon_config
@@ -125,6 +233,7 @@ class DaemonClient:
         self._retry_delays = tuple(retry_delays)
         self._spawn_fn: SpawnFn = spawn_fn or _spawn_daemon_process
         self._stdin_drain_budget_seconds = stdin_drain_budget_seconds
+        self._initialize_replay_timeout_seconds = initialize_replay_timeout_seconds
         # stdin / stdout asyncio wrappers are created lazily on first
         # shuffle and cached across reconnects. ``_wrap_stdin`` /
         # ``_wrap_stdout`` call ``loop.connect_read_pipe`` /
@@ -133,6 +242,11 @@ class DaemonClient:
         # owned by an asyncio transport. So we only call them once.
         self._cached_stdin: asyncio.StreamReader | None = None
         self._cached_stdout: _SupportsWrite | None = None
+        # Observational snoop of client→server frames, used to replay
+        # ``initialize`` + ``notifications/initialized`` across daemon
+        # restarts so the new daemon's session state matches what
+        # Claude Code believes is true.
+        self._snooper = _FrameSnooper()
 
     # -- top-level proxy entry ----------------------------------------
 
@@ -180,6 +294,70 @@ class DaemonClient:
                     exc,
                 )
                 return 1
+            await self._replay_mcp_session(reader, writer)
+
+    # -- MCP session replay -------------------------------------------
+
+    async def _replay_mcp_session(
+        self,
+        reader: asyncio.StreamReader,
+        writer: asyncio.StreamWriter,
+    ) -> None:
+        """Re-establish MCP session state on a freshly-reconnected daemon.
+
+        After daemon restart, the new daemon's MCP server has no record
+        of the original ``initialize`` handshake. Without this step,
+        the next client request (typically ``tools/list``) trips a
+        JSON-RPC ``-32602 Invalid params`` because MCP servers require
+        ``initialize`` first.
+
+        Replays:
+
+        1. The cached ``initialize`` request (if seen). The daemon's
+           response is consumed + discarded — Claude already received
+           the original ``initialize`` response and a second one with
+           the same ``id`` would confuse its JSON-RPC client.
+        2. The cached ``notifications/initialized`` notification (if
+           seen), which has no response.
+
+        Failure modes degrade gracefully:
+
+        * Nothing cached yet: no-op (reconnect happened before any
+          ``initialize`` traffic — rare but possible).
+        * Response read times out: warn + continue. The next
+          client→server frame will surface any real issue.
+        * Writer breaks during replay: bubble up to the reconnect
+          loop which will treat it as another disconnect.
+        """
+        init_frame = self._snooper.initialize_frame
+        if init_frame is None:
+            return
+        writer.write(init_frame)
+        try:
+            await writer.drain()
+        except (ConnectionResetError, BrokenPipeError) as exc:
+            _log.warning("replay: writer broke before initialize drained: %s", exc)
+            return
+
+        # Synchronous gate: swallow the daemon's response to the
+        # replayed initialize. By construction the next frame on the
+        # wire is its response (we sent nothing else).
+        try:
+            await asyncio.wait_for(
+                reader.readline(),
+                timeout=self._initialize_replay_timeout_seconds,
+            )
+        except TimeoutError:
+            _log.warning(
+                "replay: daemon did not respond to replayed initialize within %ss",
+                self._initialize_replay_timeout_seconds,
+            )
+
+        initialized_frame = self._snooper.initialized_frame
+        if initialized_frame is not None:
+            writer.write(initialized_frame)
+            with contextlib.suppress(ConnectionResetError, BrokenPipeError):
+                await writer.drain()
 
     # -- connection lifecycle -----------------------------------------
 
@@ -304,6 +482,9 @@ class DaemonClient:
                     data = await stdin.read(_BUFFER_SIZE)
                     if not data:
                         return _ShuffleExit.STDIN_CLOSED
+                    # Snoop (observational; never mutates ``data``) so the
+                    # cache can be replayed across daemon restarts.
+                    self._snooper.feed(data)
                     socket_writer.write(data)
                     try:
                         await socket_writer.drain()
