@@ -62,3 +62,6 @@ scratch/
 *.local.*
 
 docs/superpowers
+
+# Per-machine session breadcrumb (session-wrap skill output)
+PENDING_TASKS.md
