@@ -9,8 +9,10 @@ smoke in ``tests/test_phase5_cli_smoke.py``.
 from __future__ import annotations
 
 import asyncio
+import contextlib
 import json
 import tempfile
+import time
 from collections.abc import Iterable, Iterator
 from pathlib import Path
 
@@ -223,6 +225,62 @@ async def test_request_shutdown_returns_serve_forever(short_vault: Path) -> None
     daemon, server_task = await _start_daemon(short_vault, DaemonConfig(idle_shutdown_seconds=0))
     daemon.request_shutdown()
     await asyncio.wait_for(server_task, timeout=5.0)
+
+
+@pytest.mark.asyncio
+async def test_request_shutdown_with_active_proxy_completes_promptly(
+    short_vault: Path,
+) -> None:
+    """Shutdown completes promptly even when a proxy stays connected.
+
+    Reproduces the maintainer-reported issue: ``engram daemon stop``
+    hangs (sometimes past 60s) when a Claude Code session is still
+    attached to the daemon over UDS. Root cause: the ``async with
+    self._server:`` context manager exit calls ``wait_closed()`` which
+    blocks until every accepted connection handler finishes. Each
+    handler is awaiting MCP frames on a stream the proxy hasn't
+    closed, so the handler never returns naturally - the drain budget
+    has to expire before the cancel-fallback fires, and even then
+    cancellation must propagate through the FastMCP dispatch loop
+    before ``wait_closed`` unblocks.
+
+    Asserts the daemon exits in under 2 seconds with the active proxy
+    attached. Pre-fix, this takes the full ``shutdown_drain_seconds``
+    budget (default 5s, configurable, and additive with the
+    coordinator-flush budget) before completing.
+    """
+    paths = resolve_paths(short_vault)
+    daemon, server_task = await _start_daemon(
+        short_vault,
+        # Default drain budget = 5s; if this test passes WITHOUT relying
+        # on the drain budget, the fix is working. We set 5s explicitly
+        # so the assertion has a meaningful headroom.
+        DaemonConfig(idle_shutdown_seconds=0, shutdown_drain_seconds=5),
+    )
+
+    # Connect a proxy and leave it connected through shutdown.
+    _reader, writer = await asyncio.open_unix_connection(str(paths.socket))
+    await asyncio.sleep(0.1)
+    assert daemon.connected_proxies == 1
+
+    # Request shutdown WHILE the proxy is still attached.
+    started_at = time.monotonic()
+    daemon.request_shutdown()
+    await asyncio.wait_for(server_task, timeout=10.0)
+    duration = time.monotonic() - started_at
+
+    # Pre-fix duration was ~drain_budget seconds (5s with defaults). The
+    # fix cancels in-flight tasks immediately so the daemon exits in
+    # well under a second on a healthy loop. Allow 2s for CI jitter.
+    assert duration < 2.0, (
+        f"shutdown took {duration:.2f}s with an active proxy attached; "
+        "expected sub-second since the fix cancels handlers immediately"
+    )
+
+    # Cleanup the proxy side after the daemon is done.
+    writer.close()
+    with contextlib.suppress(OSError):
+        await writer.wait_closed()
 
 
 @pytest.mark.asyncio

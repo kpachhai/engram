@@ -9,6 +9,25 @@ The MCP tool surface is committed-stable for the v1.x lifetime per the API stabi
 
 ## [Unreleased]
 
+### Fixed
+
+- **`engram daemon stop` no longer hangs when a proxy is attached.**
+  The daemon's `serve_forever` accept loop used `async with self._server:`
+  whose `__aexit__` calls `Server.wait_closed()` and blocks until every
+  accepted connection handler finishes. Handlers were awaiting MCP
+  frames from still-open proxy streams (e.g. an active Claude Code
+  session), so they could not return on their own; the daemon had to
+  burn the full `shutdown_drain_seconds` budget before the cancel
+  fallback fired - and in pathological cases (long-uptime daemon,
+  proxy stuck mid-RPC) the total drain exceeded the CLI's 60s
+  timeout, forcing `--force` (SIGKILL). Fix: cancel in-flight handler
+  tasks immediately when the shutdown event fires, BEFORE exiting the
+  listener context. `wait_closed()` then returns promptly and
+  `_drain_and_exit` runs the budgeted cleanup. Measured graceful
+  shutdown on a personal vault with an attached proxy dropped from
+  ~5s (drain-budget-exhausted) / 60s+ (timeout-and-force) to ~4s
+  end-to-end including the CLI's 0.2s pid-alive polling.
+
 ### Added
 
 - **`delete_thought` MCP tool** with a mandatory two-call confirmation

@@ -174,10 +174,21 @@ class DaemonServer:
         if self.daemon_config.idle_shutdown_seconds > 0:
             self._arm_idle_timer()
 
-        # 12. Accept loop blocks until shutdown is requested.
+        # 12. Accept loop blocks until shutdown is requested. When the
+        # event fires, we proactively cancel in-flight connection
+        # handlers BEFORE exiting the ``async with`` context. The
+        # context manager's ``__aexit__`` calls ``Server.wait_closed()``
+        # which would otherwise block indefinitely waiting for the
+        # handlers to finish - and they cannot finish on their own
+        # because they are blocked in ``await reader.read()`` against a
+        # proxy stream that hasn't closed. Cancelling the tasks lets
+        # the streams unwind, ``wait_closed`` returns immediately, and
+        # ``_drain_and_exit`` runs the budgeted shutdown sequence.
         try:
             async with self._server:
                 await self._shutdown_event.wait()
+                for task in list(self._in_flight):
+                    task.cancel()
         finally:
             await self._drain_and_exit()
 
