@@ -27,7 +27,9 @@ import json
 import logging
 import logging.handlers
 import os
+import shutil
 import signal
+import subprocess
 import sys
 import time
 from datetime import UTC, datetime
@@ -120,7 +122,17 @@ def _attach_daemon_log_handler(
 
 
 def _pid_alive(pid: int) -> bool:
-    """Return ``True`` iff the given PID exists (or we can't tell)."""
+    """Return ``True`` iff the given PID exists and is not a zombie.
+
+    Plain ``os.kill(pid, 0)`` returns success for zombie (defunct)
+    processes too — the kernel keeps the pid slot alive until the
+    parent ``waitpid``s. The daemon is typically spawned by a
+    long-running proxy process that doesn't actively reap children, so
+    a cleanly-drained daemon can linger as a zombie for the full
+    poll-timeout, making ``engram daemon stop`` falsely report
+    "did not stop". Filter zombies by inspecting ``ps -p <pid> -o
+    stat=`` and treating any ``Z*`` state as dead.
+    """
     try:
         os.kill(pid, 0)
     except ProcessLookupError:
@@ -128,7 +140,26 @@ def _pid_alive(pid: int) -> bool:
     except PermissionError:
         # Process exists but signaling it is refused — still "alive" for us.
         return True
-    return True
+    # Filter zombies via ps. ``ps`` is universally available on Linux + macOS
+    # and adds ~50ms of subprocess overhead per call — acceptable for stop's
+    # poll cadence (every 200ms). Fall through (assume alive) on any failure
+    # so an unexpected ps environment never makes us report a healthy daemon
+    # as dead. The ps args are fixed literals + an int-coerced pid: no shell
+    # interpolation and no untrusted input.
+    ps_bin = shutil.which("ps") or "/bin/ps"
+    try:
+        result = subprocess.run(  # noqa: S603 - fixed argv with int-coerced pid
+            [ps_bin, "-p", str(pid), "-o", "stat="],
+            capture_output=True,
+            text=True,
+            timeout=1.0,
+            check=False,
+        )
+    except (subprocess.SubprocessError, OSError):
+        return True
+    if result.returncode != 0:
+        return True
+    return not result.stdout.strip().startswith("Z")
 
 
 def _write_readiness_error(

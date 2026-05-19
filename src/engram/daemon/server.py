@@ -240,17 +240,11 @@ class DaemonServer:
         registered in the kqueue). The pump caps the worst-case
         shutdown latency at ``~1s`` regardless of selector state.
         """
-        _log.info("stop-hang DIAG: pump task started")
-        i = 0
         while not self._shutdown_event.is_set():
             try:
                 await asyncio.sleep(1.0)
             except asyncio.CancelledError:
-                _log.info("stop-hang DIAG: pump cancelled at tick=%d", i)
                 return
-            i += 1
-            if i == 1 or i % 10 == 0:
-                _log.info("stop-hang DIAG: pump tick=%d", i)
 
     @property
     def connected_proxies(self) -> int:
@@ -476,12 +470,11 @@ class DaemonServer:
             return
 
         def _shutdown_handler(signum: int, frame: object | None) -> None:
-            del frame
+            del signum, frame
             # Signal handlers run on the main thread between bytecode
             # instructions; setting the event directly is safe and
             # immediate. ``call_soon_threadsafe`` also writes to the
             # asyncio self-pipe so any blocking selector returns.
-            _log.info("stop-hang DIAG: _shutdown_handler fired signum=%d", signum)
             self._shutdown_event.set()
             with contextlib.suppress(Exception):
                 loop.call_soon_threadsafe(self.request_shutdown)

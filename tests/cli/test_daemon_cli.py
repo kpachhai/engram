@@ -7,11 +7,13 @@ installed binary).
 
 from __future__ import annotations
 
+import contextlib
 import json
 import os
 import re
 import socket as socket_module
 import tempfile
+import time
 from collections.abc import Iterator
 from pathlib import Path
 
@@ -234,6 +236,35 @@ def test_pid_alive_for_unlikely_pid_is_false() -> None:
     # PID 0 always returns ESRCH from kill(0); PID a million is almost
     # always free on dev machines.
     assert _pid_alive(999999) is False
+
+
+def test_pid_alive_for_zombie_returns_false() -> None:
+    """Zombie (defunct) pids must be reported as dead.
+
+    The daemon is spawned by a long-running proxy that doesn't actively
+    ``waitpid`` on its children, so a cleanly-drained daemon can linger
+    as a zombie. ``os.kill(pid, 0)`` returns success for zombies — if
+    ``_pid_alive`` didn't filter them out, ``engram daemon stop``
+    would falsely report "did not stop within timeout" for a daemon
+    that actually exited in milliseconds.
+    """
+    pid = os.fork()
+    if pid == 0:
+        # Child: exit immediately so the parent observes us as zombie.
+        os._exit(0)
+    try:
+        # Give the kernel a beat to mark the child zombie. Poll briefly
+        # so the test is fast on most kernels and tolerant on slow ones.
+        deadline = time.monotonic() + 2.0
+        while time.monotonic() < deadline:
+            if not _pid_alive(pid):
+                return  # success: helper recognized the zombie
+            time.sleep(0.05)
+        pytest.fail(f"_pid_alive({pid}) returned True for a zombie child")
+    finally:
+        # Reap so we don't leak the zombie into the pytest process.
+        with contextlib.suppress(ChildProcessError):
+            os.waitpid(pid, 0)
 
 
 # ----- serve --no-daemon dispatch -----------------------------------
