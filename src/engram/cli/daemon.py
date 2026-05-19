@@ -236,6 +236,21 @@ def start(
         typer.secho(f"engram daemon start: {exc}", fg=typer.colors.RED, err=True)
         raise typer.Exit(2) from exc
 
+    # UX hint: when run interactively without --detach AND not via the
+    # proxy spawn dance (which always passes --readiness-fd), the daemon
+    # process literally IS the foreground shell process - it does not
+    # fork. The terminal blocks until Ctrl-C. Surfacing this loudly
+    # avoids the "engram daemon start is hanging" support surface.
+    if not detach and readiness_fd is None:
+        typer.secho(
+            (
+                "engram daemon start: running in foreground "
+                "(Ctrl-C to stop, or rerun with --detach to background)."
+            ),
+            fg=typer.colors.YELLOW,
+            err=True,
+        )
+
     if detach:
         double_fork_detach()
 

@@ -11,6 +11,29 @@ The MCP tool surface is committed-stable for the v1.x lifetime per the API stabi
 
 ### Fixed
 
+- **`engram doctor` `disk_usage` message now explains the macOS Finder
+  discrepancy.** `shutil.disk_usage.free` reports the bytes APFS can
+  allocate right now without purging anything; macOS Finder shows that
+  number PLUS purgeable space (Time Machine local snapshots + app
+  caches APFS can free on demand). Operators were reasonably confused
+  when the doctor warned at 93.6% real-free while Finder showed
+  hundreds of GB "Available." The check now relabels its number as
+  "real-free" / "allocatable" (the right metric for predicting
+  SQLite EIO under pressure) and appends a macOS-only note pointing at
+  `diskutil apfs list` for the canonical APFS view and
+  `tmutil thinlocalsnapshots / 1000000000 4` as a remediation handle
+  for reclaiming local-snapshot purgeable space. Non-macOS platforms
+  see the relabeled message without the note. Thresholds (90% WARN /
+  95% FAIL) unchanged - the underlying APFS reality still predicts
+  SQLite EIO at that level.
+- **`engram daemon start` (without `--detach`) now logs a one-line
+  hint to stderr** noting that the terminal will block until Ctrl-C
+  and pointing at `--detach` for background operation. Operators
+  reasonably mistake the foreground-blocking behavior for a hang
+  (the CLI process literally transitions into the daemon process; it
+  does not fork). The hint is suppressed when the daemon is being
+  spawned via the proxy's internal dance (detected by the presence of
+  `--readiness-fd`).
 - **`engram daemon stop` no longer hangs when a proxy is attached.**
   The daemon's `serve_forever` accept loop used `async with self._server:`
   whose `__aexit__` calls `Server.wait_closed()` and blocks until every

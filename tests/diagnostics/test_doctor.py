@@ -237,6 +237,74 @@ def test_disk_usage_fail_at_96_percent(tmp_path: Path, monkeypatch: pytest.Monke
     assert "96.0%" in disk_check.message
 
 
+def test_disk_usage_macos_message_includes_finder_purgeable_note(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """On macOS, WARN/FAIL messages explain that Finder may show more 'available'.
+
+    macOS Finder includes purgeable space in its 'Available' number;
+    ``shutil.disk_usage`` reports real allocatable space only. Without
+    the platform-conditional note, operators see a doctor warning at
+    93.6% while macOS Finder shows hundreds of GB free and reasonably
+    conclude the doctor is broken.
+    """
+    from collections import namedtuple
+
+    DiskUsage = namedtuple("DiskUsage", ["total", "used", "free"])
+
+    def _fake_disk_usage(_path: object) -> DiskUsage:
+        return DiskUsage(total=100_000_000_000, used=91_000_000_000, free=9_000_000_000)
+
+    config = _make_config(tmp_path)
+    storage = VaultStorage(
+        thoughts_dir=config.thoughts_dir,
+        index_db_path=config.index_dir / "engram.db",
+        embedding_dim=_DIM,
+        embedding_model_name=DEFAULT_EMBEDDING_MODEL,
+    )
+    storage.close()
+
+    monkeypatch.setattr("engram.diagnostics.doctor.shutil.disk_usage", _fake_disk_usage)
+    monkeypatch.setattr("engram.diagnostics.doctor.sys.platform", "darwin")
+
+    report = run_diagnostics(config, embedder_factory=_stub_factory)
+    disk_check = next(c for c in report.checks if c.name == "disk_usage")
+    assert disk_check.status is CheckStatus.WARN
+    assert "Finder" in disk_check.message
+    assert "purgeable" in disk_check.message
+    assert "diskutil apfs list" in disk_check.message
+
+
+def test_disk_usage_linux_message_omits_macos_note(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """On non-macOS platforms the message does not mention Finder."""
+    from collections import namedtuple
+
+    DiskUsage = namedtuple("DiskUsage", ["total", "used", "free"])
+
+    def _fake_disk_usage(_path: object) -> DiskUsage:
+        return DiskUsage(total=100_000_000_000, used=91_000_000_000, free=9_000_000_000)
+
+    config = _make_config(tmp_path)
+    storage = VaultStorage(
+        thoughts_dir=config.thoughts_dir,
+        index_db_path=config.index_dir / "engram.db",
+        embedding_dim=_DIM,
+        embedding_model_name=DEFAULT_EMBEDDING_MODEL,
+    )
+    storage.close()
+
+    monkeypatch.setattr("engram.diagnostics.doctor.shutil.disk_usage", _fake_disk_usage)
+    monkeypatch.setattr("engram.diagnostics.doctor.sys.platform", "linux")
+
+    report = run_diagnostics(config, embedder_factory=_stub_factory)
+    disk_check = next(c for c in report.checks if c.name == "disk_usage")
+    assert disk_check.status is CheckStatus.WARN
+    assert "Finder" not in disk_check.message
+    assert "purgeable" not in disk_check.message
+
+
 def test_disk_usage_warn_on_stat_failure(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     """If shutil.disk_usage raises, the check surfaces a WARN (not a crash)."""
 
