@@ -9,23 +9,21 @@ The MCP tool surface is committed-stable for the v1.x lifetime per the API stabi
 
 ## [Unreleased]
 
-### Fixed
+### Removed
 
-- **`engram doctor` `disk_usage` message now explains the macOS Finder
-  discrepancy.** `shutil.disk_usage.free` reports the bytes APFS can
-  allocate right now without purging anything; macOS Finder shows that
-  number PLUS purgeable space (Time Machine local snapshots + app
-  caches APFS can free on demand). Operators were reasonably confused
-  when the doctor warned at 93.6% real-free while Finder showed
-  hundreds of GB "Available." The check now relabels its number as
-  "real-free" / "allocatable" (the right metric for predicting
-  SQLite EIO under pressure) and appends a macOS-only note pointing at
-  `diskutil apfs list` for the canonical APFS view and
-  `tmutil thinlocalsnapshots / 1000000000 4` as a remediation handle
-  for reclaiming local-snapshot purgeable space. Non-macOS platforms
-  see the relabeled message without the note. Thresholds (90% WARN /
-  95% FAIL) unchanged - the underlying APFS reality still predicts
-  SQLite EIO at that level.
+- **`engram doctor` `disk_usage` check removed.** The check was added
+  in the SQLite resilience pass on the theory that high disk usage
+  predicts SQLite EIO. In practice it fires on macOS at 93%+ used
+  even when Finder shows hundreds of GB "Available" - because macOS
+  Finder includes purgeable space (Time Machine local snapshots +
+  caches APFS can free on demand) that the doctor's
+  `shutil.disk_usage.free` does not. Operators reasonably read the
+  warning as a false positive and lose trust in `engram doctor` at
+  large. The actual SQLite EIO defense lives in the retry-with-backoff
+  on transient `SQLITE_IOERR` plus the `PRAGMA busy_timeout=5000`,
+  both shipped in the same pass and unchanged. If a future incident
+  shows the retry path was insufficient, we can revisit with a smarter
+  purgeable-aware check; until then noise > signal.
 - **`engram daemon start` (without `--detach`) now logs a one-line
   hint to stderr** noting that the terminal will block until Ctrl-C
   and pointing at `--detach` for background operation. Operators
@@ -102,11 +100,8 @@ The MCP tool surface is committed-stable for the v1.x lifetime per the API stabi
   etc.) propagate immediately - retrying cannot help. Each retry
   emits a WARN log line so the operator can see contention bursts
   in the daemon log.
-- **`engram doctor` `disk_usage` check** that surfaces volume-level
-  disk pressure (root cause of the 2026-05-13 -> 2026-05-16
-  silent-swallow incident). WARN at >=90% used; FAIL at >=95%.
-  Stat failures surface as WARN rather than crashing the doctor
-  run.
+- ~~`engram doctor` `disk_usage` check~~ (added then removed in the same
+  release - see the Removed section above for the rollback rationale).
 
 ### Changed
 

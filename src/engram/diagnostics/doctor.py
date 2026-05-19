@@ -16,8 +16,6 @@ import asyncio
 import enum
 import logging
 import os
-import shutil
-import sys
 from collections.abc import Callable
 from dataclasses import dataclass, field
 from pathlib import Path
@@ -375,84 +373,6 @@ def _check_orphan_sqlite_rows(
     )
 
 
-#: macOS-specific tail appended to the disk_usage message to explain why
-#: the doctor's "free" number can be much smaller than Finder's "Available."
-#: shutil.disk_usage reports `f_bavail` (real bytes APFS can allocate right
-#: now without purging anything); Finder reports `volumeAvailableCapacity
-#: ForImportantUsage` which adds purgeable space (Time Machine local
-#: snapshots, app caches APFS can free if asked). SQLite EIO predictions
-#: track the former, not the latter: APFS may not be able to reclaim
-#: purgeable fast enough under write pressure to keep up. The canonical
-#: APFS-side view is `diskutil apfs list`.
-_MACOS_DISK_USAGE_NOTE = (
-    " Note: on macOS, Finder may show more 'available' space than this - "
-    "Finder includes purgeable (Time Machine local snapshots + caches APFS "
-    "can free on demand); doctor reports the real allocatable space. "
-    "`diskutil apfs list` is the canonical view; `tmutil thinlocalsnapshots "
-    "/ 1000000000 4` can reclaim local-snapshot purgeable space."
-)
-
-
-def _check_disk_usage(
-    report: DoctorReport,
-    config: EffectiveConfig,
-) -> None:
-    """Surface disk pressure on the vault's volume.
-
-    APFS and most journaling filesystems get progressively unhappy as
-    free space drops below 10%. SQLite under disk pressure can return
-    sporadic ``SQLITE_IOERR`` on writes - the 2026-05-13 -> 2026-05-16
-    silent-swallow incident class involved a vault on a disk at 94%
-    capacity. The `busy_timeout` PRAGMA + insert retry path masks
-    transient bursts; this check surfaces the underlying condition so
-    the operator can free space before the retries also exhaust.
-
-    The "free" number is what the filesystem can actually allocate
-    right now (``f_bavail`` via ``shutil.disk_usage``), NOT what macOS
-    Finder shows as "Available" (which includes purgeable space APFS
-    may or may not be able to reclaim in time). When firing on macOS,
-    the message points at ``diskutil apfs list`` for the canonical
-    APFS-side view and ``tmutil thinlocalsnapshots`` as a remediation
-    handle.
-
-    Thresholds: WARN at >=90% used, FAIL at >=95%. Stat failures
-    surface as WARN with the OSError reason rather than crashing the
-    doctor run.
-    """
-    try:
-        usage = shutil.disk_usage(config.vault_path)
-    except OSError as exc:
-        report.add(
-            "disk_usage",
-            CheckStatus.WARN,
-            f"could not stat vault disk: {exc}",
-        )
-        return
-    used_pct = (usage.total - usage.free) / usage.total * 100.0
-    free_gb = usage.free / 1e9
-    total_gb = usage.total / 1e9
-    macos_note = _MACOS_DISK_USAGE_NOTE if sys.platform == "darwin" else ""
-    msg = (
-        f"vault disk {used_pct:.1f}% real-free ({free_gb:.1f} GB allocatable of "
-        f"{total_gb:.1f} GB total)"
-    )
-    if used_pct >= 95.0:
-        report.add(
-            "disk_usage",
-            CheckStatus.FAIL,
-            f"{msg} - SQLite EIO likely at this pressure; free space immediately." + macos_note,
-        )
-        return
-    if used_pct >= 90.0:
-        report.add(
-            "disk_usage",
-            CheckStatus.WARN,
-            f"{msg} - approaching SQLite EIO territory; free space soon." + macos_note,
-        )
-        return
-    report.add("disk_usage", CheckStatus.OK, msg)
-
-
 def _check_orphan_markdown_files(
     report: DoctorReport,
     storage: VaultStorage,
@@ -758,7 +678,6 @@ def run_diagnostics(
         else:
             embedder = _check_embedding_model(report, config, download=download_model)
         _check_index_disk_consistency(report, storage)
-        _check_disk_usage(report, config)
         _check_orphan_sqlite_rows(report, storage)
         _check_orphan_markdown_files(report, storage)
         _check_orphan_tempfiles(report, config)

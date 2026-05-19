@@ -40,28 +40,6 @@ def _isolate_fastembed_cache(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) ->
     )
 
 
-@pytest.fixture(autouse=True)
-def _fake_healthy_disk(monkeypatch: pytest.MonkeyPatch) -> None:
-    """Make the disk-usage check see a healthy disk by default.
-
-    The check reads ``shutil.disk_usage(vault_path)``, which on a dev
-    machine reflects the host disk (commonly 80-95% used on long-lived
-    laptops). Without this isolation, the all-OK baseline test fails
-    spuriously on tightly packed dev machines. Individual tests that
-    exercise the WARN / FAIL thresholds override this fixture with
-    their own ``shutil.disk_usage`` patches.
-    """
-    from collections import namedtuple
-
-    DiskUsage = namedtuple("DiskUsage", ["total", "used", "free"])
-
-    def _healthy_disk_usage(_path: object) -> DiskUsage:
-        # 10% used; well below the 90% WARN threshold.
-        return DiskUsage(total=100_000_000_000, used=10_000_000_000, free=90_000_000_000)
-
-    monkeypatch.setattr("engram.diagnostics.doctor.shutil.disk_usage", _healthy_disk_usage)
-
-
 class _StubEmbedder:
     """Deterministic stub conforming to EmbeddingProvider."""
 
@@ -129,11 +107,6 @@ def test_fresh_vault_all_ok(tmp_path: Path):
     assert statuses["orphan_markdown"] is CheckStatus.OK
     assert statuses["orphan_tempfiles"] is CheckStatus.OK
     assert statuses["pending_embeddings"] is CheckStatus.OK
-    # disk_usage will be OK on a healthy dev disk; the test asserts
-    # the field is PRESENT and not FAIL (WARN is acceptable if the
-    # dev machine happens to be over 90% full).
-    assert "disk_usage" in statuses
-    assert statuses["disk_usage"] is not CheckStatus.FAIL
     assert report.exit_code == 0
 
 
@@ -178,154 +151,6 @@ def test_orphan_row_detected(tmp_path: Path):
     report = run_diagnostics(config, embedder_factory=_stub_factory)
     orphan_check = next(c for c in report.checks if c.name == "orphan_rows")
     assert orphan_check.status is CheckStatus.WARN
-
-
-def test_disk_usage_warn_at_91_percent(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
-    """Disk-usage check WARNs when used capacity crosses 90%."""
-    import shutil as shutil_mod
-    from collections import namedtuple
-
-    DiskUsage = namedtuple("DiskUsage", ["total", "used", "free"])
-
-    def _fake_disk_usage(_path: object) -> DiskUsage:
-        # 91% used: 9.1 GB free of 100 GB total.
-        return DiskUsage(total=100_000_000_000, used=91_000_000_000, free=9_000_000_000)
-
-    config = _make_config(tmp_path)
-    storage = VaultStorage(
-        thoughts_dir=config.thoughts_dir,
-        index_db_path=config.index_dir / "engram.db",
-        embedding_dim=_DIM,
-        embedding_model_name=DEFAULT_EMBEDDING_MODEL,
-    )
-    storage.close()
-
-    monkeypatch.setattr(shutil_mod, "disk_usage", _fake_disk_usage)
-    # The doctor module imports `shutil` directly; patch via string path
-    # so mypy doesn't grumble about doctor.shutil attribute access.
-    monkeypatch.setattr("engram.diagnostics.doctor.shutil.disk_usage", _fake_disk_usage)
-
-    report = run_diagnostics(config, embedder_factory=_stub_factory)
-    disk_check = next(c for c in report.checks if c.name == "disk_usage")
-    assert disk_check.status is CheckStatus.WARN
-    assert "91.0%" in disk_check.message
-
-
-def test_disk_usage_fail_at_96_percent(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
-    """Disk-usage check FAILs when used capacity crosses 95%."""
-    from collections import namedtuple
-
-    DiskUsage = namedtuple("DiskUsage", ["total", "used", "free"])
-
-    def _fake_disk_usage(_path: object) -> DiskUsage:
-        return DiskUsage(total=100_000_000_000, used=96_000_000_000, free=4_000_000_000)
-
-    config = _make_config(tmp_path)
-    storage = VaultStorage(
-        thoughts_dir=config.thoughts_dir,
-        index_db_path=config.index_dir / "engram.db",
-        embedding_dim=_DIM,
-        embedding_model_name=DEFAULT_EMBEDDING_MODEL,
-    )
-    storage.close()
-
-    monkeypatch.setattr("engram.diagnostics.doctor.shutil.disk_usage", _fake_disk_usage)
-
-    report = run_diagnostics(config, embedder_factory=_stub_factory)
-    disk_check = next(c for c in report.checks if c.name == "disk_usage")
-    assert disk_check.status is CheckStatus.FAIL
-    assert "96.0%" in disk_check.message
-
-
-def test_disk_usage_macos_message_includes_finder_purgeable_note(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
-) -> None:
-    """On macOS, WARN/FAIL messages explain that Finder may show more 'available'.
-
-    macOS Finder includes purgeable space in its 'Available' number;
-    ``shutil.disk_usage`` reports real allocatable space only. Without
-    the platform-conditional note, operators see a doctor warning at
-    93.6% while macOS Finder shows hundreds of GB free and reasonably
-    conclude the doctor is broken.
-    """
-    from collections import namedtuple
-
-    DiskUsage = namedtuple("DiskUsage", ["total", "used", "free"])
-
-    def _fake_disk_usage(_path: object) -> DiskUsage:
-        return DiskUsage(total=100_000_000_000, used=91_000_000_000, free=9_000_000_000)
-
-    config = _make_config(tmp_path)
-    storage = VaultStorage(
-        thoughts_dir=config.thoughts_dir,
-        index_db_path=config.index_dir / "engram.db",
-        embedding_dim=_DIM,
-        embedding_model_name=DEFAULT_EMBEDDING_MODEL,
-    )
-    storage.close()
-
-    monkeypatch.setattr("engram.diagnostics.doctor.shutil.disk_usage", _fake_disk_usage)
-    monkeypatch.setattr("engram.diagnostics.doctor.sys.platform", "darwin")
-
-    report = run_diagnostics(config, embedder_factory=_stub_factory)
-    disk_check = next(c for c in report.checks if c.name == "disk_usage")
-    assert disk_check.status is CheckStatus.WARN
-    assert "Finder" in disk_check.message
-    assert "purgeable" in disk_check.message
-    assert "diskutil apfs list" in disk_check.message
-
-
-def test_disk_usage_linux_message_omits_macos_note(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
-) -> None:
-    """On non-macOS platforms the message does not mention Finder."""
-    from collections import namedtuple
-
-    DiskUsage = namedtuple("DiskUsage", ["total", "used", "free"])
-
-    def _fake_disk_usage(_path: object) -> DiskUsage:
-        return DiskUsage(total=100_000_000_000, used=91_000_000_000, free=9_000_000_000)
-
-    config = _make_config(tmp_path)
-    storage = VaultStorage(
-        thoughts_dir=config.thoughts_dir,
-        index_db_path=config.index_dir / "engram.db",
-        embedding_dim=_DIM,
-        embedding_model_name=DEFAULT_EMBEDDING_MODEL,
-    )
-    storage.close()
-
-    monkeypatch.setattr("engram.diagnostics.doctor.shutil.disk_usage", _fake_disk_usage)
-    monkeypatch.setattr("engram.diagnostics.doctor.sys.platform", "linux")
-
-    report = run_diagnostics(config, embedder_factory=_stub_factory)
-    disk_check = next(c for c in report.checks if c.name == "disk_usage")
-    assert disk_check.status is CheckStatus.WARN
-    assert "Finder" not in disk_check.message
-    assert "purgeable" not in disk_check.message
-
-
-def test_disk_usage_warn_on_stat_failure(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
-    """If shutil.disk_usage raises, the check surfaces a WARN (not a crash)."""
-
-    def _raising_disk_usage(_path: object) -> object:
-        raise OSError("simulated stat failure")
-
-    config = _make_config(tmp_path)
-    storage = VaultStorage(
-        thoughts_dir=config.thoughts_dir,
-        index_db_path=config.index_dir / "engram.db",
-        embedding_dim=_DIM,
-        embedding_model_name=DEFAULT_EMBEDDING_MODEL,
-    )
-    storage.close()
-
-    monkeypatch.setattr("engram.diagnostics.doctor.shutil.disk_usage", _raising_disk_usage)
-
-    report = run_diagnostics(config, embedder_factory=_stub_factory)
-    disk_check = next(c for c in report.checks if c.name == "disk_usage")
-    assert disk_check.status is CheckStatus.WARN
-    assert "could not stat" in disk_check.message
 
 
 def test_orphan_markdown_detected(tmp_path: Path):
