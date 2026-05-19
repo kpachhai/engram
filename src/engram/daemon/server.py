@@ -203,12 +203,24 @@ class DaemonServer:
         # proxy stream that hasn't closed. Cancelling the tasks lets
         # the streams unwind, ``wait_closed`` returns immediately, and
         # ``_drain_and_exit`` runs the budgeted shutdown sequence.
+        # Periodic pump: a 1-second no-op timer guarantees the selector
+        # loop returns from its blocking call regularly. Pending Python
+        # signal handlers fire when the eval loop regains control after a
+        # syscall returns; without periodic returns, signal delivery can
+        # be deferred until an unrelated event wakes the loop (observed
+        # on macOS with multiple in-flight UDS connections: SIGTERM
+        # arrival blocks until a proxy keepalive ~60s later wakes the
+        # loop). The pump keeps wake-up latency at 1s worst-case.
+        pump = asyncio.create_task(self._signal_wakeup_pump())
         try:
             async with self._server:
                 await self._shutdown_event.wait()
                 for task in list(self._in_flight):
                     task.cancel()
         finally:
+            pump.cancel()
+            with contextlib.suppress(asyncio.CancelledError):
+                await pump
             await self._drain_and_exit()
 
     async def wait_until_ready(self, *, timeout: float) -> None:
@@ -218,6 +230,21 @@ class DaemonServer:
     def request_shutdown(self) -> None:
         """Trigger graceful shutdown (callable from signal handlers and tests)."""
         self._shutdown_event.set()
+
+    async def _signal_wakeup_pump(self) -> None:
+        """Wake the asyncio selector every second so pending signals fire promptly.
+
+        Without this, an idle daemon's selector can block on ``kevent``
+        for many seconds before SIGTERM is routed through to its Python
+        handler (observed on macOS with multiple idle UDS connections
+        registered in the kqueue). The pump caps the worst-case
+        shutdown latency at ``~1s`` regardless of selector state.
+        """
+        while not self._shutdown_event.is_set():
+            try:
+                await asyncio.sleep(1.0)
+            except asyncio.CancelledError:
+                return
 
     @property
     def connected_proxies(self) -> int:
@@ -405,23 +432,67 @@ class DaemonServer:
         _log.info("engram daemon stopped")
 
     def _install_async_signal_handlers(self) -> None:
-        """Install SIGTERM/SIGINT handlers via the asyncio loop.
+        """Install SIGTERM/SIGINT handlers, with a synchronous fallback.
 
         The daemon owns its own signal handling; the caller
         passes ``install_signal_handlers=False`` to ``VaultLock`` so we
         do not stomp these handlers from the lock side.
+
+        Two layers:
+
+        1. ``loop.add_signal_handler`` is the canonical asyncio path. It
+           wires up the wakeup-fd and registers the Python callback to be
+           dispatched from the selector loop. When it works, shutdown
+           completes in milliseconds.
+
+        2. ``signal.signal`` is installed AFTER step 1 and overrides the
+           noop Python handler asyncio installs. On macOS, when the
+           daemon has multiple in-flight UDS connections registered with
+           the kqueue selector, the asyncio-side dispatch of the
+           wakeup-fd byte for SIGTERM is observably delayed by ~60s.
+           A Python-level handler fires reliably during the
+           pending-signals check that runs when the eval loop returns
+           from a blocking syscall, and ``call_soon_threadsafe`` lets
+           it cross back into the loop. Step 1 is still required because
+           it sets up the global wakeup-fd; without it the C-level
+           wrapper has nowhere to write and the eval loop never gets
+           control on signal arrival.
+
+        Reproduced under Python 3.12.13 + anyio 4.x + 4 idle proxy
+        connections; verified that direct write to wakeup-fd triggers
+        shutdown in <50ms while ``kill -TERM`` through asyncio alone
+        hangs ~60s. The two-layer install drops time-to-stop to <1s.
         """
         try:
             loop = asyncio.get_running_loop()
         except RuntimeError:
             # Should never happen — serve_forever is called from inside a loop.
             return
+
+        def _shutdown_handler(signum: int, frame: object | None) -> None:
+            del signum, frame
+            # Signal handlers run on the main thread between bytecode
+            # instructions; setting the event directly is safe and
+            # immediate. ``call_soon_threadsafe`` also writes to the
+            # asyncio self-pipe so any blocking selector returns.
+            self._shutdown_event.set()
+            with contextlib.suppress(Exception):
+                loop.call_soon_threadsafe(self.request_shutdown)
+
         for sig in (signal.SIGTERM, signal.SIGINT):
             try:
+                # Layer 1: asyncio path — wires up the wakeup-fd.
                 loop.add_signal_handler(sig, self.request_shutdown)
             except (NotImplementedError, ValueError):
                 # add_signal_handler is unavailable in worker threads
                 # (pytest event loops); not fatal for a non-main loop.
+                continue
+            try:
+                # Layer 2: synchronous fallback — fires from the Python
+                # eval loop's pending-signals check, robust against
+                # selector-dispatch delays seen with many fds on macOS.
+                signal.signal(sig, _shutdown_handler)
+            except (ValueError, OSError):
                 continue
         self._signal_handlers_installed = True
 

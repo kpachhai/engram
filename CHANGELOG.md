@@ -11,6 +11,25 @@ The MCP tool surface is committed-stable for the v1.x lifetime per the API stabi
 
 ### Fixed
 
+- **`engram daemon stop` exits promptly with active proxy connections.**
+  On macOS, when the daemon had multiple idle UDS connections
+  registered with its kqueue selector, an externally delivered
+  ``SIGTERM`` was deferred until an unrelated event (typically a
+  proxy keepalive ~60s later) woke the selector — leading to the
+  observed 60s+ ``engram daemon stop`` hang. Two-part fix in
+  ``DaemonServer`` (``src/engram/daemon/server.py``): (1) a periodic
+  1-second wakeup pump (``_signal_wakeup_pump``) guarantees the
+  selector returns regularly so pending Python signal handlers fire
+  during the eval loop's pending-signals check; (2)
+  ``_install_async_signal_handlers`` now installs both
+  ``loop.add_signal_handler`` (the canonical asyncio path that wires
+  up the wakeup-fd) AND a synchronous ``signal.signal`` fallback
+  that schedules ``request_shutdown`` via ``call_soon_threadsafe`` —
+  the fallback fires reliably from the pending-signals check even when
+  the wakeup-fd dispatch path is unreliable. Time-to-stop with 4
+  active connections drops from ~60s to <1s. Regression test:
+  ``test_engram_daemon_sigterm_with_active_connections_exits_promptly``.
+
 - **Daemon readiness pipe survives `exec`; defensive guard against
   stale-fd writes.** Latent bug exposed by the MCP-aware proxy: every
   MCP tool call against a proxy-spawned daemon returned

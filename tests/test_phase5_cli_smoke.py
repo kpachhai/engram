@@ -290,3 +290,97 @@ def test_engram_daemon_start_detach_then_stop(smoke_vault: Path) -> None:
         # Give the kernel a beat to unlink the socket file.
         time.sleep(0.5)
         assert not state_file.exists(), "state file should be cleaned after stop"
+
+
+def test_engram_daemon_sigterm_with_active_connections_exits_promptly(
+    smoke_vault: Path,
+) -> None:
+    """SIGTERM to a daemon with active UDS connections must exit in <5s.
+
+    Reproduces the 60s+ ``engram daemon stop`` hang observed on macOS:
+    when the daemon has multiple idle UDS connections registered with
+    its kqueue selector, an externally delivered SIGTERM was deferred
+    until an unrelated event (proxy keepalive ~60s later) woke the
+    selector. Pre-fix: SIGTERM is processed after ~60-70s. Post-fix:
+    SIGTERM is processed within ~1s thanks to the periodic-wakeup pump
+    plus a synchronous-handler fallback in
+    :meth:`engram.daemon.server.DaemonServer._install_async_signal_handlers`.
+    """
+    import signal
+    import socket as socket_mod
+    import time
+
+    config_path = smoke_vault / "engram.config.yaml"
+
+    _run(
+        ["daemon", "start", "--detach", "--config", str(config_path), "--skip-probes"],
+        timeout=60.0,
+    )
+    indexes = smoke_vault / ".indexes"
+    state_file = indexes / "engram.state.json"
+    socket_path = indexes / "engram.sock"
+
+    # Poll for readiness (state file appears AFTER bind).
+    deadline = time.monotonic() + 60.0
+    while time.monotonic() < deadline:
+        if state_file.exists() and socket_path.exists():
+            break
+        time.sleep(0.2)
+    else:
+        _run(["daemon", "stop", "--force", "--config", str(config_path)], expect_zero=False)
+        pytest.skip(
+            "daemon did not become ready within 60s — likely first-run FastEmbed "
+            "model download. Re-run after the model is cached."
+        )
+
+    sockets: list[socket_mod.socket] = []
+    try:
+        state_data = json.loads(state_file.read_text())
+        daemon_pid = int(state_data["pid"])
+
+        # Open 4 concurrent UDS connections (matches the maintainer-reported
+        # repro: 4 idle Claude Code proxy sessions).
+        for _ in range(4):
+            sock = socket_mod.socket(socket_mod.AF_UNIX, socket_mod.SOCK_STREAM)
+            sock.connect(str(socket_path))
+            sockets.append(sock)
+
+        # Brief settle so accept() runs and each connection is tracked.
+        time.sleep(0.3)
+
+        # Send SIGTERM directly; time how long the daemon takes to exit.
+        started_at = time.monotonic()
+        os.kill(daemon_pid, signal.SIGTERM)
+
+        # Poll for pid exit. Generous 5s budget: pre-fix this would hit ~60s.
+        exited = False
+        while time.monotonic() - started_at < 5.0:
+            try:
+                os.kill(daemon_pid, 0)
+                time.sleep(0.05)
+            except ProcessLookupError:
+                exited = True
+                break
+        duration = time.monotonic() - started_at
+
+        assert exited, (
+            f"daemon (pid {daemon_pid}) did not exit within 5s of SIGTERM "
+            f"({duration:.2f}s elapsed); regression of the proxy-connection "
+            "stop-hang bug"
+        )
+        assert duration < 5.0, (
+            f"SIGTERM-to-exit took {duration:.2f}s; expected <5s with the "
+            "periodic-wakeup pump + synchronous-handler fallback"
+        )
+    finally:
+        import contextlib as _contextlib
+
+        for sock in sockets:
+            with _contextlib.suppress(OSError):
+                sock.close()
+        # Belt-and-suspenders cleanup if assertion fired and daemon survived.
+        _run(
+            ["daemon", "stop", "--force", "--config", str(config_path)],
+            expect_zero=False,
+            timeout=15.0,
+        )
