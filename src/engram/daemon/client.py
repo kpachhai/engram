@@ -19,6 +19,7 @@ from __future__ import annotations
 
 import asyncio
 import contextlib
+import enum
 import logging
 import os
 import random
@@ -48,6 +49,13 @@ _PROXY_RETRY_DELAYS_SECONDS: Final[tuple[float, ...]] = (1.0, 4.0, 16.0)
 _JITTER_MAX_SECONDS: Final[float] = 2.0
 
 _BUFFER_SIZE = 64 * 1024
+
+#: After Claude closes stdin, how long to wait for the socket pump
+#: to drain any in-flight daemon response before cancelling. Half-
+#: closing the UDS writer (write_eof) signals the daemon to finish
+#: + close; this budget bounds the wait. Two seconds is generous for
+#: a healthy daemon and short enough not to block proxy shutdown.
+_STDIN_DRAIN_BUDGET_SECONDS = 2.0
 #: Threshold above which the daemon may be replaying a large WAL on
 #: startup; we extend the spawn timeout by ``wal_recovery_grace_seconds``
 #: when ``engram.db-wal`` exceeds this size at proxy start time.
@@ -63,6 +71,20 @@ class _SupportsWrite(Protocol):
     async def wait_closed(self) -> None: ...
 
 
+class _ShuffleExit(enum.StrEnum):
+    """Why ``_shuffle_bytes`` returned.
+
+    ``STDIN_CLOSED`` means the MCP client (Claude Code) closed its side of
+    the pipe; the proxy should exit cleanly. ``SOCKET_CLOSED`` means the
+    daemon disappeared (crashed, was restarted, or idle-shut-down); the
+    proxy should reconnect via :meth:`_reconnect_with_backoff` and resume
+    shuffling so the MCP client doesn't see its server vanish.
+    """
+
+    STDIN_CLOSED = "stdin_closed"
+    SOCKET_CLOSED = "socket_closed"
+
+
 class DaemonClient:
     """Proxy process: connect to the per-vault daemon and shuffle bytes."""
 
@@ -75,6 +97,7 @@ class DaemonClient:
         stdout_writer: _SupportsWrite | None = None,
         retry_delays: Sequence[float] = _PROXY_RETRY_DELAYS_SECONDS,
         spawn_fn: SpawnFn | None = None,
+        stdin_drain_budget_seconds: float = _STDIN_DRAIN_BUDGET_SECONDS,
     ) -> None:
         """Construct a proxy client.
 
@@ -90,6 +113,9 @@ class DaemonClient:
                 small values to keep test wall-clock low.
             spawn_fn: Override for :func:`_spawn_daemon_process`; tests
                 pass a mock to avoid ``fork()``.
+            stdin_drain_budget_seconds: How long to wait for the socket
+                pump to drain pending daemon response after stdin EOFs
+                (Claude closed). Default 2s; tests pass small values.
         """
         self.vault_path = vault_path
         self.daemon_config = daemon_config
@@ -98,29 +124,54 @@ class DaemonClient:
         self._stdout_writer = stdout_writer
         self._retry_delays = tuple(retry_delays)
         self._spawn_fn: SpawnFn = spawn_fn or _spawn_daemon_process
+        self._stdin_drain_budget_seconds = stdin_drain_budget_seconds
 
     # -- top-level proxy entry ----------------------------------------
 
-    async def run_proxy_loop(self) -> int:  # pragma: no cover - real stdio + fork
-        """Connect (spawn if needed) and shuffle bytes until either side closes.
+    async def run_proxy_loop(self) -> int:
+        """Connect (spawn if needed) and shuffle bytes; reconnect across daemon restarts.
 
-        Returns 0 on a clean shutdown initiated by the proxy's stdin
-        (Claude closed) or by the daemon's UDS write side. The caller's
-        ``engram serve`` exit code is this return value.
+        Returns 0 when the proxy's stdin EOFs (Claude Code closed the
+        MCP server), 1 if reconnection exhausts the backoff schedule
+        after the daemon disappears. On mid-session UDS EOF the proxy
+        runs :meth:`_reconnect_with_backoff` and resumes the shuffle so
+        the MCP client's tool registry survives daemon restarts.
 
-        Coverage note: this top-level orchestration is exercised by the
-        hermetic CLI smoke (which spawns the binary in a subprocess);
-        unit tests exercise each of the helpers below directly with
-        injected streams and a mock spawn callable.
+        Coverage: each helper below is unit-tested directly. The
+        top-level orchestration including the reconnect loop is
+        exercised by :func:`test_run_proxy_loop_reconnects_after_daemon_eof`
+        with mock streams.
         """
         reader, writer = await self._connect_with_spawn_if_missing()
-        try:
-            return await self._shuffle_bytes(reader, writer)
-        finally:
-            with contextlib.suppress(OSError):
-                writer.close()
+        while True:
+            try:
+                result = await self._shuffle_bytes(reader, writer)
+            finally:
                 with contextlib.suppress(OSError):
-                    await writer.wait_closed()
+                    writer.close()
+                    with contextlib.suppress(OSError):
+                        await writer.wait_closed()
+
+            if result is _ShuffleExit.STDIN_CLOSED:
+                return 0
+
+            # SOCKET_CLOSED: daemon disappeared mid-session. Reconnect
+            # so the MCP client doesn't see its server vanish. If the
+            # backoff schedule exhausts, surface a non-zero exit so the
+            # parent (Claude Code) can show the MCP-server-died state.
+            _log.warning(
+                "daemon UDS EOF; reconnecting with backoff (vault=%s socket=%s)",
+                self.vault_path,
+                self.paths.socket,
+            )
+            try:
+                reader, writer = await self._reconnect_with_backoff()
+            except DaemonConnectionError as exc:
+                _log.error(
+                    "proxy failed to reconnect after daemon disappearance: %s",
+                    exc,
+                )
+                return 1
 
     # -- connection lifecycle -----------------------------------------
 
@@ -204,44 +255,91 @@ class DaemonClient:
         self,
         socket_reader: asyncio.StreamReader,
         socket_writer: asyncio.StreamWriter,
-    ) -> int:
+    ) -> _ShuffleExit:
         """Bidirectional byte shuffle between stdin/stdout and the UDS.
 
-        Exits cleanly when either pump observes EOF. Returns 0.
+        Returns ``STDIN_CLOSED`` when Claude closed its side (the proxy
+        should exit) or ``SOCKET_CLOSED`` when the daemon disappeared
+        (the proxy should reconnect via
+        :meth:`_reconnect_with_backoff` and resume).
+
+        The two EOF cases need different handling:
+
+        * Stdin EOF: Claude is shutting down. Half-close the UDS writer
+          so the daemon sees EOF and drains its outgoing buffer; let the
+          socket pump deliver any pending response with a small budget
+          before returning. Without this, an echo-and-close mock daemon
+          would lose its echo to a premature pump-cancel.
+        * Socket EOF: the daemon died. Cancel the stdin pump (no point
+          reading more from Claude when we can't deliver) and return so
+          the proxy loop can reconnect.
         """
         stdin = self._stdin_reader or await _wrap_stdin()
         stdout = self._stdout_writer or await _wrap_stdout()
 
-        async def stdin_to_socket() -> None:
+        async def stdin_to_socket() -> _ShuffleExit:
             try:
                 while True:
                     data = await stdin.read(_BUFFER_SIZE)
                     if not data:
-                        return  # Claude closed stdin
+                        return _ShuffleExit.STDIN_CLOSED
                     socket_writer.write(data)
                     try:
                         await socket_writer.drain()
                     except (ConnectionResetError, BrokenPipeError):
-                        return  # daemon disappeared mid-write
-            except (OSError, asyncio.CancelledError):
-                return
+                        return _ShuffleExit.SOCKET_CLOSED
+            except OSError:
+                return _ShuffleExit.SOCKET_CLOSED
 
-        async def socket_to_stdout() -> None:
+        async def socket_to_stdout() -> _ShuffleExit:
             try:
                 while True:
                     data = await socket_reader.read(_BUFFER_SIZE)
                     if not data:
-                        return  # daemon EOF
+                        return _ShuffleExit.SOCKET_CLOSED
                     stdout.write(data)
                     try:
                         await stdout.drain()
                     except (ConnectionResetError, BrokenPipeError):
-                        return
-            except (OSError, asyncio.CancelledError):
-                return
+                        return _ShuffleExit.STDIN_CLOSED
+            except OSError:
+                return _ShuffleExit.SOCKET_CLOSED
 
-        await asyncio.gather(stdin_to_socket(), socket_to_stdout())
-        return 0
+        stdin_task = asyncio.create_task(stdin_to_socket())
+        socket_task = asyncio.create_task(socket_to_stdout())
+        done, pending = await asyncio.wait(
+            [stdin_task, socket_task],
+            return_when=asyncio.FIRST_COMPLETED,
+        )
+        first = done.pop()
+        first_result = first.result()
+
+        if first_result is _ShuffleExit.STDIN_CLOSED:
+            # Claude closed. Half-close our writer side so the daemon
+            # sees EOF and finishes any in-flight response, then drain
+            # the socket pump with a small budget before exiting.
+            with contextlib.suppress(Exception):
+                if socket_writer.can_write_eof():
+                    socket_writer.write_eof()
+            try:
+                await asyncio.wait_for(
+                    asyncio.gather(*pending, return_exceptions=True),
+                    timeout=self._stdin_drain_budget_seconds,
+                )
+            except TimeoutError:
+                for task in pending:
+                    task.cancel()
+                await asyncio.gather(*pending, return_exceptions=True)
+            return _ShuffleExit.STDIN_CLOSED
+
+        # SOCKET_CLOSED: cancel stdin pump and return so the proxy loop
+        # can reconnect. No point waiting on stdin when we have nowhere
+        # to deliver bytes.
+        for task in pending:
+            task.cancel()
+        if pending:
+            await asyncio.gather(*pending, return_exceptions=True)
+        return _ShuffleExit.SOCKET_CLOSED
 
 
 # -- module helpers (testable as free functions) -----------------------

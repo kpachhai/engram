@@ -298,3 +298,156 @@ async def test_reconnect_with_backoff_recovers_on_second_attempt(
         writer.close()
         with __import__("contextlib").suppress(OSError):
             await writer.wait_closed()
+
+
+# ----- mid-session reconnect (the bug that lost MCP tools on daemon restart) -----
+
+
+@pytest.mark.asyncio
+async def test_run_proxy_loop_reconnects_after_daemon_eof(short_vault: Path) -> None:
+    """Proxy reconnects when daemon disappears mid-session.
+
+    Regression: prior to the fix the proxy's ``_shuffle_bytes`` returned
+    on EITHER stdin EOF or socket EOF without distinguishing which,
+    and ``run_proxy_loop`` exited unconditionally. The reconnect helper
+    existed as dead code. Result: any daemon restart killed the MCP
+    client's tool registry (Claude Code saw its server vanish).
+
+    Test setup: mock daemon accepts a connection, echoes one frame,
+    then closes its end. The proxy should reconnect; the mock then
+    accepts a second connection. We orchestrate stdin so the proxy
+    exits cleanly only after the reconnect has happened.
+    """
+    import contextlib as _contextlib
+
+    paths = resolve_paths(short_vault)
+    payload = b'{"jsonrpc":"2.0","id":1,"method":"ping"}\n'
+    accept_count = 0
+    reconnect_event = asyncio.Event()
+
+    async def _flaky_daemon(reader: asyncio.StreamReader, writer: asyncio.StreamWriter) -> None:
+        nonlocal accept_count
+        accept_count += 1
+        if accept_count == 1:
+            # First connection: echo one frame then close to simulate
+            # the daemon dying mid-session.
+            data = await reader.readline()
+            if data:
+                writer.write(data)
+                await writer.drain()
+            writer.close()
+            with _contextlib.suppress(OSError):
+                await writer.wait_closed()
+        else:
+            # Second connection: tells the test the reconnect happened.
+            # Hold the connection open until the test closes stdin so
+            # the proxy doesn't exit before we've observed the count.
+            reconnect_event.set()
+            with _contextlib.suppress(OSError):
+                await reader.read()
+            writer.close()
+            with _contextlib.suppress(OSError):
+                await writer.wait_closed()
+
+    server = await asyncio.start_unix_server(_flaky_daemon, path=str(paths.socket))
+    try:
+        # stdin starts with the payload but NOT at EOF; we feed EOF
+        # after the reconnect has been observed so the proxy can exit.
+        stdin = asyncio.StreamReader()
+        stdin.feed_data(payload)
+        stdout = _CapturingWriter()
+        client = DaemonClient(
+            vault_path=short_vault,
+            daemon_config=DaemonConfig(),
+            stdin_reader=stdin,
+            stdout_writer=stdout,
+            retry_delays=(0.01,),  # fast for tests
+        )
+        proxy_task = asyncio.create_task(client.run_proxy_loop())
+
+        # Wait for the second-connection accept (the reconnect).
+        await asyncio.wait_for(reconnect_event.wait(), timeout=5.0)
+        assert accept_count == 2
+
+        # Now let the proxy exit cleanly.
+        stdin.feed_eof()
+        rc = await asyncio.wait_for(proxy_task, timeout=5.0)
+        assert rc == 0
+        assert stdout.buffer.getvalue() == payload
+    finally:
+        server.close()
+        await server.wait_closed()
+
+
+@pytest.mark.asyncio
+async def test_run_proxy_loop_returns_1_when_reconnect_exhausts(
+    short_vault: Path,
+) -> None:
+    """If reconnect backoff is exhausted, the proxy returns 1 (was: 0 on bug)."""
+    import contextlib as _contextlib
+
+    paths = resolve_paths(short_vault)
+    payload = b'{"jsonrpc":"2.0","id":1,"method":"ping"}\n'
+
+    async def _one_shot_daemon(reader: asyncio.StreamReader, writer: asyncio.StreamWriter) -> None:
+        # Accept once, echo, close, then become unreachable (the
+        # ``finally`` after this handler closes the server below).
+        data = await reader.readline()
+        if data:
+            writer.write(data)
+            await writer.drain()
+        writer.close()
+        with _contextlib.suppress(OSError):
+            await writer.wait_closed()
+
+    server = await asyncio.start_unix_server(_one_shot_daemon, path=str(paths.socket))
+    accepted_first = asyncio.Event()
+
+    # Close the server after the first connection so reconnect attempts
+    # fail (no listener accepting).
+    async def _close_after_first() -> None:
+        await accepted_first.wait()
+        server.close()
+
+    close_task = asyncio.create_task(_close_after_first())
+    try:
+        stdin = asyncio.StreamReader()
+        stdin.feed_data(payload)
+        stdout = _CapturingWriter()
+
+        async def _failing_spawn(
+            *, vault_path: Path, spawn_timeout_seconds: int, wal_recovery_grace_seconds: int
+        ) -> None:
+            # Spawn fails: there's nothing listening and we don't
+            # actually spawn a daemon in this test.
+            from engram.errors import DaemonSpawnError
+
+            msg = "no listener; spawn refused for test"
+            raise DaemonSpawnError(msg)
+
+        client = DaemonClient(
+            vault_path=short_vault,
+            daemon_config=DaemonConfig(),
+            stdin_reader=stdin,
+            stdout_writer=stdout,
+            retry_delays=(0.01, 0.01),  # two fast attempts then give up
+            spawn_fn=_failing_spawn,
+        )
+        proxy_task = asyncio.create_task(client.run_proxy_loop())
+
+        # As soon as the proxy has read the payload and starts shuffling,
+        # let the server close so reconnect attempts cannot succeed.
+        # Sleep briefly to let the first accept happen.
+        await asyncio.sleep(0.2)
+        accepted_first.set()
+        await close_task
+
+        rc = await asyncio.wait_for(proxy_task, timeout=5.0)
+        assert rc == 1, "exhausted reconnect should surface as non-zero exit"
+    finally:
+        if not server.is_serving():
+            pass  # already closed
+        else:
+            server.close()
+        with _contextlib.suppress(Exception):
+            await server.wait_closed()

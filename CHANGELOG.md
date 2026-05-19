@@ -9,6 +9,28 @@ The MCP tool surface is committed-stable for the v1.x lifetime per the API stabi
 
 ## [Unreleased]
 
+### Fixed
+
+- **`engram serve` proxy now reconnects across daemon restarts.** Prior
+  behavior: when the daemon died mid-session (crash, restart, idle
+  shutdown), the proxy's byte shuffler observed UDS EOF and exited
+  cleanly with rc=0. Claude Code's MCP client saw its server vanish
+  and dropped all engram tools from the registry - tools didn't come
+  back without restarting Claude Code. The `_reconnect_with_backoff`
+  helper existed in `engram.daemon.client` (matching the docstring
+  contract for mid-session reconnection) but `run_proxy_loop` never
+  called it. Fix: `_shuffle_bytes` now returns a `_ShuffleExit` enum
+  signalling whether stdin (Claude closed) or the socket (daemon died)
+  closed first; `run_proxy_loop` reconnects with backoff on the socket
+  case and exits cleanly on the stdin case. The stdin-closed path
+  preserves the existing "drain remaining socket response before
+  exit" behavior via UDS half-close + 2s drain budget. Caveat: MCP
+  session state (initialize / tools-list) is held by the daemon; if
+  Claude Code's MCP client doesn't re-initialize on transport hiccup,
+  some session-state-dependent behavior may still need manual recovery
+  after a daemon restart. The proxy-side fix is the prerequisite for
+  any further session-state work.
+
 ### Removed
 
 - **`engram doctor` `disk_usage` check removed.** The check was added
