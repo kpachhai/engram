@@ -614,6 +614,12 @@ async def _spawn_daemon_process(  # pragma: no cover - forks the process; smoke-
         # is the intended posture for an explicit ``execvpe`` of a
         # known-trusted python binary.
         os.close(rfd)
+        # PEP 446: Python sets FD_CLOEXEC on os.pipe() fds by default. Without
+        # this, wfd is closed at exec, the daemon receives a stale fd number,
+        # and SQLite later reuses that number for engram.db — the daemon's
+        # subsequent os.write/os.close on readiness_fd then corrupts and
+        # closes the main-db fd, breaking every MCP call with disk I/O error.
+        os.set_inheritable(wfd, True)
         try:
             os.execvpe(  # noqa: S606 - explicit no-shell exec of sys.executable
                 sys.executable,

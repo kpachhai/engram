@@ -73,6 +73,36 @@ def short_vault() -> Iterator[Path]:
 def test_retry_schedule_matches_spec() -> None:
     """Spec Section 5.6: 1s, 4s, 16s exponential backoff."""
     assert _PROXY_RETRY_DELAYS_SECONDS == (1.0, 4.0, 16.0)
+
+
+def test_pipe_inheritability_contract_for_daemon_spawn() -> None:
+    """Pipe fds are non-inheritable by default; set_inheritable flips that.
+
+    Regression for the disk-I/O-error bug: in ``_spawn_daemon_process`` we
+    pass the readiness-pipe write fd to the daemon via ``--readiness-fd N``
+    after ``os.fork`` + ``os.execvpe``. PEP 446 makes ``os.pipe()`` fds
+    non-inheritable, so without ``os.set_inheritable(wfd, True)`` the kernel
+    closes wfd at exec. The daemon then receives a stale fd number and
+    SQLite later reuses it for ``engram.db`` — the daemon's subsequent
+    ``os.write``/``os.close`` on that number corrupts and closes the
+    main-db fd, breaking every MCP call with ``disk I/O error``.
+
+    If a future Python release defaults pipe fds to inheritable, this test
+    trips and the ``set_inheritable`` call becomes redundant but harmless.
+    """
+    import os
+
+    rfd, wfd = os.pipe()
+    try:
+        assert not os.get_inheritable(wfd), (
+            "os.pipe() must return non-inheritable fds (PEP 446); the "
+            "set_inheritable call in _spawn_daemon_process exists for this."
+        )
+        os.set_inheritable(wfd, True)
+        assert os.get_inheritable(wfd)
+    finally:
+        os.close(rfd)
+        os.close(wfd)
     assert _JITTER_MAX_SECONDS == 2.0
 
 

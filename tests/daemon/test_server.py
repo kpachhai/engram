@@ -116,6 +116,48 @@ async def _start_daemon(
 
 
 @pytest.mark.asyncio
+async def test_serve_forever_skips_non_pipe_readiness_fd(short_vault: Path, tmp_path: Path) -> None:
+    """Daemon must refuse to write/close a readiness_fd that is not a pipe.
+
+    Regression for the disk-I/O-error bug: when the proxy spawns the daemon
+    via fork+execvpe without ``os.set_inheritable`` on the pipe write end,
+    the wfd is closed by FD_CLOEXEC at exec time. The daemon receives a
+    stale fd number which the kernel later reuses for SQLite's
+    ``engram.db``. The original code would then ``os.write(N, b"ready\\n")``
+    (corrupting the db) and ``os.close(N)`` (closing the main-db fd),
+    causing every MCP call to fail with ``disk I/O error``.
+
+    This test passes a non-pipe fd as readiness_fd and asserts the daemon
+    leaves it untouched.
+    """
+    import os
+
+    sentinel = tmp_path / "should-stay-empty.bin"
+    fd = os.open(str(sentinel), os.O_WRONLY | os.O_CREAT, 0o600)
+    try:
+        runtime = _build_runtime(short_vault)
+        daemon = DaemonServer(
+            runtime=runtime,
+            daemon_config=DaemonConfig(idle_shutdown_seconds=0),
+            readiness_fd=fd,
+        )
+        server_task = asyncio.create_task(daemon.serve_forever())
+        try:
+            await daemon.wait_until_ready(timeout=5.0)
+            assert sentinel.read_bytes() == b"", (
+                f"daemon wrote to a non-pipe readiness_fd; contents={sentinel.read_bytes()!r}"
+            )
+            # fd must still be open in this process (daemon must not have closed it).
+            os.fstat(fd)
+        finally:
+            daemon.request_shutdown()
+            await asyncio.wait_for(server_task, timeout=5.0)
+    finally:
+        with contextlib.suppress(OSError):
+            os.close(fd)
+
+
+@pytest.mark.asyncio
 async def test_serve_forever_binds_socket_and_writes_state(short_vault: Path) -> None:
     paths = resolve_paths(short_vault)
     daemon, server_task = await _start_daemon(short_vault, DaemonConfig(idle_shutdown_seconds=0))

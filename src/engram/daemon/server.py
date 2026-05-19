@@ -34,6 +34,7 @@ import logging
 import os
 import signal
 import socket
+import stat
 from collections.abc import Awaitable, Callable
 from datetime import UTC, datetime
 from typing import TYPE_CHECKING
@@ -158,9 +159,27 @@ class DaemonServer:
         # 11. Signal readiness to the spawning proxy.
         self._ready_event.set()
         if self._readiness_fd is not None:
-            with contextlib.suppress(OSError):
-                os.write(self._readiness_fd, b"ready\n")
-                os.close(self._readiness_fd)
+            # Defensive: if the proxy passed a stale fd number (e.g. exec
+            # closed the pipe via FD_CLOEXEC), the kernel may have reused
+            # that number for SQLite's engram.db. Writing + closing it
+            # would corrupt and close the main-db fd. Verify it's a pipe
+            # first; if not, skip and warn — never write to an unknown fd.
+            try:
+                st = os.fstat(self._readiness_fd)
+                is_pipe = stat.S_ISFIFO(st.st_mode)
+            except OSError:
+                is_pipe = False
+            if is_pipe:
+                with contextlib.suppress(OSError):
+                    os.write(self._readiness_fd, b"ready\n")
+                    os.close(self._readiness_fd)
+            else:
+                _log.warning(
+                    "readiness_fd=%d is not a pipe; skipping write+close "
+                    "to avoid clobbering a reused fd (likely caller did not "
+                    "set os.set_inheritable on the pipe write end)",
+                    self._readiness_fd,
+                )
             self._readiness_fd = None
         _log.info(
             "engram daemon ready: vault=%s pid=%s socket=%s",
