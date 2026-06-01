@@ -338,6 +338,11 @@ def stop(
         os.kill(state.pid, signal.SIGTERM)
     except ProcessLookupError:
         typer.echo(f"daemon for {config.vault_name} was already stopped (pid {state.pid})")
+        # Clean up stale artifacts so a subsequent `start` sees a clean slate.
+        with contextlib.suppress(FileNotFoundError):
+            paths.state_file.unlink()
+        with contextlib.suppress(FileNotFoundError):
+            paths.socket.unlink()
         return
 
     deadline = time.monotonic() + timeout  # pragma: no cover - live-PID wait; smoke-covered

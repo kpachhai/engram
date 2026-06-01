@@ -166,7 +166,7 @@ def test_stop_no_state_prints_and_exits_0(short_vault: Path) -> None:
 
 
 def test_stop_stale_pid_recovers_quietly(short_vault: Path) -> None:
-    """If state.json points at a dead PID, stop should not hang/raise."""
+    """Dead-PID state.json: stop must not hang/raise and must clean up stale artifacts."""
     paths = resolve_paths(short_vault)
     write_state(
         paths.state_file,
@@ -184,8 +184,10 @@ def test_stop_stale_pid_recovers_quietly(short_vault: Path) -> None:
         app,
         ["daemon", "stop", "--config", str(short_vault / "engram.config.yaml")],
     )
-    # Either "already stopped" or normal exit; never a stack trace.
     assert result.exit_code == 0, result.stdout
+    assert "already stopped" in result.stdout
+    # Stale state file must be removed so a subsequent start sees a clean slate.
+    assert not paths.state_file.exists()
 
 
 # ----- logs: not-present path ----------------------------------------
