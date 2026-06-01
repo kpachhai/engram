@@ -75,7 +75,7 @@ def test_probe_cloud_sync_under_dropbox_path() -> None:
     Constructed via a synthetic path that doesn't actually have to exist;
     the check operates on path components, not file presence.
     """
-    fake = Path("/Users/x/Dropbox/vault")
+    fake = Path("/Users/x/Dropbox/vault")  # pii-allow: synthetic test path
     report = ProbeReport()
     # Monkey-call requires the path to exist for git_dir.resolve(); construct
     # a temporary symlink in /tmp and verify the path-component check directly.
@@ -170,7 +170,8 @@ def test_probe_user_identity_set_passes(tmp_path: Path) -> None:
 # === identity check ===
 
 
-def test_probe_vault_identity_match_clean(tmp_path: Path) -> None:
+def test_probe_vault_identity_no_remote_skips(tmp_path: Path) -> None:
+    # No push path = no contamination risk; check is skipped for remote-less vaults.
     repo = _seeded_repo(tmp_path)
     pattern = "^/.+/seed-test/.*$"
     (repo / IDENTITY_FILE_RELATIVE).parent.mkdir(parents=True, exist_ok=True)
@@ -179,18 +180,17 @@ def test_probe_vault_identity_match_clean(tmp_path: Path) -> None:
     )
     config = SyncConfig()
     report = asyncio.run(run_startup_probes(config, repo))
-    # No remote configured -> Mismatch (actual_url=""). The probe surfaces
-    # this as a FAIL since identity is present but no remote is wired.
-    fail_codes = [f.code for f in report.failures]
-    assert check_codes.VAULT_IDENTITY_REMOTE_MATCH in fail_codes
+    all_codes = [f.code for f in report.failures] + [w.code for w in report.warnings]
+    assert check_codes.VAULT_IDENTITY_REMOTE_MATCH not in all_codes
 
 
-def test_probe_vault_identity_missing_warns(tmp_path: Path) -> None:
+def test_probe_vault_identity_missing_no_remote_skips(tmp_path: Path) -> None:
+    # No identity.local + no remote: contamination check is skipped (no WARN).
     repo = _seeded_repo(tmp_path)
     config = SyncConfig()
     report = asyncio.run(run_startup_probes(config, repo))
     warn_codes = [w.code for w in report.warnings]
-    assert check_codes.VAULT_IDENTITY_REMOTE_MATCH in warn_codes
+    assert check_codes.VAULT_IDENTITY_REMOTE_MATCH not in warn_codes
 
 
 # === git version ===
@@ -215,12 +215,15 @@ def test_run_startup_probes_disabled_returns_empty(tmp_path: Path) -> None:
 
 
 def test_run_startup_probes_aggregates_all_probes(tmp_path: Path) -> None:
-    """At least one of the 14 probes runs (otherwise the wiring is broken)."""
+    """At least one probe produces a result (aggregate wiring check)."""
     repo = _seeded_repo(tmp_path)
+    # Clear per-vault git identity so SYNC_USER_IDENTITY_SET fires.
+    run_git(["config", "--unset", "user.email"], repo)
+    run_git(["config", "--unset", "user.name"], repo)
     config = SyncConfig()
     report = asyncio.run(run_startup_probes(config, repo))
-    # Some probes will warn (no remote, no identity); aggregate must include them.
-    assert report.warnings or report.failures
+    warn_codes = [w.code for w in report.warnings]
+    assert check_codes.SYNC_USER_IDENTITY_SET in warn_codes
 
 
 def test_per_cycle_recheck_skips_when_disabled(tmp_path: Path) -> None:

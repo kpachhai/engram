@@ -209,13 +209,14 @@ def test_user_identity_unset_warns_doctor(tmp_path: Path) -> None:
 # === vault identity ===
 
 
-def test_vault_identity_missing_warns(tmp_path: Path) -> None:
+def test_vault_identity_no_remote_is_ok(tmp_path: Path) -> None:
+    # No remote configured -> contamination check is skipped -> status OK.
     repo = _seeded_git_vault(tmp_path)
     config = _config_for(repo)
     report = DoctorReport()
     run_sync_diagnostics(report, config)
     statuses = {c.name: c.status for c in report.checks}
-    assert statuses[check_codes.VAULT_IDENTITY_REMOTE_MATCH] is CheckStatus.WARN
+    assert statuses[check_codes.VAULT_IDENTITY_REMOTE_MATCH] is CheckStatus.OK
 
 
 # === all 14 codes appear in output ===

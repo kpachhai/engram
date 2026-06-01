@@ -31,6 +31,7 @@ from engram.sync.identity import (
     Mismatch,
     MissingIdentity,
     check_identity,
+    load_identity,
 )
 from engram.utils.run_command import run_git
 
@@ -340,6 +341,10 @@ async def probe_vault_identity(
 ) -> None:
     """Cross-vault contamination guard via .engram/identity.local."""
     actual_url = await gitops.remote_url(vault_dir, sync_config.git_remote)
+    if actual_url is None:
+        # No remote configured - no push path means no cross-vault contamination
+        # risk. Skip the check entirely so local-only vaults stay clean.
+        return
     try:
         result = check_identity(vault_dir, actual_url)
     except ConfigError as exc:
@@ -373,8 +378,16 @@ async def probe_user_identity(vault_dir: Path, report: ProbeReport) -> None:
     """Warn when per-vault git identity is not set.
 
     Inheriting from global config silently leaks the user's default
-    identity into vault commits.
+    identity into vault commits. Per-vault identity can be provided via
+    either ``git config --local`` or ``.engram/identity.local``
+    (``user_email`` + ``user_name`` fields) — the coordinator prefers the
+    identity.local values when committing.
     """
+    identity = load_identity(vault_dir)
+    if identity is not None and identity.user_email and identity.user_name:
+        # identity.local provides both fields; commits will use these overrides.
+        return
+
     cp_email = await asyncio.to_thread(
         run_git,
         ["config", "--local", "--get", "user.email"],
