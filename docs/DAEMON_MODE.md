@@ -221,6 +221,11 @@ its push queue + storage to close cleanly, then exits. If the
 daemon does not exit within that budget, the command exits 1 and
 suggests ``--force``.
 
+If the daemon process is already dead when ``stop`` runs (e.g. after a
+prior SIGKILL or a reboot left behind a stale state file), ``stop``
+reports ``already stopped`` and unlinks the stale state file and socket
+so the next ``start`` sees a clean slate.
+
 Forced stop:
 
 ```bash

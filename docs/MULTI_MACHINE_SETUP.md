@@ -61,7 +61,7 @@ two-machine deployment.
 
 ```bash
 # Working from the source repo so we can call uv run engram directly.
-cd ~/repos/github.com/kpachhai/engram
+cd <path-to-engram-source>
 
 # 1. Bare repo standing in for "github".
 git init --bare ~/smoke-engram-remote.git
@@ -221,8 +221,10 @@ user_email: you@example.com
 user_name: Your Name
 EOF
 
-# Per-vault git identity (so this machine's commits are tagged with the
-# vault user, not your global git config).
+# Optional: also set the per-vault git config. The sync coordinator
+# already uses user_email + user_name from .engram/identity.local
+# when committing, but matching git config keeps ad-hoc `git`
+# invocations against the vault consistent.
 git config user.email you@example.com
 git config user.name 'Your Name'
 git config commit.gpgsign false   # or true if you have GPG infra

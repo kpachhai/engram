@@ -11,6 +11,30 @@ The MCP tool surface is committed-stable for the v1.x lifetime per the API stabi
 
 ### Fixed
 
+- **Startup probes no longer warn on intentionally local-only vaults or
+  on vaults that use `.engram/identity.local` for commit identity.**
+  Two refinements in `src/engram/sync/startup_probes.py`: (1)
+  `probe_vault_identity` now returns early when the vault has no
+  configured git remote — with no push path there is no cross-vault
+  contamination risk to guard against, so the probe skips rather than
+  emitting a FAIL/WARN on `actual_url=None`. (2) `probe_user_identity`
+  now consults `.engram/identity.local` before warning about an unset
+  `git config --local user.{email,name}`. When identity.local provides
+  both `user_email` and `user_name`, the sync coordinator already uses
+  those values when committing, so the warning is redundant. Net effect:
+  `engram doctor` and `engram serve` startup are quieter on two valid
+  configurations they previously over-reported on.
+
+- **`engram daemon stop` cleans stale state file + socket when the
+  daemon was already dead.** The dead-PID branch in
+  `src/engram/cli/daemon.py` (`ProcessLookupError` from
+  `os.kill(pid, SIGTERM)`) previously echoed
+  `daemon for <vault> was already stopped (pid N)` and returned, leaving
+  `<vault>/.indexes/engram.state.json` and `<vault>/.indexes/engram.sock`
+  on disk. The next `engram daemon start` then saw stale artifacts and
+  got confused. The dead-PID branch now unlinks both before returning
+  so the next `start` sees a clean slate.
+
 - **`engram daemon stop` exits promptly with active proxy connections.**
   On macOS, when the daemon had multiple idle UDS connections
   registered with its kqueue selector, an externally delivered
