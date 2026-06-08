@@ -53,6 +53,11 @@ while IFS= read -r line; do
   patterns+=("$trimmed")
 done < "$PATTERNS_FILE"
 
+# Structural-only pattern set (conf patterns, before identity values are added).
+# Used to keep manifest author lines honest: the maintainer's name/email is
+# allowed there, but paths, employer brands, and keys are not.
+structural_pattern="$(IFS='|'; echo "${patterns[*]}")"
+
 # Identity-specific patterns (each value is regex-escaped to match as literal string)
 if [[ -f "$IDENTITY_FILE" ]] && command -v jq >/dev/null 2>&1; then
   for field in full_name email_personal email_work github_username; do
@@ -112,6 +117,24 @@ for f in "${files[@]}"; do
     if printf '%s' "$m" | grep -q 'pii-allow'; then
       continue
     fi
+    # Filter out documentation-placeholder paths. Real usernames don't use
+    # ALL_CAPS_WITH_UNDERSCORES or angle-bracket syntax, so these are
+    # unambiguous placeholders in docs (launchd plists, cron lines, install
+    # snippets). Match the path-portion of the line and skip if it contains
+    # any of these tokens.
+    if printf '%s' "$m" | grep -qE '/(Users|home)/(YOUR_USERNAME|<your-username>|<USERNAME>|<username>|<user>|USERNAME)/'; then
+      continue
+    fi
+    # Allow package-manifest attribution fields - the one sanctioned place for
+    # the maintainer's name (see CLAUDE.md PII Discipline). JSON/TOML manifests
+    # cannot carry an inline pii-allow marker, so exempt the author(s) key line,
+    # but still flag structural PII (paths, employer brand, keys) on it.
+    case "$f" in
+      package.json|*/package.json|*pyproject.toml|*Cargo.toml)
+        if printf '%s' "$m" | grep -qE '^[0-9]+:[[:space:]]*"?authors?"?[[:space:]]*[:=]'; then
+          printf '%s' "$m" | grep -qE "$structural_pattern" || continue
+        fi ;;
+    esac
     printf '%s:%s\n' "$f" "$m"
     found=1
   done <<< "$matches"
