@@ -106,6 +106,13 @@ for f in "${files[@]}"; do
   case "$f" in
     *pii-patterns.conf|*pii-scan.sh) continue ;;
   esac
+  # Auto-skip machine-generated dependency lockfiles: their content hashes
+  # (sha256 etc.) false-positive against the hex key patterns, and humans
+  # never author PII into them.
+  case "$f" in
+    *uv.lock|*package-lock.json|*yarn.lock|*pnpm-lock.yaml|*Cargo.lock|\
+    *poetry.lock|*Gemfile.lock|*composer.lock|*flake.lock) continue ;;
+  esac
   # Skip binary
   if file --brief --mime-encoding "$f" 2>/dev/null | grep -qE '^(binary|application/)'; then
     continue
@@ -127,11 +134,17 @@ for f in "${files[@]}"; do
     fi
     # Allow package-manifest attribution fields - the one sanctioned place for
     # the maintainer's name (see CLAUDE.md PII Discipline). JSON/TOML manifests
-    # cannot carry an inline pii-allow marker, so exempt the author(s) key line,
-    # but still flag structural PII (paths, employer brand, keys) on it.
+    # cannot carry an inline pii-allow marker, so exempt the author(s) key line
+    # (single-line form), name-entry lines inside a multi-line authors block,
+    # and the manifest's own repository-URL lines (Repository/Issues/Homepage
+    # etc. self-references). Still flag structural PII (paths, employer brand,
+    # keys) on any of them.
     case "$f" in
       package.json|*/package.json|*pyproject.toml|*Cargo.toml)
-        if printf '%s' "$m" | grep -qE '^[0-9]+:[[:space:]]*"?authors?"?[[:space:]]*[:=]'; then
+        if printf '%s' "$m" | grep -qE '^[0-9]+:[[:space:]]*("?authors?"?[[:space:]]*[:=]|\{[[:space:]]*name[[:space:]]*=|"name"[[:space:]]*:)'; then
+          printf '%s' "$m" | grep -qE "$structural_pattern" || continue
+        fi
+        if printf '%s' "$m" | grep -qE '^[0-9]+:[[:space:]]*"?(Repository|Issues|Changelog|Homepage|Documentation|Source|repository|homepage|bugs|url|urls)"?[[:space:]]*[:=].*https?://'; then
           printf '%s' "$m" | grep -qE "$structural_pattern" || continue
         fi ;;
     esac
