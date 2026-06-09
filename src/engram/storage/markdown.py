@@ -308,8 +308,29 @@ def _serialize_frontmatter(
     return buf.getvalue()
 
 
+#: Fields the serializer re-derives from the Thought on every write. Anything
+#: else found in an existing file - unknown extras AND known fields not
+#: carried on the Thought model (legacy_created_at, consolidation provenance)
+#: - is preserved verbatim on rewrite, or it would be silently dropped by
+#: update_metadata / update_body / reindex re-capture.
+_SERIALIZER_OWNED_FIELDS = {
+    "schema_version",
+    "id",
+    "prefix",
+    "portability",
+    "source",
+    "created_at",
+    "updated_at",
+    "fingerprint",
+    "tags",
+    "vault",
+    "legacy_id",
+    "captured_by",
+}
+
+
 def _read_extras_from_existing(path: Path) -> dict[str, Any]:
-    """Read unknown-extra frontmatter fields from an existing file for write-side preservation."""
+    """Read non-serializer-owned frontmatter fields for write-side preservation."""
     if not path.exists():
         return {}
     decoded, _ = _decode_file(path)
@@ -322,7 +343,7 @@ def _read_extras_from_existing(path: Path) -> dict[str, Any]:
     fm_dict, _ = _parse_frontmatter_yaml(fm_yaml, path)
     if fm_dict is None:
         return {}
-    return {k: v for k, v in fm_dict.items() if k not in _KNOWN_FRONTMATTER_FIELDS}
+    return {k: v for k, v in fm_dict.items() if k not in _SERIALIZER_OWNED_FIELDS}
 
 
 def write_thought(
@@ -330,6 +351,7 @@ def write_thought(
     *,
     base_dir: Path,
     preserve_extras_from: Path | None = None,
+    extra_fields: dict[str, Any] | None = None,
 ) -> Path:
     """Atomically write a thought to disk, preserving any unknown extra frontmatter fields.
 
@@ -339,6 +361,9 @@ def write_thought(
         preserve_extras_from: Optional path to an existing file whose unknown
             extra frontmatter fields should be preserved on write. If unset,
             extras are read from ``thought.file_path`` itself when it exists.
+        extra_fields: Additional frontmatter fields to emit (e.g. consolidation
+            provenance on a merged thought). Caller-supplied values win over
+            same-named fields preserved from the existing file.
 
     Returns:
         The absolute path of the written file.
@@ -351,6 +376,8 @@ def write_thought(
 
     extras_source = preserve_extras_from if preserve_extras_from is not None else target
     extras = _read_extras_from_existing(extras_source)
+    if extra_fields:
+        extras.update(extra_fields)
     fm_yaml = _serialize_frontmatter(thought, extras=extras)
 
     body = thought.content.replace("\r\n", "\n").replace("\r", "\n")

@@ -189,6 +189,68 @@ def open_connection(
     return conn
 
 
+def open_connection_readonly(db_path: Path) -> sqlite3.Connection:
+    """Open an EXISTING index read-only (URI ``mode=ro``) with sqlite-vec loaded.
+
+    Used by consolidation report mode so it can run safely beside a live
+    daemon: a read-only connection can never become the second WAL writer.
+    No schema creation or settings verification happens on this path.
+
+    Raises:
+        IndexError: if the database does not exist, sqlite-vec cannot load,
+            or the open/probe fails - notably when a leftover ``-wal`` needs
+            recovery the read-only connection cannot perform (unclean daemon
+            exit shape, SQLITE_READONLY_CANTINIT class).
+    """
+    if not db_path.exists():
+        msg = (
+            f"index database does not exist at {db_path}; "
+            "run `engram serve` or `engram reindex --full` to build it"
+        )
+        raise EngramIndexError(msg)
+
+    _probe_extension_support()
+
+    try:
+        conn = sqlite3.connect(
+            f"file:{db_path}?mode=ro",
+            uri=True,
+            isolation_level=None,
+            detect_types=sqlite3.PARSE_DECLTYPES,
+        )
+    except sqlite3.Error as exc:
+        msg = f"failed to open {db_path} read-only: {exc}"
+        raise EngramIndexError(msg) from exc
+    try:
+        conn.execute("PRAGMA busy_timeout=5000")
+        try:
+            conn.enable_load_extension(True)
+            try:
+                sqlite_vec.load(conn)
+            finally:
+                conn.enable_load_extension(False)
+        except (sqlite3.OperationalError, OSError) as exc:
+            msg = f"failed to load sqlite-vec extension: {exc}"
+            raise EngramIndexError(msg) from exc
+        # Probe eagerly so corruption / WAL-recovery failures surface here
+        # with a remediation message instead of at the first caller query.
+        conn.execute("SELECT 1 FROM sqlite_master LIMIT 1").fetchone()
+    except sqlite3.Error as exc:
+        conn.close()
+        msg = (
+            f"cannot read {db_path} read-only: {exc}. The index may be "
+            "corrupted or hold write-ahead-log state needing recovery "
+            "(daemon exited uncleanly?); run `engram doctor`, or "
+            "`engram reindex --full` to rebuild from markdown"
+        )
+        raise EngramIndexError(msg) from exc
+    except Exception:
+        conn.close()
+        raise
+
+    return conn
+
+
 def _create_schema(conn: sqlite3.Connection, *, embedding_dim: int) -> None:
     """Create all engram tables idempotently."""
     conn.execute(_CREATE_THOUGHTS_TABLE)
@@ -285,5 +347,6 @@ __all__ = [
     "get_setting",
     "get_user_version",
     "open_connection",
+    "open_connection_readonly",
     "set_setting",
 ]

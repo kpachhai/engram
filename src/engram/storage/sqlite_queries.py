@@ -646,9 +646,42 @@ def iter_all_thought_paths(conn: sqlite3.Connection) -> Iterable[tuple[str, str]
     yield from cursor.fetchall()
 
 
+def fetch_all_embeddings(conn: sqlite3.Connection) -> dict[str, list[float]]:
+    """Return ``{thought_id: vector}`` for every ``embedding_status='ok'`` thought.
+
+    The consolidation similarity pass needs the full vector set (single-query
+    KNN would truncate large clusters). ``vec_to_json`` keeps the read
+    portable regardless of sqlite-vec's internal storage form.
+    """
+    cursor = conn.execute(
+        "SELECT e.thought_id, vec_to_json(e.embedding) "
+        "FROM thought_embeddings e "
+        "JOIN thoughts t ON t.id = e.thought_id "
+        "WHERE t.embedding_status = 'ok'"
+    )
+    return {str(row[0]): [float(x) for x in json.loads(row[1])] for row in cursor.fetchall()}
+
+
+def delete_thought_rows(conn: sqlite3.Connection, thought_ids: Sequence[UUID | str]) -> int:
+    """Delete rows + embeddings for ``thought_ids`` in ONE transaction.
+
+    Used by consolidation apply after originals are archived: either every
+    superseded row in the cluster leaves the index or none do.
+    """
+    sids = [(_normalize_id(tid),) for tid in thought_ids]
+    if not sids:
+        return 0
+    with conn:
+        conn.executemany("DELETE FROM thought_embeddings WHERE thought_id = ?", sids)
+        cursor = conn.executemany("DELETE FROM thoughts WHERE id = ?", sids)
+    return max(0, cursor.rowcount)
+
+
 __all__ = [
     "DEFAULT_VAULT_NAME",
     "delete_thought",
+    "delete_thought_rows",
+    "fetch_all_embeddings",
     "get_stats",
     "get_thought_row",
     "insert_thought",

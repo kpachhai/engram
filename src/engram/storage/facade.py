@@ -261,12 +261,17 @@ class VaultStorage:
         created_at: datetime | None = None,
         captured_by: str | None = None,
         on_index_failure: Callable[[Thought, sqlite3.Error], None] | None = None,
+        extra_frontmatter: dict[str, Any] | None = None,
     ) -> Thought:
         """Capture a thought: write markdown SoT, then insert SQLite row.
 
         Per Flow A: markdown write must succeed first. If embedding is provided,
         it lands in the same SQLite transaction as the row. If omitted, the row
         is marked ``embedding_status='pending'`` for later repair.
+
+        ``extra_frontmatter`` emits additional frontmatter fields on the
+        markdown file (e.g. ``consolidated_from`` provenance on a merged
+        thought). Markdown-only: the SQLite row does not carry them.
 
         ``on_index_failure`` is an optional callback invoked when the SQLite
         insert raises (``sqlite3.Error``). The capture STILL succeeds: the
@@ -335,7 +340,7 @@ class VaultStorage:
         )
 
         # Step 1: markdown write must succeed before anything else.
-        write_thought(thought, base_dir=self.thoughts_dir)
+        write_thought(thought, base_dir=self.thoughts_dir, extra_fields=extra_frontmatter)
 
         # Step 2 + 3: insert SQLite row (with embedding if provided).
         try:
