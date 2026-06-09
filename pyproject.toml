@@ -46,6 +46,9 @@ dependencies = [
   "ruamel.yaml>=0.18",
   "httpx>=0.27",
   "uuid7>=0.1",
+  # Direct dependency for the consolidation similarity pass (already present
+  # transitively via fastembed -> onnxruntime; the promotion costs nothing).
+  "numpy>=1.26",
   # Pin onnxruntime under 1.21: 1.20.x is the last release that ships
   # macOS x86_64 (Intel Mac) wheels. Engram explicitly supports Intel Macs
   # for the work-laptop deployment scenario; revisit when Intel Mac stops
