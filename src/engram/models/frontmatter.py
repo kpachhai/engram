@@ -101,6 +101,15 @@ class Frontmatter(BaseModel):
     #: thought lives in a team-write vault. None for personal /
     #: read-only friend vaults.
     captured_by: str | None = None
+    #: Set on archived originals at consolidation time (`engram consolidate
+    #: --apply`); the file has left ``thoughts_dir`` for ``archive/``.
+    archived_at: datetime | None = None
+    #: Merged thought that superseded this archived original.
+    superseded_by: UUID | None = None
+    #: Source thought ids distilled into this merged thought.
+    consolidated_from: list[UUID] | None = None
+    #: (earliest, latest) created_at across the source thoughts.
+    consolidated_range: tuple[datetime, datetime] | None = None
 
     @field_validator("prefix")
     @classmethod
@@ -120,11 +129,27 @@ class Frontmatter(BaseModel):
             raise ValueError(msg)
         return value
 
-    @field_validator("created_at", "updated_at", "legacy_created_at")
+    @field_validator("created_at", "updated_at", "legacy_created_at", "archived_at")
     @classmethod
     def _require_timezone(cls, value: datetime | None) -> datetime | None:
         if value is not None and value.tzinfo is None:
             msg = "datetime must be timezone-aware (UTC)"
+            raise ValueError(msg)
+        return value
+
+    @field_validator("consolidated_range")
+    @classmethod
+    def _check_consolidated_range(
+        cls, value: tuple[datetime, datetime] | None
+    ) -> tuple[datetime, datetime] | None:
+        if value is None:
+            return value
+        earliest, latest = value
+        if earliest.tzinfo is None or latest.tzinfo is None:
+            msg = "datetime must be timezone-aware (UTC)"
+            raise ValueError(msg)
+        if earliest > latest:
+            msg = "consolidated_range must be ordered (earliest, latest)"
             raise ValueError(msg)
         return value
 

@@ -310,6 +310,59 @@ class PushQueuePersistenceFailed(EngramError):
     error_code: str = "push_queue_persistence_failed"
 
 
+# Consolidation errors ------------------------------------------------------
+
+
+class ConsolidateError(EngramError):
+    """Base class for consolidation (report-then-action curation) errors."""
+
+    error_code: str = "consolidate_error"
+
+
+class ConsolidateVaultBusy(ConsolidateError):
+    """The vault's lock is held (daemon or another consolidate run).
+
+    ``--apply`` holds the ``VaultLock`` for its entire run and refuses to
+    start while the daemon owns the vault. Remediation:
+    ``engram daemon stop``, re-run, restart the daemon afterwards.
+    There is deliberately no ``--force`` override.
+    """
+
+    error_code: str = "consolidate_vault_busy"
+
+
+class ConsolidateReportStale(ConsolidateError):
+    """The report no longer matches the vault (whole-report level).
+
+    Raised when the report was generated for a different vault, or the
+    vault changed so broadly that applying would be unsafe. Per-proposal
+    fingerprint mismatches are skipped individually, NOT raised.
+    """
+
+    error_code: str = "consolidate_report_stale"
+
+
+class ConsolidateModelMismatch(ConsolidateError):
+    """The index's recorded embedding model differs from the configured one.
+
+    Similarity thresholds are calibrated per model; running the similarity
+    passes against a mismatched index would produce garbage clusters.
+    Remediation: ``engram reindex --full`` under the configured model.
+    """
+
+    error_code: str = "consolidate_model_mismatch"
+
+
+class ConsolidateVaultTooLarge(ConsolidateError):
+    """The vault exceeds the supported clustering size for one pass.
+
+    The full pairwise similarity pass is O(n^2); vaults beyond the guard
+    threshold refuse rather than degrade silently.
+    """
+
+    error_code: str = "consolidate_vault_too_large"
+
+
 # Daemon-mode errors --------------------------------------------------------
 
 
@@ -350,6 +403,11 @@ __all__ = [
     "BundleCycleDetected",
     "BundleImportError",
     "ConfigError",
+    "ConsolidateError",
+    "ConsolidateModelMismatch",
+    "ConsolidateReportStale",
+    "ConsolidateVaultBusy",
+    "ConsolidateVaultTooLarge",
     "DaemonConnectionError",
     "DaemonError",
     "DaemonNotRunningError",

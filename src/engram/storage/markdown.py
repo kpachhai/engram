@@ -89,6 +89,11 @@ _KNOWN_FRONTMATTER_FIELDS = _REQUIRED_FRONTMATTER_FIELDS | {
     "legacy_created_at",
     # GPG primary-fingerprint of capturing user (team-write vaults).
     "captured_by",
+    # Consolidation provenance (archived originals + merged thoughts).
+    "archived_at",
+    "superseded_by",
+    "consolidated_from",
+    "consolidated_range",
 }
 
 

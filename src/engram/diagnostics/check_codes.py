@@ -160,16 +160,37 @@ ALL_DAEMON_CHECK_CODES: Final[tuple[str, ...]] = (
 )
 
 
+# Consolidation check codes. Check implementations live in
+# `consolidate_checks.py`.
+
+#: WARN when an apply journal under ``.indexes/consolidate/`` has entries
+#: but no terminal state for every cluster (interrupted apply; resumable).
+CONSOLIDATE_JOURNAL_ORPHAN: Final[str] = "consolidate_journal_orphan"
+#: WARN when git conflict markers appear in files under ``<vault>/archive/``
+#: (the thoughts_dir conflict scan does not cover the archive).
+ARCHIVE_CONFLICT_MARKERS: Final[str] = "archive_conflict_markers"
+
+#: Canonical consolidation check tuple. Tests iterate this to assert the
+#: codes are unique snake_case strings.
+ALL_CONSOLIDATE_CHECK_CODES: Final[tuple[str, ...]] = (
+    CONSOLIDATE_JOURNAL_ORPHAN,
+    ARCHIVE_CONFLICT_MARKERS,
+)
+
+
 __all__ = [
     "AGGREGATOR_MODE",
+    "ALL_CONSOLIDATE_CHECK_CODES",
     "ALL_DAEMON_CHECK_CODES",
     "ALL_PHASE_2_CHECK_CODES",
     "ALL_PHASE_3_CHECK_CODES",
     "ALL_PHASE_4_CHECK_CODES",
+    "ARCHIVE_CONFLICT_MARKERS",
     "AUTOCRLF_DRIFT",
     "BRANCH_ALIGNMENT",
     "CLOUD_SYNC_UNDER_DOTGIT",
     "CONFLICT_MARKERS_PRESENT",
+    "CONSOLIDATE_JOURNAL_ORPHAN",
     "DAEMON_LOG_ROTATION_HEALTHY",
     "DAEMON_RUNNING",
     "DAEMON_SOCKET_PATH_TOO_LONG",
