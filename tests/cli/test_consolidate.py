@@ -157,3 +157,45 @@ def test_stale_report_partial_apply_exits_three(tmp_path: Path):
     assert "did not apply" in result.output
     # Nothing was archived: the only proposal was skipped.
     assert not (vault / "archive").exists()
+
+
+def test_llm_resolution_scopes_to_prefix(tmp_path: Path):
+    """A sensitive thought OUTSIDE the --prefix scope must not disable the
+    LLM for an all-portable prefix run (it can never reach a prompt)."""
+    from engram.cli.consolidate import _build_llm_callables
+    from engram.config.models import DEFAULT_EMBEDDING_MODEL, EffectiveConfig, LLMConfig, SyncConfig
+    from engram.storage.facade import VaultStorage
+
+    vault = tmp_path / "vault"
+    storage = VaultStorage(
+        thoughts_dir=vault / "thoughts",
+        index_db_path=vault / ".indexes" / "engram.db",
+        vault_name="primary",
+    )
+    try:
+        storage.capture(content="[Lesson] portable knowledge")
+        storage.capture(content="[Decision] private call", portability="sensitive")
+        config = EffectiveConfig(
+            default_user="test",
+            vault_path=vault,
+            thoughts_dir=vault / "thoughts",
+            index_dir=vault / ".indexes",
+            embedding_model=DEFAULT_EMBEDDING_MODEL,
+            vault_name="primary",
+            sync=SyncConfig(),
+            llm=LLMConfig(provider="anthropic"),  # remote: refuses sensitive
+        )
+        judge, distiller, notice = _build_llm_callables(
+            config, storage.conn, no_llm=False, prefix="Lesson"
+        )
+        assert judge is not None
+        assert distiller is not None
+        assert notice is None
+
+        judge_all, _, notice_all = _build_llm_callables(
+            config, storage.conn, no_llm=False, prefix=None
+        )
+        assert judge_all is None
+        assert "LLM unavailable" in (notice_all or "")
+    finally:
+        storage.close()

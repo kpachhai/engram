@@ -94,8 +94,14 @@ def _build_llm_callables(
     conn: sqlite3.Connection,
     *,
     no_llm: bool,
+    prefix: str | None = None,
 ) -> tuple[JudgeFn | None, DistillFn | None, str | None]:
-    """Resolve a provider over the non-block corpus; degrade to None on refusal."""
+    """Resolve a provider over the non-block, prefix-scoped corpus.
+
+    Scoping matters: a sensitive thought OUTSIDE the run's --prefix scope
+    must not disable the LLM for an all-portable prefix run (it will never
+    appear in any prompt). Degrades to None on refusal.
+    """
     if no_llm:
         return None, None, None
     if config.llm.provider is None:
@@ -103,7 +109,7 @@ def _build_llm_callables(
     from engram.llm.resolver import resolve_provider
     from engram.mcp.llm_tools import build_default_budget
 
-    rows = list_all_thought_rows(conn)
+    rows = list_all_thought_rows(conn, prefix=prefix)
     corpus = [
         ThoughtWithSimilarity.model_validate(
             {
@@ -280,7 +286,9 @@ def _run_report_mode(config: EffectiveConfig, settings: ReportSettings, *, no_ll
     except EngramIndexError as exc:
         raise _fail(str(exc)) from exc
     try:
-        judge, distiller, llm_notice = _build_llm_callables(config, conn, no_llm=no_llm)
+        judge, distiller, llm_notice = _build_llm_callables(
+            config, conn, no_llm=no_llm, prefix=settings.prefix
+        )
         if llm_notice:
             typer.secho(f"note: {llm_notice}", fg=typer.colors.YELLOW, err=True)
         try:
