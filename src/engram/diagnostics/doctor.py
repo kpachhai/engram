@@ -700,6 +700,20 @@ def run_diagnostics(
                 detail=str(exc),
             )
 
+    try:
+        # Imported lazily: consolidate_checks uses CheckStatus from this module.
+        from engram.diagnostics.consolidate_checks import run_consolidate_checks
+
+        run_consolidate_checks(report, config)
+    except Exception as exc:
+        _log.exception("consolidate diagnostics raised: %s", exc)
+        report.add(
+            "consolidate_checks_internal",
+            CheckStatus.FAIL,
+            "consolidate diagnostics raised an unexpected error",
+            detail=str(exc),
+        )
+
     return report
 
 
