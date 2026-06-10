@@ -6,17 +6,22 @@
 
 ## Why engram
 
-Three problems with hosted AI memory tools, and engram's answer:
+Memory is where AI lock-in actually happens. Models are stateless and interchangeable; the accumulated record of what your assistant has learned about you and your work is neither. The open-vs-closed harness debate landed on exactly this point in spring 2026: a harness that stores memory behind its API owns your context, and vendors have every incentive to keep it there ("[Your harness, your memory](https://x.com/hwchase17/status/2042978500567609738)", Harrison Chase, April 2026). Portable memory is the optionality that keeps every other choice - harness, model, vendor - reversible.
+
+Six problems with hosted AI memory tools, and engram's answer:
 
 | Problem | Hosted AI memory tools | engram |
 |---|---|---|
-| Vendor lock-in | Years of context on someone else's database | Markdown files you can read in any editor |
+| Vendor lock-in | Years of context on someone else's database; switching harnesses means abandoning it | Markdown files readable in any editor, by any harness, today |
 | Privacy boundaries | One hosted store can't model personal-vs-employer-confidential | Physically separate vaults; the work vault data isn't on the personal disk |
 | Cross-machine fragmentation | Service down or unreachable = no memory | Git pull/push = sync; works offline |
 | API stability | Vendor changes break your prompts | MCP-native, drop-in compatible with Open Brain's tool surface |
 | Compliance review | "Where does the data live?" → "the cloud" | "Where does the data live?" → "this directory" |
+| Memory curation | Server-side, on the vendor's schedule, invisible to you | `engram consolidate` (v0.6.0+): local report-then-action curation; nothing merges without your review |
 
-If you run an AI assistant daily and want its memory to (a) survive across sessions and machines, (b) honor the personal/work boundary, and (c) never get held hostage by a vendor — engram is built for you.
+Growth is the quiet failure mode: semantic memory that only accretes interferes with itself - retrieval crowds and false recall rises as the store grows (the no-escape theorem; "[The Price of Meaning](https://x.com/ashwingop/status/2042604890988646750)", April 2026). The architecture that survives is three legs: an exact episodic record, a semantic index, and consolidation managing the boundary between them. engram ships all three - markdown files are the episodic record, the local vector index is the semantic layer, and `engram consolidate` (v0.6.0+) is the consolidation pass. On its first run against a real production vault it surfaced 16 near-duplicate clusters in about 4 seconds and merged none of them: apply is gated behind your review, and originals are archived, never deleted.
+
+If you run an AI assistant daily and want its memory to (a) survive across sessions and machines, (b) honor the personal/work boundary, (c) stay yours through any harness or model switch, and (d) keep its signal as it grows - engram is built for you.
 
 ## Quickstart
 
