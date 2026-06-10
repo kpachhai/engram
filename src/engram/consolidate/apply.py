@@ -69,6 +69,16 @@ def load_journal_state(journal_dir: Path) -> dict[str, JournalEntry]:
             except ValueError:
                 _log.warning("skipping malformed journal line in %s", journal_file)
                 continue
+            prior = state.get(entry.cluster_id)
+            if (
+                entry.merged_thought_id is None
+                and prior is not None
+                and prior.merged_thought_id is not None
+            ):
+                # Carry the captured merged id through later id-less entries
+                # (e.g. a FAILED line) so a resumed run reuses it instead of
+                # capturing a duplicate.
+                entry = entry.model_copy(update={"merged_thought_id": prior.merged_thought_id})
             state[entry.cluster_id] = entry
     return state
 
@@ -295,9 +305,10 @@ def _resume_or_capture_merged(
     if (
         prior is not None
         and prior.merged_thought_id is not None
-        and prior.state in (JournalEntryState.MERGED_CAPTURED, JournalEntryState.ORIGINALS_ARCHIVED)
         and get_thought_row(storage.conn, prior.merged_thought_id) is not None
     ):
+        # A previous run already captured the merged thought (whatever state
+        # it reached afterwards); reuse it rather than minting a duplicate.
         return str(prior.merged_thought_id)
 
     if proposal.distilled_draft is None:  # pragma: no cover - model validator forbids
