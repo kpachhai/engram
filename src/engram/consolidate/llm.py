@@ -44,7 +44,9 @@ def parse_verdict(text: str) -> tuple[str, str]:
     for line in text.strip().splitlines():
         stripped = line.strip()
         if verdict is None and stripped.upper().startswith("VERDICT:"):
-            candidate = stripped.split(":", 1)[1].strip().lower()
+            # Small local models add trailing punctuation ("consistent,");
+            # observed on the first real llama-3.2-3b run.
+            candidate = stripped.split(":", 1)[1].strip().lower().rstrip(".,;:!")
             if candidate in _VERDICTS:
                 verdict = candidate
                 continue

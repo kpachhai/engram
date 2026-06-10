@@ -56,6 +56,11 @@ class TestParseVerdict:
         verdict, _ = parse_verdict("verdict: Consistent\nfine")
         assert verdict == "consistent"
 
+    def test_trailing_punctuation_on_verdict_parses(self):
+        """Observed on the first real llama-3.2-3b run: 'VERDICT: consistent,'."""
+        verdict, _ = parse_verdict("VERDICT: consistent, \nSame idea in both notes.")
+        assert verdict == "consistent"
+
     def test_unparseable_degrades_to_unclear(self):
         verdict, rationale = parse_verdict("These notes seem fine to me!")
         assert verdict == "unclear"
