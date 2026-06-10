@@ -646,6 +646,30 @@ def iter_all_thought_paths(conn: sqlite3.Connection) -> Iterable[tuple[str, str]
     yield from cursor.fetchall()
 
 
+def list_all_thought_rows(
+    conn: sqlite3.Connection,
+    *,
+    prefix: str | None = None,
+) -> list[dict[str, Any]]:
+    """Return every thought row (optionally one prefix), unpaginated.
+
+    The consolidation passes need the whole corpus at once; the paginated
+    ``list_thoughts`` would force an arbitrary limit.
+    """
+    sql = (
+        "SELECT id, schema_version, prefix, portability, source, created_at, updated_at, "
+        "fingerprint, file_path, vault_name, tags, legacy_id, legacy_created_at, "
+        "embedding_status, embedding_error, captured_by FROM thoughts"
+    )
+    params: list[Any] = []
+    if prefix is not None:
+        sql += " WHERE prefix = ?"
+        params.append(prefix)
+    sql += " ORDER BY created_at, id"
+    cursor = conn.execute(sql, params)
+    return [_row_to_dict(row) for row in cursor.fetchall()]
+
+
 def fetch_all_embeddings(conn: sqlite3.Connection) -> dict[str, list[float]]:
     """Return ``{thought_id: vector}`` for every ``embedding_status='ok'`` thought.
 
@@ -686,6 +710,7 @@ __all__ = [
     "get_thought_row",
     "insert_thought",
     "iter_all_thought_paths",
+    "list_all_thought_rows",
     "list_thoughts",
     "list_thoughts_with_status",
     "mark_embedding_status",
