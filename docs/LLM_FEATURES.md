@@ -172,3 +172,18 @@ the dead config so the operator can clean it up.
   config reference.
 * [`FRIEND_SHARE_GUIDE.md`](./FRIEND_SHARE_GUIDE.md) - friend-vault
   semantics this depends on.
+
+## Consolidation's LLM use (v0.6.0+)
+
+``engram consolidate`` reuses this entire stack for two report-mode jobs:
+judging contradiction-candidate pairs and distilling near-duplicate
+clusters into one merged draft. All calls route through the same resolver
+(``block`` thoughts are filtered before pair/cluster assembly AND refused
+by the resolver as defense-in-depth; ``sensitive`` thoughts require a
+local provider), respect the daily cost cap (an interrupted pass is
+reported ``incomplete after N of M``, never as a clean result), and use
+the same anti-injection prompt assembly. Pairs or clusters that exceed
+``max_input_tokens`` are skipped and reported oversized rather than
+truncated into a verdict. With ``--no-llm`` (or no provider configured)
+the contradiction pass is skipped and merge clusters surface as
+manual-review proposals. See [``CONSOLIDATION.md``](CONSOLIDATION.md).

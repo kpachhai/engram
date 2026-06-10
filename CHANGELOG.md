@@ -9,7 +9,34 @@ The MCP tool surface is committed-stable for the v1.x lifetime per the API stabi
 
 ## [Unreleased]
 
+### Added
+
+- **`engram consolidate` - report-then-action vault curation.** Four
+  detection passes (exact-duplicate keep-newest, near-duplicate
+  clustering with LLM-distilled merge proposals, age-only stale
+  candidates, LLM-judged contradiction candidates) produce a reviewable
+  per-machine report; `--apply` executes merge proposals only, archiving
+  originals body-untouched under `<vault>/archive/` and curating the
+  SQLite index. Apply is a daemon-stopped one-shot holding the vault
+  lock for its full run, journaled and resumable, with per-proposal
+  fingerprint re-verification and one git commit per run. Merged
+  thoughts carry provenance frontmatter (`consolidated_from`,
+  `consolidated_range`, `source: engram-consolidate`) and inherit the
+  most restrictive member portability. Stale and contradiction findings
+  are report-only. Team-write vaults, read-only vaults, and cloud-synced
+  paths refuse `--apply`. See `docs/CONSOLIDATION.md` + ADR 009.
+  Roadmap renumbering: the former "Phase 6 - Enterprise Scaffolding" and
+  "Phase 7 - Enterprise Polish" shift to Phase 7 and Phase 8; Phase 6 is
+  consolidation.
+
 ### Fixed
+
+- **Markdown rewrites preserve all non-serializer-owned frontmatter
+  fields.** Previously `update_metadata` / `update_body` / reindex
+  re-capture silently dropped `legacy_created_at` (and would have
+  dropped the new consolidation provenance fields) because write-side
+  extras preservation only kept UNKNOWN fields. The serializer now owns
+  an explicit field set; everything else round-trips verbatim.
 
 - **Startup probes no longer warn on intentionally local-only vaults or
   on vaults that use `.engram/identity.local` for commit identity.**

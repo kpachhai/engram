@@ -29,9 +29,10 @@ engram/
 │   ├── FRIEND_SHARE_GUIDE.md         # bundle export/import flow
 │   ├── TEAM_BRAIN_GUIDE.md           # shared team vault + GPG attribution
 │   ├── LLM_FEATURES.md               # opt-in summarize / synthesize tools
+│   ├── CONSOLIDATION.md              # report-then-action vault curation guide
 │   ├── PUBLISHING.md                 # PyPI release procedure (maintainer-only)
 │   ├── DEPLOYMENT_MODEL.md           # local-first thesis (why not cloud-hosted)
-│   ├── adr/                          # 8 ADRs (one per major design choice)
+│   ├── adr/                          # 9 ADRs (one per major design choice)
 │   └── archive/
 │       └── phases/                   # historical: PHASE_<N>_PLAN + PHASE_<N>_CODE_COMPLETE
 ├── src/engram/
@@ -46,6 +47,7 @@ engram/
 │   ├── mcp/                          # FastMCP server + tool handlers
 │   ├── team/                         # team-vault primitives + pre-receive hook
 │   ├── bundle/                       # export/import bundle format
+│   ├── consolidate/                  # report-then-action vault curation (passes, apply, guards)
 │   ├── migration/                    # Open Brain migration pipeline
 │   ├── diagnostics/                  # engram doctor + 32 check codes
 │   └── utils/                        # atomic_write, fingerprint, file_naming, lock
@@ -145,6 +147,10 @@ uv run engram doctor
 # Rebuild the index from markdown
 uv run engram reindex --full
 
+# Curate the vault: report (safe beside the daemon), then gated apply
+uv run engram consolidate
+uv run engram daemon stop && uv run engram consolidate --apply
+
 # Export a portable bundle for a friend
 uv run engram export --output ~/share/bundle.tar.gz --portability portable
 
@@ -185,7 +191,8 @@ uv run engram doctor --download-model --print-hashes
 - `docs/ARCHITECTURE.md` — components, flows, two-layer security boundary, MCP API.
 - `docs/USE_CASES.md` — five concrete personas with example flows.
 - `docs/COMPARISONS.md` — engram vs Mem0 / Letta / basic-memory / Open Brain / Obsidian / engraph.
-- `docs/adr/` — 8 ADRs (storage, MCP, sync, embedding, sync coordinator, multi-vault, team brain, daemon mode).
+- `docs/adr/` — 9 ADRs (storage, MCP, sync, embedding, sync coordinator, multi-vault, team brain, daemon mode, consolidation).
 - `docs/DAEMON_MODE.md` — operator + migration guide for daemon mode (v0.5.0+).
+- `docs/CONSOLIDATION.md` — report-then-action vault curation (v0.6.0+).
 - `~/repos/github.com/kpachhai/idea-forge/docs/superpowers/specs/2026-05-04-engram/` — original spec (12 docs; historical authority). <!-- pii-allow:spec-back-ref -->
 - `~/repos/github.com/kpachhai/idea-forge/workspace/engram/PHASE_<N>_RETROSPECTIVE.md` — lessons learned (Phase 2-4). <!-- pii-allow:spec-back-ref -->

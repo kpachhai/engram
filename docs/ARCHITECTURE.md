@@ -72,6 +72,7 @@ A vault is a directory:
 ```
 ~/.local/share/engram/personal/         # vault root (you choose the path)
 ├── engram.config.yaml                  # vault config (committed)
+├── archive/                            # consolidation-superseded originals (committed; v0.6.0+)
 ├── .gitignore                          # ensures .indexes/ is never committed
 ├── README.md                           # operator-facing stub
 ├── thoughts/                           # markdown SoT
@@ -88,7 +89,8 @@ A vault is a directory:
 │   ├── engram.sock                     # UDS (daemon listener; mode 0o600)
 │   ├── engram.spawn.lock               # serializes concurrent spawn dances
 │   ├── engram.state.json               # daemon PID + hostname + config snapshot
-│   └── engram.log                      # daemon log (rotated)
+│   ├── engram.log                      # daemon log (rotated)
+│   └── consolidate/                    # consolidation reports + apply journals (v0.6.0+)
 └── .engram/                            # local-only operational state (gitignored)
     ├── identity.local                  # per-machine identity overrides
     ├── push-queue.local                # persistent push queue (team vaults)
@@ -307,6 +309,18 @@ Three identity surfaces, depending on context:
 3. **`stewards`** — list of GPG fingerprints in `team-policy.yaml` with disaster-recovery + policy-mutation + member-mutation + redaction permission.
 
 GPG identity is discovered via `gpg --list-secret-keys --with-colons`; the colon-format walker resolves subkeys back to their primary so `git verify-commit` outputs map to the canonical fingerprint stored in `members.yaml`.
+
+## Consolidation (v0.6.0+)
+
+``engram consolidate`` curates the semantic index without touching the
+episodic record: near-duplicate clusters merge into provenance-marked
+distilled thoughts and the superseded originals move to ``archive/``
+(git-tracked, bodies untouched, invisible to reindex). Report mode is a
+read-only pass safe beside a live daemon; ``--apply`` is a
+daemon-stopped one-shot that holds the vault lock for its full run. See
+[``CONSOLIDATION.md``](CONSOLIDATION.md) for the operator guide and
+[``adr/009-consolidation.md``](adr/009-consolidation.md) for the design
+rationale.
 
 ## LLM features (opt-in)
 

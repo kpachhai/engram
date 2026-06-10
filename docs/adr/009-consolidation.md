@@ -134,4 +134,4 @@ Constraints that shaped the design:
   action rather than a background behavior - acceptable for a
   curation pass expected to run on the order of weeks, not minutes.
 - Restore/unarchive, team-vault apply, retrieval telemetry, and
-  daemon-RPC apply are explicitly deferred (Phase 6 plan, "Deferred").
+  daemon-RPC apply are explicitly deferred future work.
