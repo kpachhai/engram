@@ -263,3 +263,88 @@ def test_block_thought_never_reaches_the_judge(storage: VaultStorage):
     report = _report_for(storage, settings=settings, judge=spy_judge)
     assert all("secret claim" not in content for content in seen)
     assert report.exclusions.block_thoughts_llm == 1
+
+
+def test_default_settings_match_measured_dup_bands():
+    settings = ReportSettings()
+    assert settings.near_dup_threshold == 0.93
+    assert settings.exclude_prefixes == ("Session Summary",)
+
+
+def test_excluded_prefix_skips_similarity_passes(storage: VaultStorage):
+    storage.capture(
+        content="[Session Summary] wrapped the alpha work",
+        embedding=[1.0, 0.0, 0.0, 0.0],
+    )
+    storage.capture(
+        content="[Session Summary] wrapped the beta work",
+        embedding=[1.0, 0.05, 0.0, 0.0],
+    )
+    storage.capture(content="[Lesson] near duplicate alpha", embedding=[0.0, 0.0, 1.0, 0.0])
+    storage.capture(content="[Lesson] near duplicate beta", embedding=[0.0, 0.05, 1.0, 0.0])
+    report = _report_for(storage)
+    assert {c.prefix for c in report.clusters} == {"Lesson"}
+    assert report.exclusions.prefix_excluded == 2
+    assert report.exclude_prefixes == ["Session Summary"]
+
+
+def test_excluded_prefix_exact_duplicates_still_keep_newest(storage: VaultStorage):
+    old = storage.capture(
+        content="[Session Summary] identical wrap",
+        embedding=[1.0, 0.0, 0.0, 0.0],
+        created_at=_NOW - timedelta(days=3),
+    )
+    new = storage.capture(
+        content="[Session Summary] identical wrap",
+        embedding=[1.0, 0.0, 0.0, 0.0],
+        created_at=_NOW - timedelta(days=1),
+    )
+    report = _report_for(storage)
+    keeps = [c for c in report.clusters if c.action is ClusterAction.KEEP_NEWEST]
+    assert len(keeps) == 1
+    assert keeps[0].keep_thought_id == new.id
+    assert {m.thought_id for m in keeps[0].members} == {old.id, new.id}
+    # Exact duplicates are consumed before the similarity passes, so nothing
+    # was left for the exclusion to skip.
+    assert report.exclusions.prefix_excluded == 0
+
+
+def test_excluded_prefix_still_reaches_staleness(storage: VaultStorage):
+    storage.capture(
+        content="[Session Summary] ancient wrap",
+        embedding=[1.0, 0.0, 0.0, 0.0],
+        created_at=_NOW - timedelta(days=400),
+    )
+    report = _report_for(storage)
+    assert report.clusters == []
+    assert len(report.stale_candidates) == 1
+    assert report.exclusions.prefix_excluded == 1
+
+
+def test_explicit_prefix_scope_overrides_exclusion(storage: VaultStorage):
+    storage.capture(
+        content="[Session Summary] wrapped the alpha work",
+        embedding=[1.0, 0.0, 0.0, 0.0],
+    )
+    storage.capture(
+        content="[Session Summary] wrapped the beta work",
+        embedding=[1.0, 0.05, 0.0, 0.0],
+    )
+    report = _report_for(storage, settings=ReportSettings(prefix="Session Summary"))
+    assert {c.prefix for c in report.clusters} == {"Session Summary"}
+    assert report.exclusions.prefix_excluded == 0
+    assert report.exclude_prefixes == []
+
+
+def test_excluded_prefix_never_reaches_the_judge(storage: VaultStorage):
+    storage.capture(content="[Session Summary] claim A", embedding=[1.0, 0.0, 0.0, 0.0])
+    storage.capture(content="[Session Summary] claim B", embedding=[1.0, 0.75, 0.0, 0.0])
+    calls: list[tuple[str, str]] = []
+
+    def spy_judge(first: str, second: str) -> tuple[str, str]:
+        calls.append((first, second))
+        return "consistent", "fine"
+
+    report = _report_for(storage, judge=spy_judge)
+    assert calls == []
+    assert report.contradiction_candidates == []

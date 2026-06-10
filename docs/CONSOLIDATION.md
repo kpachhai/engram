@@ -47,6 +47,27 @@ portable thought content to your resolved provider and record budget usage.
 The portability gates (`block` never; `sensitive` local-only) apply
 unchanged.
 
+## Defaults and tuning
+
+Two defaults encode evidence from the first real-vault run
+(bge-small-en-v1.5, ~600 thoughts):
+
+- **`--threshold 0.93`** (near-duplicate similarity). True duplicates on
+  that corpus scored 0.94-0.99 while pairs needing human judgment - notably
+  a lesson and its deliberate correction - sat at 0.90-0.92. The
+  contradiction band is `contradiction-threshold <= similarity < threshold`,
+  so the judgment band flows to the LLM contradiction judge (report-only)
+  instead of merge proposals. Lower `--threshold` toward 0.90 for
+  recall-first reports; the apply gate still protects the vault.
+- **`--exclude-prefix "Session Summary"`** (repeatable). Log-like prefixes
+  cluster on shared structure, not shared meaning - 5 of the 16 clusters in
+  that first report were session summaries whose template similarity made
+  them embedding-near-duplicates that must never merge. Excluded prefixes
+  skip the similarity passes (near-dup clustering + contradiction judging)
+  but still get exact-duplicate keep-newest and staleness coverage. The
+  exclusion is surfaced in the report and the CLI summary, never silent.
+  An explicit `--prefix X` scope overrides the exclusion list entirely.
+
 ## Apply mode
 
 ```bash

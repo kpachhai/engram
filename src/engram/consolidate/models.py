@@ -165,6 +165,8 @@ class ExclusionCounts(BaseModel):
     future_dated: int = Field(default=0, ge=0)
     #: Thoughts or pairs exceeding the provider context window.
     oversized: int = Field(default=0, ge=0)
+    #: Thoughts skipped by the prefix-exclusion list (similarity passes only).
+    prefix_excluded: int = Field(default=0, ge=0)
 
 
 class ConsolidationReport(BaseModel):
@@ -182,6 +184,9 @@ class ConsolidationReport(BaseModel):
     contradiction_threshold: float = Field(ge=0.0, le=1.0)
     stale_days: int = Field(ge=1)
     max_cluster_size: int = Field(ge=2)
+    #: Prefixes the similarity passes skipped this run (empty when --prefix
+    #: scoped the run explicitly).
+    exclude_prefixes: list[str] = Field(default_factory=list)
     pass_near_duplicate: PassStatus
     pass_stale: PassStatus
     pass_contradiction: PassStatus

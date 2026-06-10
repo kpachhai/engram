@@ -173,6 +173,12 @@ def _echo_report_summary(report: ConsolidationReport, report_path: Path) -> None
             f"  data quality: {exclusions.future_dated} future-dated thought(s); "
             "check machine clocks"
         )
+    if exclusions.prefix_excluded:
+        names = ", ".join(report.exclude_prefixes)
+        typer.echo(
+            f"  excluded from similarity passes: {exclusions.prefix_excluded} "
+            f"thought(s) under {names} - override with --prefix or --exclude-prefix"
+        )
     typer.echo(
         f"Proposals: {len(actionable)} actionable, {len(reviews)} manual-review, "
         f"{len(report.stale_candidates)} stale candidate(s), "
@@ -203,11 +209,15 @@ def register(app: typer.Typer) -> None:
             help="Apply a specific report file instead of the newest one.",
         ),
         threshold: float = typer.Option(
-            0.90,
+            0.93,
             "--threshold",
             min=0.0,
             max=1.0,
-            help="Near-duplicate similarity threshold.",
+            help=(
+                "Near-duplicate similarity threshold. Pairs between "
+                "--contradiction-threshold and this value go to the "
+                "contradiction judge instead of merge proposals."
+            ),
         ),
         contradiction_threshold: float = typer.Option(
             0.75,
@@ -232,6 +242,16 @@ def register(app: typer.Typer) -> None:
             None,
             "--prefix",
             help="Scope the run to one prefix (e.g. Lesson).",
+        ),
+        exclude_prefix: list[str] = typer.Option(  # noqa: B008
+            ["Session Summary"],
+            "--exclude-prefix",
+            help=(
+                "Prefix(es) the similarity passes skip (near-dup clustering + "
+                "contradiction judging); exact-duplicate and staleness passes "
+                "still cover them. Repeat to extend. Ignored when --prefix "
+                "scopes the run explicitly."
+            ),
         ),
         no_llm: bool = typer.Option(
             False,
@@ -275,6 +295,7 @@ def register(app: typer.Typer) -> None:
             stale_days=stale_days,
             max_cluster_size=max_cluster_size,
             prefix=prefix,
+            exclude_prefixes=tuple(exclude_prefix),
         )
         _run_report_mode(config, settings, no_llm=no_llm)
 

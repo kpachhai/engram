@@ -61,7 +61,7 @@ _PORTABILITY_RANK = {"portable": 0, "sensitive": 1, "block": 2}
 class ReportSettings:
     """Tunable thresholds for one consolidation run."""
 
-    near_dup_threshold: float = 0.90
+    near_dup_threshold: float = 0.93
     contradiction_threshold: float = 0.75
     stale_days: int = 180
     max_cluster_size: int = 12
@@ -69,6 +69,12 @@ class ReportSettings:
     #: Conservative single-prompt token budget for cluster distillation.
     max_distill_tokens: int = 6000
     prefix: str | None = None
+    #: Prefixes the similarity passes skip (near-dup clustering and
+    #: contradiction judging); exact-duplicate and staleness passes still
+    #: cover them. Log-like prefixes cluster on shared structure, not shared
+    #: meaning, so merging them destroys history. Ignored when ``prefix``
+    #: scopes the run explicitly.
+    exclude_prefixes: tuple[str, ...] = ("Session Summary",)
 
 
 def most_restrictive_portability(values: list[str]) -> str:
@@ -175,10 +181,16 @@ def generate_report(
         row for row in rows if str(row["id"]) in embeddings and str(row["id"]) not in consumed
     ]
     ensure_clusterable_size(len(eligible))
+    excluded_prefixes = set(settings.exclude_prefixes) if settings.prefix is None else set()
+    prefix_excluded = 0
     raw_clusters: list[tuple[Cluster, bool]] = []  # (cluster, degenerate)
     by_prefix: dict[str, list[dict[str, Any]]] = {}
     for row in eligible:
-        by_prefix.setdefault(str(row["prefix"]), []).append(row)
+        row_prefix = str(row["prefix"])
+        if row_prefix in excluded_prefixes:
+            prefix_excluded += 1
+            continue
+        by_prefix.setdefault(row_prefix, []).append(row)
     matrices: dict[str, Any] = {}
     prefix_ids: dict[str, list[str]] = {}
     for prefix, group in sorted(by_prefix.items()):
@@ -218,7 +230,9 @@ def generate_report(
         )
         if age >= settings.stale_days:
             stale_candidates.append(StaleCandidate(thought=_pin(row), age_days=age, anchor=anchor))
-    exclusions = exclusions.model_copy(update={"future_dated": future_dated})
+    exclusions = exclusions.model_copy(
+        update={"future_dated": future_dated, "prefix_excluded": prefix_excluded}
+    )
 
     # Pass 3: contradiction candidates (LLM-judged, report-only).
     contradiction_status, contradiction_candidates, blocked_count, oversized = (
@@ -248,6 +262,7 @@ def generate_report(
         contradiction_threshold=settings.contradiction_threshold,
         stale_days=settings.stale_days,
         max_cluster_size=settings.max_cluster_size,
+        exclude_prefixes=sorted(excluded_prefixes),
         pass_near_duplicate=PassStatus(
             state=PassState.COMPLETE, done=len(clusters), total=len(clusters)
         ),

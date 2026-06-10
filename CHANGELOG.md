@@ -28,6 +28,20 @@ The MCP tool surface is committed-stable for the v1.x lifetime per the API stabi
   Roadmap renumbering: the former "Phase 6 - Enterprise Scaffolding" and
   "Phase 7 - Enterprise Polish" shift to Phase 7 and Phase 8; Phase 6 is
   consolidation.
+- **`engram consolidate --exclude-prefix` (default `Session Summary`).**
+  Log-like prefixes skip the similarity passes (near-dup clustering +
+  contradiction judging) by default - they cluster on shared template
+  structure, not shared meaning, so merging them destroys history.
+  Exact-duplicate and staleness passes still cover them; the exclusion is
+  counted in the report and CLI summary; an explicit `--prefix` scope
+  overrides it.
+
+### Changed
+
+- **`engram consolidate` near-dup threshold default raised 0.90 -> 0.93.**
+  First real-vault evidence: true duplicates scored 0.94-0.99; pairs at
+  0.90-0.92 needed human judgment and now flow to the contradiction judge
+  (report-only) instead of merge proposals. Tune with `--threshold`.
 
 ### Fixed
 

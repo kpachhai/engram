@@ -14,6 +14,7 @@ hermetic (no network).
 
 from __future__ import annotations
 
+import json
 import os
 import shutil
 import subprocess
@@ -112,6 +113,14 @@ def test_report_mode_exit_zero_and_writes_report(smoke_vault: Path):
     assert len(reports) == 1
     # Report mode mutated nothing.
     assert len(list((smoke_vault / "thoughts").rglob("*.md"))) == 2
+
+
+def test_report_records_default_threshold_and_exclusions(smoke_vault: Path):
+    assert _consolidate(smoke_vault, "--no-llm").returncode == 0
+    report_path = next((smoke_vault / ".indexes" / "consolidate").glob("report-*.json"))
+    payload = json.loads(report_path.read_text(encoding="utf-8"))
+    assert payload["near_dup_threshold"] == 0.93
+    assert payload["exclude_prefixes"] == ["Session Summary"]
 
 
 def test_apply_keep_newest_end_to_end(smoke_vault: Path):
