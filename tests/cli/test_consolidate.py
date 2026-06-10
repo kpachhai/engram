@@ -131,3 +131,29 @@ def test_apply_refused_on_team_vault_shape(tmp_path: Path):
     result = runner.invoke(app, _args(vault, "--apply", "--yes"))
     assert result.exit_code == 2
     assert "team-write" in result.output
+
+
+def test_stale_report_partial_apply_exits_three(tmp_path: Path):
+    """A thought edited between report and apply skips its proposal; the run
+    signals partial application via exit code 3."""
+    vault = _setup_vault(tmp_path)
+    assert runner.invoke(app, _args(vault, "--no-llm")).exit_code == 0
+
+    from engram.storage.facade import VaultStorage
+
+    storage = VaultStorage(
+        thoughts_dir=vault / "thoughts",
+        index_db_path=vault / ".indexes" / "engram.db",
+        vault_name="primary",
+    )
+    try:
+        thoughts, _total = storage.list_thoughts(limit=10)
+        storage.update_body(thoughts[0].id, new_content="[Lesson] edited after the report")
+    finally:
+        storage.close()
+
+    result = runner.invoke(app, _args(vault, "--apply", "--yes"))
+    assert result.exit_code == 3
+    assert "did not apply" in result.output
+    # Nothing was archived: the only proposal was skipped.
+    assert not (vault / "archive").exists()

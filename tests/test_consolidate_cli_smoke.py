@@ -168,3 +168,26 @@ def test_typed_confirmation_gate(smoke_vault: Path):
     result = _consolidate(smoke_vault, "--apply", input_str="wrong-token\n")
     assert result.returncode == 1
     assert len(list((smoke_vault / "thoughts").rglob("*.md"))) == 2
+
+
+def test_module_form_parity():
+    """``python -m engram`` resolves the same CLI surface as the console script."""
+    import sys
+
+    script = _run(["--version"])
+    module = subprocess.run(
+        [sys.executable, "-m", "engram", "--version"],
+        capture_output=True,
+        text=True,
+        check=True,
+        env=_smoke_env(),
+    )
+    assert module.stdout == script.stdout
+    module_help = subprocess.run(
+        [sys.executable, "-m", "engram", "consolidate", "--help"],
+        capture_output=True,
+        text=True,
+        check=True,
+        env=_smoke_env(),
+    )
+    assert "--apply" in module_help.stdout

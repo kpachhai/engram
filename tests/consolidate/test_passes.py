@@ -228,3 +228,38 @@ def test_cross_prefix_thoughts_never_cluster(storage: VaultStorage):
     # identical embeddings but different prefixes: no near-dup cluster forms
     # (the fingerprints differ too, so no exact-dup cluster either)
     assert near_dups == []
+
+
+def test_oversized_cluster_downgrades_to_manual_review(storage: VaultStorage):
+    """Clusters above max-cluster-size are never auto-merged."""
+    for index in range(3):
+        storage.capture(
+            content=f"[Lesson] crowded topic variant {index}",
+            embedding=[1.0, 0.001 * index, 0.0, 0.0],
+        )
+    report = _report_for(
+        storage,
+        settings=ReportSettings(max_cluster_size=2),
+        distiller=lambda members, prefix: "should not be called",
+    )
+    reviews = [c for c in report.clusters if c.action is ClusterAction.MANUAL_REVIEW]
+    assert len(reviews) == 1
+    assert "max-cluster-size" in (reviews[0].review_reason or "")
+
+
+def test_block_thought_never_reaches_the_judge(storage: VaultStorage):
+    storage.capture(
+        content="[Lesson] secret claim", portability="block", embedding=[1.0, 0.0, 0.0, 0.0]
+    )
+    storage.capture(content="[Lesson] open claim A", embedding=[1.0, 0.45, 0.0, 0.0])
+    storage.capture(content="[Lesson] open claim B", embedding=[1.0, 0.55, 0.0, 0.0])
+    seen: list[str] = []
+
+    def spy_judge(first: str, second: str) -> tuple[str, str]:
+        seen.extend([first, second])
+        return "consistent", "fine"
+
+    settings = ReportSettings(near_dup_threshold=0.999, contradiction_threshold=0.5)
+    report = _report_for(storage, settings=settings, judge=spy_judge)
+    assert all("secret claim" not in content for content in seen)
+    assert report.exclusions.block_thoughts_llm == 1
