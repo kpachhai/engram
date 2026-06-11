@@ -49,9 +49,9 @@ engram/
 │   ├── bundle/                       # export/import bundle format
 │   ├── consolidate/                  # report-then-action vault curation (passes, apply, guards)
 │   ├── migration/                    # Open Brain migration pipeline
-│   ├── diagnostics/                  # engram doctor + 32 check codes
+│   ├── diagnostics/                  # engram doctor; check codes enumerated in check_codes.py
 │   └── utils/                        # atomic_write, fingerprint, file_naming, lock
-├── tests/                            # 1166 tests (unit + integration + smoke)
+├── tests/                            # 1349 tests (unit + integration + smoke)
 └── bench/                            # NFR1 search-latency benchmarks
 ```
 
@@ -112,7 +112,7 @@ Follow the global rules in `~/.claude/CLAUDE.md` (use hyphens or semicolons inst
 
 ```bash
 uv sync --all-extras --dev          # install + lock deps
-uv run pytest -q                     # full suite (1166 tests; ~2.5 min)
+uv run pytest -q                     # full suite (1349 tests; ~2.5 min)
 uv run ruff format                   # auto-format
 uv run ruff check --fix              # lint + auto-fix
 uv run mypy                          # strict type-check (188 source files)

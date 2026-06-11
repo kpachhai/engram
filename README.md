@@ -222,7 +222,7 @@ uv run ruff check .
 uv run mypy
 ```
 
-The test suite (1100+ tests) covers unit, integration, and hermetic CLI smoke against the installed binary.
+The test suite (1300+ tests) covers unit, integration, and hermetic CLI smoke against the installed binary.
 
 ## Migrating from Open Brain
 
