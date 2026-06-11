@@ -59,16 +59,7 @@ The spec lives outside this repo at `~/repos/github.com/kpachhai/idea-forge/docs
 
 ## Phase history (historical context, not active work)
 
-engram shipped across four phases. The phase artifacts in `docs/archive/phases/PHASE_<N>_*.md`, `docs/adr/`, and `CHANGELOG.md` are the historical record:
-
-| Phase | Scope |
-|---|---|
-| 1 | Solo MVP + Open Brain migration |
-| 2 | Multi-machine personal sync (git transport) |
-| 3 | Multi-vault foundation + friend-share + optional LLM tools |
-| 4 | Team Brain (multi-target write + GPG attribution + per-prefix routing + server-side hook) |
-
-All four are **code-complete**. Future work is operational dogfood (PyPI publish, multi-day team-vault exercise) and incremental polish, not phased delivery.
+engram shipped in four phases (solo MVP + Open Brain migration -> multi-machine git sync -> multi-vault/friend-share/LLM -> Team Brain), all code-complete; the record lives in `docs/archive/phases/`, `docs/adr/`, and `CHANGELOG.md`. Future work is operational dogfood and incremental polish, not phased delivery.
 
 **Don't reintroduce "Phase N" framing in source comments.** That historical context belongs in plan / ADR / retrospective docs. Source code reads as a polished v1.0 product.
 
@@ -131,51 +122,18 @@ Test taxonomy:
 
 ## Common operations
 
-```bash
-# Start an MCP server for the configured vault
-uv run engram serve
+The CLI is self-documenting (`engram --help`, `engram <cmd> --help`); recipes for serve / doctor / reindex / export / import / team-vault / model-hash printing live there and in the docs. Two gotchas that are NOT obvious from `--help`:
 
-# Health check (run after any config change or migration)
-uv run engram doctor
-
-# Migrate from Open Brain (one-time)
-# WARNING: the MCP-based `migrate-from-open-brain` CLI is currently broken against
-# real OB1 (OB1's MCP tools return human-readable text, not structured records).
-# Use the Postgres-direct path instead - see docs/OPENBRAIN_MIGRATION_GUIDE.md
-# for the reference script + walkthrough.
-
-# Rebuild the index from markdown
-uv run engram reindex --full
-
-# Curate the vault: report (safe beside the daemon), then gated apply
-uv run engram consolidate
-uv run engram daemon stop && uv run engram consolidate --apply
-
-# Export a portable bundle for a friend
-uv run engram export --output ~/share/bundle.tar.gz --portability portable
-
-# Import a friend's bundle
-uv run engram import ~/share/bundle.tar.gz --vault friend-vault --allow-read-only
-
-# Bootstrap a team vault (steward)
-uv run engram team-vault setup ~/team-vaults/postmortems --remote git@github.com:org/team-postmortems.git
-
-# Add a team member (steward)
-uv run engram team-vault add-member <40-hex-fingerprint> --members-yaml .engram/members.yaml --policy-yaml .engram/team-policy.yaml
-
-# Print FastEmbed model hashes (after a model upgrade)
-uv run engram doctor --download-model --print-hashes
-```
+- The MCP-based `migrate-from-open-brain` CLI is broken against real OB1 (OB1's MCP tools return human-readable text, not structured records) - use the Postgres-direct path in `docs/OPENBRAIN_MIGRATION_GUIDE.md`.
+- `engram consolidate` (report) is safe beside the running daemon; `engram consolidate --apply` requires `engram daemon stop` first.
 
 ## When making changes
 
 **Discipline that's been load-bearing on this project:**
 
-1. **Integration callsites in CLI/server BEFORE integration tests, not after.** Earlier delivery iterations got bitten by deferring CLI wiring to the end. If you're adding a new component, wire it into the user-facing path (CLI / `build_multivault_server` / `engram doctor`) in the same change that adds the component, not later.
-2. **Hermetic CLI smoke is mandatory at exit.** Per `python-package-builder` Phase Exit Step 5: every new CLI subcommand or modified subcommand gets a smoke test in `tests/test_phase4_cli_smoke.py` that spawns the actual binary via subprocess. The test suite catches handler bugs; the smoke catches wiring bugs.
-3. **Defense-in-depth at security boundaries.** When adding a new constraint (allowlist, refusal, gate), put it in two places: the capture-time client-side gate AND the push-time server-side check (when applicable). Single-layer enforcement is brittle.
-4. **Spec-vs-implementation audit before claiming "done."** Run a sub-agent to walk the relevant spec doc and cross-check against `src/engram/` before merging. Three independent gaps (FastEmbed integrity, LLM CLI, doc count drift) escaped an earlier closeout because we didn't audit thoroughly.
-5. **Verify-before-done at every "shipped" claim.** Stderr discipline (check both stdout AND stderr). Bounds-checks on numerical outputs. List what was NOT verified explicitly. The `verify-before-done` global skill produces the checklist.
+1. **Wire new components into the user-facing path (CLI / `build_multivault_server` / `engram doctor`) in the same change that adds them.** Deferred wiring bit earlier delivery iterations.
+2. **At exit:** hermetic CLI smoke per the Testing section above (smoke catches wiring bugs the handler tests miss); defense-in-depth per pinned invariant 4 (client-side AND server-side, where applicable); `verify-before-done` for any shipped claim.
+3. **Spec-vs-implementation audit before claiming "done".** Run a sub-agent to cross-check the relevant spec doc against `src/engram/` - three independent gaps once escaped a closeout without this.
 
 ## Operational reality
 
@@ -188,11 +146,7 @@ uv run engram doctor --download-model --print-hashes
 
 ## See also
 
-- `docs/ARCHITECTURE.md` — components, flows, two-layer security boundary, MCP API.
-- `docs/USE_CASES.md` — five concrete personas with example flows.
-- `docs/COMPARISONS.md` — engram vs Mem0 / Letta / basic-memory / Open Brain / Obsidian / engraph.
 - `docs/adr/` — 9 ADRs (storage, MCP, sync, embedding, sync coordinator, multi-vault, team brain, daemon mode, consolidation).
 - `docs/DAEMON_MODE.md` — operator + migration guide for daemon mode (v0.5.0+).
 - `docs/CONSOLIDATION.md` — report-then-action vault curation (v0.6.0+).
-- `~/repos/github.com/kpachhai/idea-forge/docs/superpowers/specs/2026-05-04-engram/` — original spec (12 docs; historical authority). <!-- pii-allow:spec-back-ref -->
 - `~/repos/github.com/kpachhai/idea-forge/workspace/engram/PHASE_<N>_RETROSPECTIVE.md` — lessons learned (Phase 2-4). <!-- pii-allow:spec-back-ref -->
