@@ -37,10 +37,10 @@ from engram.utils.run_command import run_git
 
 _log = logging.getLogger("engram.sync.startup_probes")
 
-#: Floor for the git binary. Older releases lack --force-with-lease
-#: semantics + symbolic-ref refresh contracts that the coordinator
-#: depends on.
-GIT_VERSION_FLOOR: tuple[int, int, int] = (2, 40, 0)
+#: Floor for the git binary. Requires pull --rebase=true --no-edit and
+#: --force-with-lease (both available since 2.9/1.8.5 respectively).
+#: 2.30 is chosen to match the documented minimum in QUICKSTART.md.
+GIT_VERSION_FLOOR: tuple[int, int, int] = (2, 30, 0)
 
 #: Cloud-sync directory hints (case-insensitive substring match).
 _CLOUD_SYNC_HINTS: tuple[str, ...] = (

@@ -98,10 +98,12 @@ def test_real_conflict_during_pull_rebase(tmp_path: Path) -> None:
 
 
 def test_real_git_version_meets_floor(tmp_path: Path) -> None:
-    """The system git binary is at least 2.40."""
+    """The system git binary meets the documented version floor."""
+    from engram.sync.startup_probes import GIT_VERSION_FLOOR
+
     init_repo(tmp_path, bare=False)
     version = asyncio.run(gitops.git_version(tmp_path))
-    assert version >= (2, 40, 0), f"unexpected git version {version}; floor is 2.40"
+    assert version >= GIT_VERSION_FLOOR, f"git {version} below floor {GIT_VERSION_FLOOR}"
 
 
 def test_real_status_porcelain_after_modify(tmp_path: Path) -> None:
