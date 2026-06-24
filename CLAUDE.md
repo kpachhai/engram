@@ -2,6 +2,8 @@
 
 This file gives Claude Code (claude.ai/code) the context it needs to work productively on the engram repository.
 
+Contributions: see [CONTRIBUTING.md](CONTRIBUTING.md) - keep changes compatible with both Claude Code and local AI models.
+
 ## What engram is
 
 `engram` is a Model Context Protocol (MCP) server that gives AI assistants a persistent, portable, sovereign memory layer. Thoughts are markdown files; vector search runs locally; sync is `git push`. The full positioning + use cases live in `README.md`, `docs/USE_CASES.md`, and `docs/COMPARISONS.md`.

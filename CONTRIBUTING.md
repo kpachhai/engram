@@ -1,80 +1,47 @@
 # Contributing to engram
 
-Thank you for considering contributing.
+engram is **already tool-agnostic**. It is consumed by Claude Code, OpenCode (local
+models), and any MCP client over the same protocol; no client gets a special path. The
+cross-tool contract IS the MCP surface, so "stay compatible across tools" mostly reduces
+to one rule: **keep the protocol surface stable.** A new feature must behave the same
+regardless of which AI client calls it.
 
-## Scope of contributions
+## The MCP surface is the contract
 
-This repo holds **code, tests, and docs for the engram tool**. It does NOT hold any user thoughts. The three-repo data ownership model is non-negotiable:
+- **Keep the 6-tool core stable** (pinned invariant 6 in `CLAUDE.md`). The MCP wire
+  format is stable for v1.x: only non-breaking additions are permitted - new optional
+  fields, new tools. A field rename, a removed field, or a changed default is breaking
+  and warrants v2.0, not a v1.x PR.
+- **Pydantic at the boundary, additive only.** New fields ship with safe defaults
+  (`extra="ignore"` on outputs); existing fields are never removed (invariant 7,
+  forward-compatible markdown).
+- **No client-specific behavior.** Don't branch on the caller. A tool that returns one
+  shape for Claude and another for a local model breaks the shared contract.
 
-1. The engram project repo (this one) - code only, ever.
-2. Each user's vault - their thoughts, in their own private repo.
-3. Other users' vaults - separately owned; cross-user sharing is peer-to-peer only.
+## Conventions live in CLAUDE.md
 
-Pull requests that introduce real user data (test fixtures, examples, screenshots of personal vaults) will be rejected. Test fixtures use synthetic data only.
+Don't re-derive them here. `CLAUDE.md` is authoritative for the pinned invariants
+(markdown is source of truth, the portability gates, two-layer enforcement, the stable
+wire format), Pydantic at boundaries, atomic writes, parameterized SQL, no `shell=True`,
+strict mypy, and the hermetic CLI-smoke discipline. Read it before changing code.
 
-## Development setup
-
-Requirements: Python 3.11+, `uv`, `git`.
+## Setup and quality gates
 
 ```bash
-git clone https://github.com/kpachhai/engram
-cd engram
-uv sync --all-extras --dev
-uv run pre-commit install
+uv sync --all-extras --dev && uv run pre-commit install
+uv run ruff format --check . && uv run ruff check . && uv run mypy && uv run pytest
 ```
 
-## Quality gates
+CI runs the same gates plus property tests and benchmarks across Python 3.11/3.12 x
+macOS/Ubuntu. Coverage gate is 80% (line); test quality over coverage percentage. Write
+tests first; add a hermetic CLI smoke test for every new subcommand. Update
+`CHANGELOG.md` under `[Unreleased]`, and write an ADR in `docs/adr/` for any
+ADR-worthy decision. Tests use synthetic data only - never real user thoughts (the
+three-repo data-ownership model: this repo is code only, ever).
 
-Every change must pass these gates locally before opening a PR:
+## House style and commits
 
-```bash
-uv run ruff format --check .
-uv run ruff check .
-uv run mypy
-uv run pytest
-```
-
-CI runs the same gates plus the property-based tests and benchmarks across the Python 3.11 / 3.12 x macOS / Ubuntu matrix.
-
-Coverage threshold is 80% (line). Care more about test quality than coverage percentage; tests that exist only to bump coverage are technical debt.
-
-## Code quality bar
-
-The bar is the lineage of FastAPI / Pydantic / Httpx, not "passing tests + valid Python." Read [`docs/superpowers/specs/2026-05-04-engram/10-CODE_QUALITY.md`](https://github.com/kpachhai/idea-forge/blob/main/docs/superpowers/specs/2026-05-04-engram/10-CODE_QUALITY.md) before submitting code.
-
-Specifically:
-
-- Pydantic v2 at boundaries (MCP tools, config, frontmatter, migration manifests)
-- `dataclass(frozen=True, slots=True)` for internal data containers
-- Composition over inheritance; max 2 levels deep
-- All filesystem paths via `pathlib.Path`, never `str`
-- All UUIDs via `uuid.UUID`
-- All datetimes timezone-aware (UTC)
-- All YAML loaded with `yaml.safe_load` (or ruamel safe variant)
-- All file writes atomic (`.tmp` + fsync + rename)
-- All subprocess calls in list form (never `shell=True`)
-- All SQLite queries parameterized (never string-concatenated)
-- No `print()`; use `structlog` to stderr
-- No bare `except:`; catch specific exception types
-
-## Pull request flow
-
-1. Fork or branch from `main`
-2. Open an issue describing the change before writing significant code (avoids wasted work)
-3. Write tests first (TDD). Property-based tests (`hypothesis`) for storage / embedding invariants
-4. Keep PRs small and focused (one logical change per PR)
-5. Update `CHANGELOG.md` under `[Unreleased]`
-6. Run the full quality-gate sequence locally
-7. Open the PR with a clear description of motivation, change, and test plan
-
-## ADRs
-
-Non-trivial architectural decisions live as Architecture Decision Records in `docs/adr/`. If your change adds or revises an ADR-worthy decision, write the ADR before merging.
-
-## Reporting issues
-
-For security issues, please use GitHub Security Advisories (private). For functional bugs, please open a regular issue with a minimal reproduction.
-
-## License
-
-By contributing, you agree that your contributions will be licensed under the [Apache License, Version 2.0](LICENSE).
+Hyphens or semicolons, never em-dashes. Numbers over adjectives. Secrets in
+`~/.config/devkit/`, never committed (see `CLAUDE.md` PII discipline). Commits are
+`git commit -S -s` (GPG sign + DCO); no `Co-Authored-By` / AI attribution; never push
+without being asked. By contributing you agree to the Apache-2.0 `LICENSE`.
