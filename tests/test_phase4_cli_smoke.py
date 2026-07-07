@@ -283,3 +283,10 @@ vaults:
             f"phase4 doctor rows absent (exit={result.returncode}):\n"
             f"stdout: {result.stdout}\nstderr: {result.stderr}"
         )
+
+
+def test_team_vault_rotate_member_key_registered() -> None:
+    """rotate-member-key is documented in the module docstring + ADR 007;
+    it must actually be registered (was `No such command`)."""
+    result = _run(["team-vault", "rotate-member-key", "--help"])
+    assert "rotate-member-key" in result.stdout or "OLD_FINGERPRINT" in result.stdout.upper()

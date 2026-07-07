@@ -234,6 +234,37 @@ def setup_cmd(
     return written
 
 
+def _write_members_yaml(members: MembersList, members_yaml_path: Path) -> None:
+    """Serialize a MembersList in the canonical line-merge-friendly form.
+
+    Round-trips every MemberEntry field (including ``superseded_by``,
+    which key rotation produces) - hand-rolled per-command writers used
+    to silently strip it. Atomic write per the project convention.
+    """
+    from engram.utils.atomic_write import atomic_write_text
+
+    # Fingerprints are force-quoted: an all-digit fingerprint written
+    # bare would round-trip through YAML as an int and fail validation.
+    lines = ["members:"]
+    for m in members.members:
+        if m.display_name is not None or m.superseded_by is not None:
+            lines.append(f'  - fingerprint: "{m.fingerprint}"')
+            if m.display_name is not None:
+                lines.append(f"    display_name: {m.display_name}")
+            if m.superseded_by is not None:
+                lines.append(f'    superseded_by: "{m.superseded_by}"')
+        else:
+            lines.append(f'  - "{m.fingerprint}"')
+    if members.revoked:
+        lines.append("revoked:")
+        for fp in members.revoked:
+            lines.append(f'  - "{fp}"')
+    else:
+        lines.append("revoked: []")
+    members_yaml_path.parent.mkdir(parents=True, exist_ok=True)
+    atomic_write_text(members_yaml_path, "\n".join(lines) + "\n")
+
+
 def add_member_cmd(
     members_yaml_path: Path,
     *,
@@ -278,25 +309,7 @@ def add_member_cmd(
     new_member = MemberEntry(fingerprint=fingerprint_norm, display_name=display_name)
     members.members.append(new_member)
 
-    # Write back as canonical bare-string-or-mapping YAML so line-level
-    # merges stay clean.
-    lines = ["members:"]
-    for m in members.members:
-        if m.display_name is not None:
-            lines.append(f"  - fingerprint: {m.fingerprint}")
-            lines.append(f"    display_name: {m.display_name}")
-            if m.superseded_by is not None:
-                lines.append(f"    superseded_by: {m.superseded_by}")
-        else:
-            lines.append(f"  - {m.fingerprint}")
-    if members.revoked:
-        lines.append("revoked:")
-        for fp in members.revoked:
-            lines.append(f"  - {fp}")
-    else:
-        lines.append("revoked: []")
-    members_yaml_path.parent.mkdir(parents=True, exist_ok=True)
-    members_yaml_path.write_text("\n".join(lines) + "\n", encoding="utf-8")
+    _write_members_yaml(members, members_yaml_path)
     return members
 
 
@@ -339,17 +352,63 @@ def revoke_key_cmd(
         return members
     members.revoked.append(fingerprint_norm)
 
-    lines = ["members:"]
-    for m in members.members:
-        if m.display_name is not None:
-            lines.append(f"  - fingerprint: {m.fingerprint}")
-            lines.append(f"    display_name: {m.display_name}")
-        else:
-            lines.append(f"  - {m.fingerprint}")
-    lines.append("revoked:")
-    for fp in members.revoked:
-        lines.append(f"  - {fp}")
-    members_yaml_path.write_text("\n".join(lines) + "\n", encoding="utf-8")
+    _write_members_yaml(members, members_yaml_path)
+    return members
+
+
+def rotate_member_key_cmd(
+    members_yaml_path: Path,
+    *,
+    old_fingerprint: str,
+    new_fingerprint: str,
+    caller_fingerprint: str,
+    stewards: list[str],
+) -> MembersList:
+    """Rotate a member's key: enroll the new fp, flag the old as superseded.
+
+    Per ADR 007 Q6: prior thoughts stay attributed under the old
+    fingerprint; the old entry gains ``superseded_by: <new>`` and the new
+    fingerprint is enrolled under the same display name. Steward-only.
+    Revocation of the old key (e.g. on compromise) is a separate,
+    deliberate ``revoke-key`` step.
+    """
+    caller_norm = normalize_fingerprint(caller_fingerprint)
+    stewards_norm = {normalize_fingerprint(s) for s in stewards}
+    if caller_norm not in stewards_norm:
+        msg = f"caller {caller_fingerprint!r} is not a steward; only stewards may rotate keys"
+        raise TeamMemberNotEnrolled(msg)
+    for label, fp in (("old", old_fingerprint), ("new", new_fingerprint)):
+        if not is_valid_fingerprint(fp):
+            msg = f"invalid {label} fingerprint: {fp!r} (must be 40 hex chars)"
+            raise VaultError(msg)
+    old_norm = normalize_fingerprint(old_fingerprint)
+    new_norm = normalize_fingerprint(new_fingerprint)
+    if old_norm == new_norm:
+        msg = "old and new fingerprints are identical; nothing to rotate"
+        raise VaultError(msg)
+
+    if not members_yaml_path.exists():
+        msg = f"members.yaml not found at {members_yaml_path}"
+        raise VaultError(msg)
+
+    from ruamel.yaml import YAML
+
+    yaml_safe = YAML(typ="safe", pure=True)
+    data = yaml_safe.load(members_yaml_path.read_text(encoding="utf-8")) or {}
+    members = MembersList.from_yaml_dict(data)
+
+    old_entry = next((m for m in members.members if m.fingerprint == old_norm), None)
+    if old_entry is None:
+        msg = f"old fingerprint {old_norm} is not an enrolled member; cannot rotate"
+        raise VaultError(msg)
+
+    old_entry.superseded_by = new_norm
+    if not any(m.fingerprint == new_norm for m in members.members):
+        members.members.append(
+            MemberEntry(fingerprint=new_norm, display_name=old_entry.display_name)
+        )
+
+    _write_members_yaml(members, members_yaml_path)
     return members
 
 
@@ -835,6 +894,56 @@ def register(app: typer.Typer) -> None:
         typer.echo(f"revoked {fingerprint} in {members_yaml}")
         if reason:
             typer.echo(f"reason: {reason}")
+
+    @team_vault_app.command("rotate-member-key")
+    def rotate_member_key(
+        old_fingerprint: str = typer.Argument(
+            ...,
+            help="Currently-enrolled primary GPG fingerprint being rotated out.",
+        ),
+        new_fingerprint: str = typer.Argument(
+            ...,
+            help="Replacement primary GPG fingerprint (40 hex characters).",
+        ),
+        members_yaml: Path = typer.Option(  # noqa: B008
+            ...,
+            "--members-yaml",
+            help="Path to .engram/members.yaml in the team-vault checkout.",
+        ),
+        policy_yaml: Path = typer.Option(  # noqa: B008
+            ...,
+            "--policy-yaml",
+            help="Path to .engram/team-policy.yaml (used to verify caller is a steward).",
+        ),
+        gpg_binary: str = typer.Option("gpg", "--gpg-binary", hidden=True),
+    ) -> None:
+        """Rotate a member's key: enroll the new fp, flag the old as superseded. Steward-only."""
+        from ruamel.yaml import YAML
+
+        identity = GpgIdentity(gpg_binary=gpg_binary)
+        caller_fp = identity.primary_fingerprint()
+        if caller_fp is None:
+            typer.echo("error: no GPG signing key found", err=True)
+            raise typer.Exit(code=2)
+        yaml_safe = YAML(typ="safe", pure=True)
+        policy_data = yaml_safe.load(policy_yaml.read_text(encoding="utf-8")) or {}
+        stewards = policy_data.get("stewards") or []
+        try:
+            rotate_member_key_cmd(
+                members_yaml,
+                old_fingerprint=old_fingerprint,
+                new_fingerprint=new_fingerprint,
+                caller_fingerprint=caller_fp,
+                stewards=stewards,
+            )
+        except (TeamMemberNotEnrolled, VaultError) as exc:
+            typer.echo(f"error: {exc}", err=True)
+            raise typer.Exit(code=1) from exc
+        typer.echo(f"rotated {old_fingerprint} -> {new_fingerprint} in {members_yaml}")
+        typer.echo(
+            "The old key stays enrolled (historical attribution); run "
+            "revoke-key if it is compromised. Commit + push the change."
+        )
 
     @team_vault_app.command("join")
     def join(
