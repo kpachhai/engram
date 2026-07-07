@@ -493,7 +493,8 @@ def logs(
     tail_count: int = typer.Option(
         200,
         "--tail",
-        help="Print the last N lines of the log file (default 200).",
+        min=0,
+        help="Print the last N lines of the log file (default 200; 0 prints nothing).",
     ),
     follow: bool = typer.Option(
         False,
@@ -518,7 +519,9 @@ def logs(
     if not follow:
         with paths.log_file.open("r", encoding="utf-8", errors="replace") as fh:
             lines = fh.readlines()
-        for line in lines[-tail_count:]:
+        # lines[-0:] is the WHOLE file; 0 must mean "print nothing".
+        tail_lines = lines[-tail_count:] if tail_count > 0 else []
+        for line in tail_lines:
             typer.echo(line.rstrip("\n"))
         return
 

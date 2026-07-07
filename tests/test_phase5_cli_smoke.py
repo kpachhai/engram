@@ -384,3 +384,44 @@ def test_engram_daemon_sigterm_with_active_connections_exits_promptly(
             expect_zero=False,
             timeout=15.0,
         )
+
+
+# ----- daemon logs --tail bounds ------------------------------------
+
+
+def test_daemon_logs_tail_zero_prints_nothing(smoke_vault: Path) -> None:
+    """--tail 0 must print nothing, not the whole log (log may carry PII)."""
+    log_file = smoke_vault / ".indexes" / "engram.log"
+    log_file.parent.mkdir(parents=True, exist_ok=True)
+    log_file.write_text("line-1\nline-2\nline-3\n")
+    result = _run(
+        [
+            "daemon",
+            "logs",
+            "--tail",
+            "0",
+            "--config",
+            str(smoke_vault / "engram.config.yaml"),
+        ],
+    )
+    assert "line-1" not in result.stdout
+    assert "line-3" not in result.stdout
+
+
+def test_daemon_logs_negative_tail_rejected(smoke_vault: Path) -> None:
+    """--tail -5 is rejected instead of producing a nonsense slice."""
+    log_file = smoke_vault / ".indexes" / "engram.log"
+    log_file.parent.mkdir(parents=True, exist_ok=True)
+    log_file.write_text("line-1\n")
+    result = _run(
+        [
+            "daemon",
+            "logs",
+            "--tail",
+            "-5",
+            "--config",
+            str(smoke_vault / "engram.config.yaml"),
+        ],
+        expect_zero=False,
+    )
+    assert result.returncode != 0
