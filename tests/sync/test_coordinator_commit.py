@@ -134,3 +134,37 @@ def test_filter_engram_paths_drops_outside_paths(tmp_path: Path) -> None:
     out = filter_engram_paths([inside, outside], thoughts)
     assert inside.resolve() in out
     assert outside.resolve() not in out
+
+
+@pytest.mark.asyncio
+async def test_commit_cycle_failure_is_surfaced_not_silent(tmp_path: Path) -> None:
+    """A failing git commit must not transition to IDLE as success.
+
+    Regression: commit_paths returned sha=None on failure with no failure
+    discriminator, so the coordinator fell through to the success branch,
+    logged 'committed ?', and the drained batch was never re-enqueued -
+    session-long silent non-replication.
+    """
+    init_repo(tmp_path, bare=False)
+    commit_file(tmp_path, "seed.md", "seed")
+    from .conftest import run_git
+
+    # Force every git commit to fail: signing is mandatory and the gpg
+    # program is `false`, so `git commit` exits non-zero.
+    assert run_git(["config", "commit.gpgsign", "true"], tmp_path).returncode == 0
+    assert run_git(["config", "gpg.program", "false"], tmp_path).returncode == 0
+
+    coord = SyncCoordinator(
+        repo_dir=tmp_path,
+        config=CoordinatorConfig(user_email="x@y", user_name="x"),
+    )
+    new_file = tmp_path / "thoughts" / "x.md"
+    new_file.parent.mkdir(parents=True)
+    new_file.write_text("body")
+    coord.enqueue(new_file)
+
+    await coord._commit_cycle()
+
+    assert coord.state is SyncState.MANUAL_RESOLUTION_REQUIRED
+    # The drained batch must be re-enqueued so a later resume retries it.
+    assert not coord._queue.empty()

@@ -176,3 +176,19 @@ def test_real_push_after_clone(tmp_path: Path, bare_remote: Path, set_upstream: 
     commit_file(repo, "x.md", "x")
     result = asyncio.run(gitops.push(repo, "origin", "main", set_upstream=set_upstream))
     assert result.error_class is GitErrorClass.OK
+
+
+def test_real_commit_paths_reports_failure(tmp_path: Path) -> None:
+    """A non-zero `git commit` must be distinguishable from success."""
+    repo = tmp_path / "repo"
+    init_repo(repo, bare=False)
+    commit_file(repo, "seed.md", "seed")
+    run_git(["config", "commit.gpgsign", "true"], repo)
+    run_git(["config", "gpg.program", "false"], repo)
+    (repo / "x.md").write_text("x")
+
+    result = asyncio.run(gitops.commit_paths(repo, ["x.md"], message="m"))
+
+    assert result.failed is True
+    assert result.sha is None
+    assert result.nothing_to_commit is False

@@ -519,6 +519,17 @@ class SyncCoordinator:
             if result.nothing_to_commit:
                 self._transition(SyncState.IDLE, note="nothing staged")
                 return
+            if result.failed:
+                # Re-enqueue the drained batch so a later resume retries it;
+                # falling through to IDLE here would silently drop the
+                # captures from the sync pipeline for the whole session.
+                for p in paths:
+                    self._queue.put_nowait(p)
+                self._transition(
+                    SyncState.MANUAL_RESOLUTION_REQUIRED,
+                    note=f"commit failed: {result.stderr.strip()[:200]}",
+                )
+                return
             self._transition(
                 SyncState.IDLE, note=f"committed {result.sha[:8] if result.sha else '?'}"
             )

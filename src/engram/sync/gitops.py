@@ -74,11 +74,18 @@ class StatusEntry:
 
 @dataclass(frozen=True, slots=True)
 class CommitResult:
-    """Outcome of :func:`commit_paths`."""
+    """Outcome of :func:`commit_paths`.
+
+    ``failed`` is the explicit failure discriminator: ``sha`` alone cannot
+    distinguish a failed commit from a successful one whose ``rev-parse``
+    lookup failed.
+    """
 
     sha: str | None
     message: str
     nothing_to_commit: bool = False
+    failed: bool = False
+    stderr: str = ""
 
 
 @dataclass(frozen=True, slots=True)
@@ -347,7 +354,13 @@ async def commit_paths(
         add_cp = await _git(["add", "--", *paths_str], cwd=cwd)
         if add_cp.returncode != 0:
             _log.warning("git add failed: %s", add_cp.stderr.strip())
-            return CommitResult(sha=None, message=message, nothing_to_commit=False)
+            return CommitResult(
+                sha=None,
+                message=message,
+                nothing_to_commit=False,
+                failed=True,
+                stderr=add_cp.stderr,
+            )
 
     if not allow_empty:
         # Bail before invoking git commit if nothing actually changed.
@@ -369,7 +382,13 @@ async def commit_paths(
     cp = await _git(args, cwd=cwd)
     if cp.returncode != 0:
         _log.warning("git commit failed: %s", cp.stderr.strip())
-        return CommitResult(sha=None, message=message, nothing_to_commit=False)
+        return CommitResult(
+            sha=None,
+            message=message,
+            nothing_to_commit=False,
+            failed=True,
+            stderr=cp.stderr,
+        )
 
     sha_cp = await _git(["rev-parse", "HEAD"], cwd=cwd)
     sha = sha_cp.stdout.strip() if sha_cp.returncode == 0 else None
