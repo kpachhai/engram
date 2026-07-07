@@ -31,6 +31,12 @@ from engram.utils.run_command import run_git
 _log = logging.getLogger("engram.sync.gitops")
 
 
+_FP40_RE = re.compile(r"^[A-Fa-f0-9]{40}$")
+
+#: Default allow-list consulted by :func:`signed_pull_gate`.
+DEFAULT_TRUSTED_KEYS_PATH = Path.home() / ".config" / "engram" / "trusted-keys.yaml"
+
+
 class GitErrorClass(enum.StrEnum):
     """Classified git failure modes used by the sync coordinator.
 
@@ -44,6 +50,8 @@ class GitErrorClass(enum.StrEnum):
     * ``LOCK_HELD`` - wait briefly, then retry once (another git invocation
       raced us; engram's coordinator owns its own asyncio.Lock so this
       should only happen if a human is running git concurrently).
+    * ``SIGNATURE_UNVERIFIED`` - signed-pull gate refused; never retry
+      (the remote head must be re-signed by a trusted key).
     * ``UNKNOWN`` - default fallback; treat as non-retryable.
     """
 
@@ -54,6 +62,7 @@ class GitErrorClass(enum.StrEnum):
     NON_FAST_FORWARD = "non_fast_forward"
     CONFLICT = "conflict"
     LOCK_HELD = "lock_held"
+    SIGNATURE_UNVERIFIED = "signature_unverified"
     UNKNOWN = "unknown"
 
 
@@ -470,15 +479,86 @@ async def verify_commit(
     cp = await _git(["verify-commit", "--raw", ref], cwd=cwd)
     if cp.returncode != 0:
         return False
-    # gpg --status-fd output contains "VALIDSIG <fingerprint> ..."; we
-    # accept any allowed fingerprint that appears.
+    # Real status lines look like "[GNUPG:] VALIDSIG <sig-key-fpr> ...
+    # <primary-key-fpr>". Accept when EITHER 40-hex field (signing subkey
+    # or its primary key) is on the allow-list; operators normally list
+    # primary fingerprints, but a pinned subkey also verifies.
     for line in cp.stderr.splitlines():
-        parts = line.split()
-        if len(parts) >= 3 and parts[0].endswith("VALIDSIG"):
-            fingerprint = parts[2].upper()
+        if "VALIDSIG" not in line:
+            continue
+        for token in line.split():
+            if not _FP40_RE.fullmatch(token):
+                continue
+            fingerprint = token.upper()
             if fingerprint in allowed or fingerprint[-16:] in allowed:
                 return True
     return False
+
+
+def load_trusted_keys(path: Path | None = None) -> list[str]:
+    """Load the fingerprint allow-list from ``trusted-keys.yaml``.
+
+    Accepts either a top-level YAML list of fingerprints or a mapping
+    with a ``trusted_keys:`` list. Returns ``[]`` when the file is
+    missing or unparseable - callers treat an empty allow-list as a
+    refusal when ``signed_pull_required`` is on (fail closed).
+    """
+    resolved = path or DEFAULT_TRUSTED_KEYS_PATH
+    try:
+        text = resolved.read_text(encoding="utf-8")
+    except OSError:
+        return []
+    try:
+        from ruamel.yaml import YAML
+
+        data = YAML(typ="safe", pure=True).load(text)
+    except Exception:
+        _log.warning("could not parse trusted-keys file at %s", resolved)
+        return []
+    if isinstance(data, dict):
+        data = data.get("trusted_keys")
+    if not isinstance(data, list):
+        return []
+    return [str(fp).strip() for fp in data if isinstance(fp, str) and str(fp).strip()]
+
+
+async def signed_pull_gate(
+    cwd: Path,
+    *,
+    remote: str,
+    branch: str,
+    signed_pull_required: bool,
+    trusted_keys_path: Path | None = None,
+    timeout: float = 60.0,
+) -> str | None:
+    """Return a refusal reason when signed-pull verification blocks the pull.
+
+    Fetches the remote head and verifies its GPG signature against the
+    trusted-keys allow-list BEFORE any rebase touches the working tree.
+    Returns ``None`` when the pull may proceed: gate off, verification
+    passed, or no remote branch exists yet.
+    """
+    if not signed_pull_required:
+        return None
+    allowed = load_trusted_keys(trusted_keys_path)
+    if not allowed:
+        return (
+            "signed_pull_required=true but the trusted-keys allow-list is "
+            "missing or empty; refusing pull"
+        )
+    fetch_result = await fetch(cwd, remote, timeout=timeout)
+    if fetch_result.error_class is not GitErrorClass.OK:
+        return f"fetch for signature verification failed: {fetch_result.stderr.strip()[:200]}"
+    cp = await _git(["rev-parse", "--verify", f"refs/remotes/{remote}/{branch}"], cwd=cwd)
+    if cp.returncode != 0:
+        return None
+    remote_head = cp.stdout.strip()
+    if await verify_commit(cwd, remote_head, allowed):
+        return None
+    return (
+        f"remote head {remote_head[:8]} is not signed by a key on the "
+        "trusted-keys allow-list; refusing pull"
+    )
 
 
 # === Conflict marker scanner (Step 5) ===
@@ -538,9 +618,11 @@ __all__ = [
     "fetch",
     "git_version",
     "is_inside_work_tree",
+    "load_trusted_keys",
     "pull_rebase",
     "push",
     "remote_url",
+    "signed_pull_gate",
     "status_porcelain",
     "verify_commit",
 ]

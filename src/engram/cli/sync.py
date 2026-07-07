@@ -43,11 +43,26 @@ def _coordinator_config(config: EffectiveConfig) -> CoordinatorConfig:
         auto_commit_on_capture=config.sync.auto_commit_on_capture,
         auto_push_on_capture=True,  # explicit sync forces push attempt
         use_no_verify=config.sync.use_no_verify,
+        signed_pull_required=config.sync.signed_pull_required,
     )
 
 
 async def _do_pull(vault_path: Path, config: EffectiveConfig) -> int:
     """Run a single pull --rebase; return exit code (0 on OK)."""
+    refusal = await gitops.signed_pull_gate(
+        vault_path,
+        remote=config.sync.git_remote,
+        branch=config.sync.git_branch,
+        signed_pull_required=config.sync.signed_pull_required,
+        timeout=config.sync.push_timeout_seconds,
+    )
+    if refusal is not None:
+        typer.secho(
+            f"engram sync --pull: signed-pull gate: {refusal}",
+            fg=typer.colors.RED,
+            err=True,
+        )
+        return 2
     result = await gitops.pull_rebase(
         vault_path,
         config.sync.git_remote,

@@ -98,6 +98,7 @@ def _coordinator_config_from(config: EffectiveConfig) -> CoordinatorConfig:
         auto_commit_on_capture=config.sync.auto_commit_on_capture,
         auto_push_on_capture=config.sync.auto_push_on_capture,
         use_no_verify=config.sync.use_no_verify,
+        signed_pull_required=config.sync.signed_pull_required,
         migration_held=lambda: MigrationLock.is_held(config.vault_path),
     )
 

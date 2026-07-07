@@ -37,6 +37,19 @@ async def maybe_startup_pull(
     if url is None:
         _log.info("no remote %s configured; skipping startup pull", sync_config.git_remote)
         return None
+    refusal = await gitops.signed_pull_gate(
+        repo_dir,
+        remote=sync_config.git_remote,
+        branch=sync_config.git_branch,
+        signed_pull_required=sync_config.signed_pull_required,
+        timeout=sync_config.startup_pull_timeout_seconds,
+    )
+    if refusal is not None:
+        _log.warning("startup pull refused by signed-pull gate: %s", refusal)
+        return PullResult(
+            error_class=GitErrorClass.SIGNATURE_UNVERIFIED,
+            stderr=refusal,
+        )
     _log.info(
         "running startup pull --rebase against %s/%s (timeout=%.1fs)",
         sync_config.git_remote,

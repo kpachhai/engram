@@ -168,6 +168,13 @@ class CoordinatorConfig:
     use_no_verify: bool = True
     user_email: str | None = None
     user_name: str | None = None
+    #: Require pulled remote heads to be GPG-verified against the
+    #: trusted-keys allow-list before any rebase (mirrors
+    #: ``SyncConfig.signed_pull_required``).
+    signed_pull_required: bool = False
+    #: Override for the trusted-keys file location (test seam; None uses
+    #: ``~/.config/engram/trusted-keys.yaml``).
+    trusted_keys_path: Path | None = None
     #: Optional callback returning True when the migration lock is held.
     migration_held: object = field(default=None)
 
@@ -686,6 +693,21 @@ class SyncCoordinator:
                     allow_from_any=True,
                 )
                 return False
+        refusal = await gitops.signed_pull_gate(
+            self.repo_dir,
+            remote=self.config.git_remote,
+            branch=self.config.git_branch,
+            signed_pull_required=self.config.signed_pull_required,
+            trusted_keys_path=self.config.trusted_keys_path,
+            timeout=self.config.push_timeout_seconds,
+        )
+        if refusal is not None:
+            self._transition(
+                SyncState.MANUAL_RESOLUTION_REQUIRED,
+                note=f"signed-pull gate: {refusal}",
+                allow_from_any=True,
+            )
+            return False
         self._transition(SyncState.FETCHING, note="rebase begin", allow_from_any=True)
         pull_result: PullResult = await gitops.pull_rebase(
             self.repo_dir,
@@ -727,6 +749,19 @@ class SyncCoordinator:
     async def explicit_pull(self) -> PullResult:
         """Run a one-shot pull --rebase outside the auto loop."""
         async with self._git_lock:
+            refusal = await gitops.signed_pull_gate(
+                self.repo_dir,
+                remote=self.config.git_remote,
+                branch=self.config.git_branch,
+                signed_pull_required=self.config.signed_pull_required,
+                trusted_keys_path=self.config.trusted_keys_path,
+                timeout=self.config.push_timeout_seconds,
+            )
+            if refusal is not None:
+                return PullResult(
+                    error_class=GitErrorClass.SIGNATURE_UNVERIFIED,
+                    stderr=refusal,
+                )
             return await gitops.pull_rebase(
                 self.repo_dir,
                 self.config.git_remote,
