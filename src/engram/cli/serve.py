@@ -102,12 +102,64 @@ def _coordinator_config_from(config: EffectiveConfig) -> CoordinatorConfig:
     )
 
 
+def _load_team_vault_deps(
+    vault_path: Path,
+    vault_name: str,
+) -> tuple[object | None, object | None]:
+    """Load a team-write vault's policy + members from ``.engram/``.
+
+    Returns ``(policy, members)``; either is ``None`` (with a WARN) when
+    the file is missing or unparseable - the capture gate then refuses
+    team-write captures to that vault instead of silently proceeding
+    without policy/enrollment enforcement.
+    """
+    from ruamel.yaml import YAML
+
+    from engram.team.members import MembersList
+    from engram.team.policy import TeamVaultPolicy
+
+    yaml_safe = YAML(typ="safe", pure=True)
+    policy: object | None = None
+    members: object | None = None
+
+    policy_path = vault_path / ".engram" / "team-policy.yaml"
+    try:
+        policy = TeamVaultPolicy.model_validate(
+            yaml_safe.load(policy_path.read_text(encoding="utf-8")) or {}
+        )
+    except Exception as exc:
+        _log.warning(
+            "engram serve: team-write vault %r: could not load %s (%s); "
+            "captures to it will be refused",
+            vault_name,
+            policy_path,
+            exc,
+        )
+
+    members_path = vault_path / ".engram" / "members.yaml"
+    try:
+        members = MembersList.from_yaml_dict(
+            yaml_safe.load(members_path.read_text(encoding="utf-8")) or {}
+        )
+    except Exception as exc:
+        _log.warning(
+            "engram serve: team-write vault %r: could not load %s (%s); "
+            "captures to it will be refused",
+            vault_name,
+            members_path,
+            exc,
+        )
+
+    return policy, members
+
+
 def _build_multivault_server_for(
     *,
     config: EffectiveConfig,
     primary_storage: VaultStorage,
     embedder: object,
     primary_coordinator: object | None,
+    gpg_identity: object | None = None,
 ) -> FastMCP[Any]:
     """Build a multi-vault FastMCP server.
 
@@ -115,6 +167,12 @@ def _build_multivault_server_for(
     registry, then opens a read-only-mounted storage for every other
     vault listed in ``config.vaults``. Skips entries whose path is
     missing on disk (the operator sees a one-line WARN per skip).
+
+    For every mounted ``team-write`` vault, its ``.engram/team-policy.yaml``
+    and ``.engram/members.yaml`` are loaded into the handler deps so the
+    capture gate can enforce enrollment + policy and stamp ``captured_by``.
+    ``gpg_identity`` defaults to a real :class:`GpgIdentity` when any
+    team-write vault is mounted; tests inject a hermetic fake.
     """
     from engram.llm.budget import LLMBudget
     from engram.mcp.llm_tools import HandlerDeps
@@ -129,6 +187,9 @@ def _build_multivault_server_for(
         role="primary",
         coordinator=primary_coordinator,
     )
+
+    team_policies: dict[str, object] = {}
+    team_members: dict[str, object] = {}
 
     for mount in config.vaults:
         if mount.name == config.vault_name:
@@ -165,6 +226,20 @@ def _build_multivault_server_for(
             _log.exception("engram serve: could not mount %r.%s", mount.name, hint)
             continue
 
+        if mount.role == "team-write":
+            policy, members = _load_team_vault_deps(vault_path, mount.name)
+            if policy is not None:
+                team_policies[mount.name] = policy
+            if members is not None:
+                team_members[mount.name] = members
+
+    if gpg_identity is None and any(
+        registry.role_of(name) == "team-write" for name in registry.names()
+    ):
+        from engram.team.identity import GpgIdentity
+
+        gpg_identity = GpgIdentity()
+
     budget = LLMBudget.load_or_init(
         state_path=config.index_dir / "llm_usage.json",
         daily_cost_cap_usd=config.llm.daily_cost_cap_usd,
@@ -174,6 +249,9 @@ def _build_multivault_server_for(
         embedder=embedder,  # type: ignore[arg-type]
         config=config,
         budget=budget,
+        team_policies=team_policies,
+        team_members=team_members,
+        gpg_identity=gpg_identity,
     )
     return build_multivault_server(
         registry,
