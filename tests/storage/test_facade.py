@@ -423,7 +423,7 @@ class _FlakyConn:
         self._remaining = fail_attempts
         self._error = error
         self._target = target_sql_fragment
-        self.execute_calls = 0
+        self.target_calls = 0
 
     def __enter__(self):
         return self
@@ -434,8 +434,15 @@ class _FlakyConn:
         # no-op for our purposes.
         return False
 
+    @property
+    def in_transaction(self) -> bool:
+        # _transaction() consults this on the rollback path; delegate to
+        # the real connection so BEGIN/ROLLBACK bookkeeping stays truthful.
+        return bool(self._real.in_transaction)
+
     def execute(self, sql, params=()):
-        self.execute_calls += 1
+        if self._target in sql:
+            self.target_calls += 1
         if self._remaining > 0 and self._target in sql:
             self._remaining -= 1
             raise self._error
@@ -507,7 +514,7 @@ def test_insert_thought_does_not_retry_non_transient_errors(
     # Non-transient errors raise on the first attempt -> no sleeps.
     assert sleeps == []
     # Exactly one INSERT INTO thoughts call happened.
-    assert flaky.execute_calls == 1
+    assert flaky.target_calls == 1
 
 
 def test_insert_thought_exhausts_retries_on_persistent_io_error(

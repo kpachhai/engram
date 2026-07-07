@@ -56,7 +56,7 @@ def _insert(
     thought_id: UUID | None = None,
     prefix: str = "Lesson",
     portability: str = "portable",
-    source: str = "kpachhai",
+    source: str = "engram-user",
     created_at: datetime | None = None,
     fingerprint: str | None = None,
     file_path: str | None = None,
@@ -129,7 +129,7 @@ def test_insert_with_legacy_id(conn: sqlite3.Connection) -> None:
         thought_id=tid,
         prefix="Lesson",
         portability="portable",
-        source="kpachhai",
+        source="engram-user",
         created_at=datetime.now(UTC),
         updated_at=datetime.now(UTC),
         fingerprint=_FP_BASE,
@@ -574,3 +574,37 @@ def test_insert_thought_with_uuid_object_or_string(conn: sqlite3.Connection) -> 
     # And via UUID object.
     row2 = get_thought_row(conn, tid_obj)
     assert row2 is not None
+
+
+# === transaction atomicity (isolation_level=None regression) ===
+
+
+def test_insert_thought_is_atomic_when_embedding_insert_fails(
+    conn: sqlite3.Connection,
+) -> None:
+    """A failure after the thoughts INSERT must roll the whole insert back.
+
+    Regression: under isolation_level=None (autocommit), `with conn:`
+    opens no transaction, so the thoughts row auto-committed and a
+    failing embedding INSERT left a half-written row marked
+    embedding_status='ok' with no embedding - invisible to KNN search
+    and untouched by doctor --repair.
+    """
+    tid = uuid4()
+    wrong_dim_vec = [0.1] * (_DIM * 2)
+
+    with pytest.raises(sqlite3.Error):
+        insert_thought(
+            conn,
+            thought_id=tid,
+            prefix="Lesson",
+            portability="portable",
+            source="engram-user",
+            created_at=datetime.now(UTC),
+            updated_at=datetime.now(UTC),
+            fingerprint=_FP_BASE,
+            file_path="thoughts/x.md",
+            embedding=wrong_dim_vec,
+        )
+
+    assert get_thought_row(conn, tid) is None

@@ -32,11 +32,12 @@ trap that ``LIKE '%"x"%"`` would have (Risk R24).
 
 from __future__ import annotations
 
+import contextlib
 import json
 import logging
 import sqlite3
 import time
-from collections.abc import Iterable, Sequence
+from collections.abc import Iterable, Iterator, Sequence
 from datetime import datetime
 from pathlib import Path
 from typing import Any, Literal
@@ -114,6 +115,28 @@ def _normalize_dt(value: datetime | str) -> str:
     return value
 
 
+@contextlib.contextmanager
+def _transaction(conn: sqlite3.Connection) -> Iterator[None]:
+    """Open a REAL transaction under autocommit connections.
+
+    Connections are opened with ``isolation_level=None`` (autocommit), and
+    in that mode ``with conn:`` never emits BEGIN - each statement commits
+    independently, so a multi-statement block could half-commit (e.g. a
+    thoughts row landing without its embedding row). BEGIN IMMEDIATE takes
+    the write lock up front (riding out contention via busy_timeout) and
+    the block commits or rolls back as one unit.
+    """
+    conn.execute("BEGIN IMMEDIATE")
+    try:
+        yield
+    except BaseException:
+        if conn.in_transaction:
+            conn.execute("ROLLBACK")
+        raise
+    else:
+        conn.execute("COMMIT")
+
+
 def insert_thought(
     conn: sqlite3.Connection,
     *,
@@ -159,7 +182,7 @@ def insert_thought(
     backoff_s = _INSERT_RETRY_INITIAL_BACKOFF_S
     for attempt in range(1, _INSERT_RETRY_ATTEMPTS + 1):
         try:
-            with conn:
+            with _transaction(conn):
                 conn.execute(
                     "INSERT INTO thoughts("
                     "id, schema_version, prefix, portability, source, "
@@ -447,7 +470,7 @@ def update_thought_metadata(
     params.append(_normalize_id(thought_id))
     # `sets` is built from a closed list of literal "col = ?" strings.
     update_sql = f"UPDATE thoughts SET {', '.join(sets)} WHERE id = ?"  # noqa: S608
-    with conn:
+    with _transaction(conn):
         cursor = conn.execute(update_sql, params)
     return cursor.rowcount > 0
 
@@ -467,7 +490,7 @@ def update_thought_body(
     regenerate it.
     """
     sid = _normalize_id(thought_id)
-    with conn:
+    with _transaction(conn):
         cursor = conn.execute(
             "UPDATE thoughts SET fingerprint = ?, updated_at = ?, "
             "embedding_status = ?, embedding_error = NULL "
@@ -493,7 +516,7 @@ def update_thought_body(
 def delete_thought(conn: sqlite3.Connection, thought_id: UUID | str) -> bool:
     """Remove a thought row + its embedding row. Returns True if deleted."""
     sid = _normalize_id(thought_id)
-    with conn:
+    with _transaction(conn):
         conn.execute("DELETE FROM thought_embeddings WHERE thought_id = ?", (sid,))
         cursor = conn.execute("DELETE FROM thoughts WHERE id = ?", (sid,))
     return cursor.rowcount > 0
@@ -506,7 +529,7 @@ def upsert_embedding(
 ) -> None:
     """Insert or replace the embedding row; mark the thought row's status as ``ok``."""
     sid = _normalize_id(thought_id)
-    with conn:
+    with _transaction(conn):
         conn.execute("DELETE FROM thought_embeddings WHERE thought_id = ?", (sid,))
         conn.execute(
             "INSERT INTO thought_embeddings(thought_id, embedding) VALUES (?, ?)",
@@ -526,7 +549,7 @@ def mark_embedding_status(
 ) -> bool:
     """Update the embedding_status (and optional error message) for a thought."""
     sid = _normalize_id(thought_id)
-    with conn:
+    with _transaction(conn):
         cursor = conn.execute(
             "UPDATE thoughts SET embedding_status = ?, embedding_error = ? WHERE id = ?",
             (status, error_message, sid),
@@ -608,7 +631,7 @@ def record_migration_start(
     started_at: datetime | str,
 ) -> int:
     """Insert a row in ``migrations`` for a new run; return its rowid."""
-    with conn:
+    with _transaction(conn):
         cursor = conn.execute(
             "INSERT INTO migrations(source_type, source_url, started_at) VALUES (?, ?, ?)",
             (source_type, source_url, _normalize_dt(started_at)),
@@ -626,7 +649,7 @@ def record_migration_complete(
     report_path: Path | str | None = None,
 ) -> None:
     """Update an existing ``migrations`` row with completion state."""
-    with conn:
+    with _transaction(conn):
         conn.execute(
             "UPDATE migrations SET completed_at = ?, thought_count = ?, error_count = ?, "
             "report_path = ? WHERE id = ?",
@@ -695,7 +718,7 @@ def delete_thought_rows(conn: sqlite3.Connection, thought_ids: Sequence[UUID | s
     sids = [(_normalize_id(tid),) for tid in thought_ids]
     if not sids:
         return 0
-    with conn:
+    with _transaction(conn):
         conn.executemany("DELETE FROM thought_embeddings WHERE thought_id = ?", sids)
         cursor = conn.executemany("DELETE FROM thoughts WHERE id = ?", sids)
     return max(0, cursor.rowcount)
