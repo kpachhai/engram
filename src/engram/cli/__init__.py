@@ -76,8 +76,7 @@ _team_vault_cmd.register(app)
 _llm_cmd.register(app)
 _delete_cmd.register(app)
 _consolidate_cmd.register(app)
-if hasattr(_move_thought_cmd, "register"):
-    _move_thought_cmd.register(app)
+_move_thought_cmd.register(app)
 
 
 __all__ = ["app"]

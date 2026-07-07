@@ -145,3 +145,22 @@ def test_move_thought_bad_ref_exits_nonzero(two_vault_home: tuple[Path, Path, Pa
         env=_smoke_env(home),
     )
     assert result.returncode != 0
+
+
+def test_move_thought_registered_in_help() -> None:
+    """move-thought must appear in `engram --help`.
+
+    Guards the wiring itself: registration used to hide behind a
+    hasattr() guard that would silently drop the command on a future
+    rename instead of failing loudly at import like every peer.
+    """
+    result = subprocess.run(  # noqa: S603 - test-only, controlled args
+        [_engram_bin(), "--help"],
+        capture_output=True,
+        text=True,
+        check=False,
+        timeout=30.0,
+        env={**os.environ, "COLUMNS": "200", "NO_COLOR": "1", "TERM": "dumb"},
+    )
+    assert result.returncode == 0
+    assert "move-thought" in result.stdout
