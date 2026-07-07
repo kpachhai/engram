@@ -19,8 +19,8 @@ from engram.team.server_hooks.pre_receive import (
     run_hook,
 )
 
-VALID_FP = "1234567890ABCDEF1234567890ABCDEF12345678"
-OTHER_FP = "ABCDEFABCDEFABCDEFABCDEFABCDEFABCDEFABCD"
+VALID_FP = "1234567890ABCDEF1234567890ABCDEF12345678"  # pii-allow: synthetic test fingerprint
+OTHER_FP = "ABCDEFABCDEFABCDEFABCDEFABCDEFABCDEFABCD"  # pii-allow: synthetic test fingerprint
 
 
 # === YAML parser ===
@@ -259,7 +259,7 @@ def _drive_hook(stdin_text: str, patches: list[object]) -> tuple[int, str]:
         return run_hook(stdin_text=stdin_text, repo_path="/fake/path")
 
 
-STDIN = "0000000000000000000000000000000000000000 deadbeef refs/heads/main\n"
+STDIN = "0000000000000000000000000000000000000000 deadbeef refs/heads/main\n"  # pii-allow: zero sha
 
 
 def test_hook_passes_legit_push() -> None:
@@ -387,3 +387,36 @@ def test_committer_fingerprint_normalization(fingerprint: str) -> None:
     )
     code, stderr = _drive_hook(STDIN, patches)
     assert code == 0, stderr
+
+
+def test_committer_fingerprint_uses_primary_not_signing_subkey(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """VALIDSIG field 1 is the signing (sub)key; the LAST field is the primary.
+
+    Regression: taking the first 40-hex token returned the signing-subkey
+    fingerprint, so captured_by (a primary fp) never matched and every
+    subkey-signed push was rejected.
+    """
+    from engram.team.server_hooks import pre_receive
+
+    subkey_fp = OTHER_FP
+    primary_fp = VALID_FP
+    raw = (
+        "[GNUPG:] NEWSIG\n"
+        f"[GNUPG:] GOODSIG {subkey_fp[-16:]} Engram Test <t@example.com>\n"
+        f"[GNUPG:] VALIDSIG {subkey_fp} 2026-07-07 1751851200 0 4 0 22 8 00 {primary_fp}\n"
+        "[GNUPG:] TRUST_ULTIMATE 0 pgp\n"
+    )
+
+    class _CompletedProcess:
+        returncode = 0
+        stdout = ""
+        stderr = raw
+
+    monkeypatch.setattr(
+        "engram.team.server_hooks.pre_receive.subprocess.run",
+        lambda *args, **kwargs: _CompletedProcess(),
+    )
+    fp = pre_receive._committer_fingerprint("deadbeef")
+    assert fp == primary_fp

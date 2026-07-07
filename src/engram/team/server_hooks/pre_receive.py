@@ -251,14 +251,19 @@ def _committer_fingerprint(sha: str, *, cwd: str | None = None) -> str | None:
         return None
     # verify-commit emits its raw output to STDERR.
     text = (result.stderr or "") + (result.stdout or "")
-    # GOOD signature line carries the long-form fingerprint:
-    # "[GNUPG:] VALIDSIG <fpr> ..."
+    # Per gnupg doc/DETAILS, the VALIDSIG status line is:
+    #   [GNUPG:] VALIDSIG <sig-key-fpr> <date> <ts> <expire-ts> <ver>
+    #            <reserved> <pk-algo> <hash-algo> <sig-class> <primary-key-fpr>
+    # Field 1 is the key that MADE the signature (the signing subkey when
+    # one is used); the LAST field is the PRIMARY key fingerprint, which
+    # is what captured_by / members.yaml / stewards bind to. Taking the
+    # first fingerprint would reject every push signed with a separate
+    # signing subkey (the standard GPG setup).
     for line in text.splitlines():
         if "VALIDSIG" in line:
-            parts = line.split()
-            for p in parts:
-                if _is_valid_fingerprint(p):
-                    return _normalize_fingerprint(p)
+            candidates = [p for p in line.split() if _is_valid_fingerprint(p)]
+            if candidates:
+                return _normalize_fingerprint(candidates[-1])
     return None
 
 
