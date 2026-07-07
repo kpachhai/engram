@@ -140,13 +140,13 @@ min_engram_version: 0.4.0
 """
 
 
-def _members_yaml(member_fp: str) -> str:
+def _members_yaml(member_fp: str, *, revoked_fp: str | None = None) -> str:
+    revoked_block = f"revoked:\n  - {revoked_fp}\n" if revoked_fp else "revoked: []\n"
     return f"""\
 members:
   - fingerprint: {member_fp}
     display_name: steward
-revoked: []
-"""
+{revoked_block}"""
 
 
 def _thought_md(captured_by: str) -> str:
@@ -174,6 +174,7 @@ def _make_signed_team_repo(
     steward_fp: str,
     member_fp: str,
     captured_by: str,
+    revoked_fp: str | None = None,
 ) -> tuple[Path, str]:
     """Init a repo with canonical team files + one thought, subkey-signed."""
     repo = tmp_path / "team-repo"
@@ -188,7 +189,9 @@ def _make_signed_team_repo(
     engram_dir = repo / ".engram"
     engram_dir.mkdir()
     (engram_dir / "team-policy.yaml").write_text(_policy_yaml(steward_fp), encoding="utf-8")
-    (engram_dir / "members.yaml").write_text(_members_yaml(member_fp), encoding="utf-8")
+    (engram_dir / "members.yaml").write_text(
+        _members_yaml(member_fp, revoked_fp=revoked_fp), encoding="utf-8"
+    )
     thoughts = repo / "thoughts"
     thoughts.mkdir()
     (thoughts / "lesson.md").write_text(_thought_md(captured_by), encoding="utf-8")
@@ -241,3 +244,46 @@ def test_mismatched_captured_by_still_refused(tmp_path: Path, gpg_env: dict[str,
 
     assert code == 1
     assert "attribution_committer_mismatch" in stderr
+
+
+def test_revoked_key_push_refused(tmp_path: Path, gpg_env: dict[str, str]) -> None:
+    """A commit really signed by a revoked key must be refused (invariant 5)."""
+    primary_fp, subkey_fp = _gen_key_with_signing_subkey(gpg_env)
+    repo, sha = _make_signed_team_repo(
+        tmp_path,
+        gpg_env,
+        subkey_fp=subkey_fp,
+        steward_fp=primary_fp,
+        member_fp=primary_fp,
+        captured_by=primary_fp,
+        revoked_fp=primary_fp,
+    )
+
+    code, stderr = run_hook(
+        stdin_text=f"{_ZERO_SHA} {sha} refs/heads/main\n",
+        repo_path=str(repo),
+    )
+
+    assert code == 1
+    assert "team_membership_revoked" in stderr
+
+
+def test_non_enrolled_key_push_refused(tmp_path: Path, gpg_env: dict[str, str]) -> None:
+    """A commit really signed by a key absent from members.yaml is refused."""
+    primary_fp, subkey_fp = _gen_key_with_signing_subkey(gpg_env)
+    repo, sha = _make_signed_team_repo(
+        tmp_path,
+        gpg_env,
+        subkey_fp=subkey_fp,
+        steward_fp=primary_fp,
+        member_fp=OTHER_FP,  # roster lists someone else
+        captured_by=primary_fp,
+    )
+
+    code, stderr = run_hook(
+        stdin_text=f"{_ZERO_SHA} {sha} refs/heads/main\n",
+        repo_path=str(repo),
+    )
+
+    assert code == 1
+    assert "team_member_not_enrolled" in stderr

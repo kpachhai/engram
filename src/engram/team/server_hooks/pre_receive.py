@@ -14,8 +14,10 @@ Hook responsibilities:
   working dir).
 * For each pushed thought file: assert ``prefix`` in
   ``allowed_prefixes``, ``source`` in ``allowed_sources``,
-  ``portability != "block"``, AND ``captured_by`` matches the committer
-  GPG primary fingerprint.
+  ``portability != "block"``, AND ``captured_by`` is PRESENT and matches
+  the committer GPG primary fingerprint.
+* Enforce membership: the committer's primary fingerprint must be an
+  enrolled, non-revoked entry in ``members.yaml`` for any pushed thought.
 * For pushes mutating policy.yaml or members.yaml: refuses if committer
   is not in the OLD-tree's ``stewards:`` list.
 * Lists ALL violating files (not just the first) in the rejection
@@ -270,6 +272,30 @@ def _committer_fingerprint(sha: str, *, cwd: str | None = None) -> str | None:
 # === Validation logic ===
 
 
+def _extract_membership(members: dict[str, object]) -> tuple[set[str], set[str]]:
+    """Return (enrolled, revoked) fingerprint sets from parsed members.yaml.
+
+    Enrolled excludes revoked, mirroring ``MembersList.is_enrolled`` on the
+    client side - the server layer is canonical at push time (invariant 4).
+    """
+    revoked: set[str] = set()
+    raw_revoked = members.get("revoked")
+    if isinstance(raw_revoked, list):
+        revoked = {
+            _normalize_fingerprint(fp)
+            for fp in raw_revoked
+            if isinstance(fp, str) and _is_valid_fingerprint(fp)
+        }
+    enrolled: set[str] = set()
+    raw_members = members.get("members")
+    if isinstance(raw_members, list):
+        for entry in raw_members:
+            fp: object = entry.get("fingerprint") if isinstance(entry, dict) else entry
+            if isinstance(fp, str) and _is_valid_fingerprint(fp):
+                enrolled.add(_normalize_fingerprint(fp))
+    return enrolled - revoked, revoked
+
+
 def _is_indexes_path(path: str) -> bool:
     """True iff ``path`` is under ``.indexes/`` (machine-local index files)."""
     return path.startswith(".indexes/") or "/.indexes/" in path
@@ -280,6 +306,8 @@ def _validate_thought(
     content: str,
     policy: dict[str, object],
     committer_fp: str | None,
+    enrolled: set[str],
+    revoked: set[str],
 ) -> list[_Violation]:
     """Validate one pushed thought file against the team policy."""
     violations: list[_Violation] = []
@@ -332,18 +360,47 @@ def _validate_thought(
             ),
         )
 
+    # Server-canonical identity gate (invariants 4+5): every team-vault
+    # thought must be signed by an enrolled, non-revoked member.
+    if committer_fp is None:
+        violations.append(
+            _Violation(
+                file_path=path,
+                reason="attribution_committer_mismatch",
+                detail="no committer GPG fingerprint",
+            ),
+        )
+    elif committer_fp in revoked:
+        violations.append(
+            _Violation(
+                file_path=path,
+                reason="team_membership_revoked",
+                detail=f"committer={committer_fp}",
+            ),
+        )
+    elif committer_fp not in enrolled:
+        violations.append(
+            _Violation(
+                file_path=path,
+                reason="team_member_not_enrolled",
+                detail=f"committer={committer_fp}",
+            ),
+        )
+
+    # captured_by is REQUIRED: a missing field is the hand-edited /
+    # pre-team-client bypass this hook exists to reject, not a pass.
     captured_by = fm.get("captured_by")
-    if captured_by is not None:
+    if captured_by is None:
+        violations.append(
+            _Violation(
+                file_path=path,
+                reason="attribution_committer_mismatch",
+                detail="captured_by missing; team-vault thoughts require GPG attribution",
+            ),
+        )
+    elif committer_fp is not None:
         captured_by_norm = _normalize_fingerprint(str(captured_by))
-        if committer_fp is None:
-            violations.append(
-                _Violation(
-                    file_path=path,
-                    reason="attribution_committer_mismatch",
-                    detail="no committer GPG fingerprint",
-                ),
-            )
-        elif captured_by_norm != committer_fp:
+        if captured_by_norm != committer_fp:
             violations.append(
                 _Violation(
                     file_path=path,
@@ -412,11 +469,7 @@ def run_hook(
             continue
 
         policy = _parse_simple_yaml(policy_text)
-        # members_text is currently consulted only via the captured_by/
-        # committer mismatch check (which reads the GPG fingerprint via
-        # `git verify-commit`); future work may surface unenrolled-key
-        # refusals here too.
-        del members_text  # silence "unused" while preserving the read-side semantics
+        enrolled, revoked = _extract_membership(_parse_simple_yaml(members_text))
         stewards_raw = policy.get("stewards") or []
         stewards: set[str] = set()
         if isinstance(stewards_raw, list):
@@ -460,7 +513,9 @@ def run_hook(
             content = _ls_tree_at(upd.new_sha, path, cwd=repo_path)
             if content is None:
                 continue
-            all_violations.extend(_validate_thought(path, content, policy, committer_fp))
+            all_violations.extend(
+                _validate_thought(path, content, policy, committer_fp, enrolled, revoked)
+            )
 
     if not all_violations:
         return 0, ""

@@ -420,3 +420,46 @@ def test_committer_fingerprint_uses_primary_not_signing_subkey(
     )
     fp = pre_receive._committer_fingerprint("deadbeef")
     assert fp == primary_fp
+
+
+def test_hook_refuses_thought_missing_captured_by() -> None:
+    """Server-canonical attribution: a thought omitting captured_by must refuse.
+
+    Regression: the `if captured_by is not None` guard skipped the whole
+    attribution check, accepting hand-edited/pre-team-client thoughts with
+    no GPG binding (the exact bypass the server layer exists to reject).
+    """
+    md = _legit_thought_md().replace(f"captured_by: {VALID_FP}\n", "")
+    patches = _patch_hook(changed_files={"thoughts/anon.md": md})
+    code, stderr = _drive_hook(STDIN, patches)
+    assert code == 1
+    assert "attribution_committer_mismatch" in stderr
+
+
+def test_hook_refuses_revoked_committer() -> None:
+    """A revoked key must not be able to push thoughts (members.py promise)."""
+    members = f"""\
+members:
+  - fingerprint: {VALID_FP}
+    display_name: alice
+revoked:
+  - {VALID_FP}
+"""
+    patches = _patch_hook(
+        changed_files={"thoughts/x.md": _legit_thought_md()},
+        members_yaml=members,
+    )
+    code, stderr = _drive_hook(STDIN, patches)
+    assert code == 1
+    assert "team_membership_revoked" in stderr
+
+
+def test_hook_refuses_non_enrolled_committer() -> None:
+    """A key absent from members.yaml must not be able to push thoughts."""
+    patches = _patch_hook(
+        changed_files={"thoughts/x.md": _legit_thought_md(captured_by=OTHER_FP)},
+        committer_fingerprint=OTHER_FP,
+    )
+    code, stderr = _drive_hook(STDIN, patches)
+    assert code == 1
+    assert "team_member_not_enrolled" in stderr
