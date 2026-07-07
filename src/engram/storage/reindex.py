@@ -25,18 +25,24 @@ Each mode produces a :class:`ReindexReport` that ``engram doctor`` and
 from __future__ import annotations
 
 import enum
+import io
 import logging
 from collections.abc import Callable, Sequence
 from dataclasses import dataclass, field
 from datetime import UTC, datetime
 from pathlib import Path
 
+from ruamel.yaml import YAML
+from ruamel.yaml.error import YAMLError
+
 from engram.errors import IndexError as EngramIndexError
 from engram.errors import VaultReadOnlyError
+from engram.models import Thought
 from engram.storage.facade import VaultStorage
-from engram.storage.markdown import FrontmatterDrift, read_thought
+from engram.storage.markdown import FrontmatterDrift, read_thought, split_frontmatter
 from engram.storage.sqlite_queries import (
     delete_thought,
+    insert_thought,
     iter_all_thought_paths,
     list_thoughts_with_status,
     mark_embedding_status,
@@ -140,6 +146,66 @@ def _walk_markdown_files(thoughts_dir: Path) -> list[Path]:
     return sorted(p.resolve() for p in thoughts_dir.rglob("*.md") if p.is_file())
 
 
+def _legacy_created_at_from_file(md_path: Path) -> datetime | str | None:
+    """Read the optional ``legacy_created_at`` frontmatter field.
+
+    The :class:`Thought` model does not carry this field (it is migration
+    metadata consumed by consolidate staleness), so the reindex path reads
+    it straight from the file's frontmatter.
+    """
+    try:
+        text = md_path.read_text(encoding="utf-8")
+    except (OSError, UnicodeDecodeError):
+        return None
+    split = split_frontmatter(text)
+    if split is None:
+        return None
+    try:
+        data = YAML(typ="safe", pure=True).load(io.StringIO(split[0]))
+    except YAMLError:
+        return None
+    if not isinstance(data, dict):
+        return None
+    value = data.get("legacy_created_at")
+    return value if isinstance(value, datetime | str) else None
+
+
+def _insert_index_row(
+    storage: VaultStorage,
+    md_path: Path,
+    thought: Thought,
+    *,
+    embedding: Sequence[float] | None,
+    legacy_created_at: datetime | str | None,
+) -> None:
+    """Insert the SQLite row for an on-disk thought without touching markdown.
+
+    Reindex is index-only: the row is keyed on the file's actual on-disk
+    path and every frontmatter field is carried verbatim. Routing through
+    ``storage.capture()`` here would rewrite the markdown SoT, reset
+    ``updated_at``, drop ``captured_by``, and re-derive the path (spawning
+    a duplicate file when the slug drifted after a body edit).
+    """
+    insert_thought(
+        storage.conn,
+        thought_id=thought.id,
+        prefix=thought.prefix,
+        portability=thought.portability,
+        source=thought.source,
+        created_at=thought.created_at,
+        updated_at=thought.updated_at,
+        fingerprint=thought.fingerprint,
+        file_path=str(md_path.relative_to(storage.thoughts_dir)),
+        vault_name=thought.vault,
+        tags=thought.tags,
+        legacy_id=thought.legacy_id,
+        legacy_created_at=legacy_created_at,
+        schema_version=thought.schema_version,
+        embedding=embedding,
+        captured_by=thought.captured_by,
+    )
+
+
 def _incremental_reindex(
     storage: VaultStorage,
     *,
@@ -167,17 +233,12 @@ def _incremental_reindex(
         if existing is None:
             embedding = embed_fn(thought.content) if embed_fn is not None else None
             try:
-                storage.capture(
-                    content=thought.content,
-                    prefix=thought.prefix,
-                    portability=thought.portability,
-                    source=thought.source,
-                    tags=thought.tags,
-                    vault=thought.vault,
+                _insert_index_row(
+                    storage,
+                    md_path,
+                    thought,
                     embedding=embedding,
-                    legacy_id=thought.legacy_id,
-                    thought_id=thought.id,
-                    created_at=thought.created_at,
+                    legacy_created_at=_legacy_created_at_from_file(md_path),
                 )
                 report.inserted += 1
             except Exception:
@@ -245,6 +306,15 @@ def _full_reindex(
     report: ReindexReport,
 ) -> None:
     """Drop SQLite content, walk markdown, re-insert everything from scratch."""
+    # Files written before engram emitted legacy_created_at to frontmatter
+    # carry it only in the index; snapshot those values before the wipe so
+    # the rebuild does not lose consolidate's staleness anchors.
+    legacy_by_id: dict[str, str] = {
+        str(row[0]): row[1]
+        for row in storage.conn.execute(
+            "SELECT id, legacy_created_at FROM thoughts WHERE legacy_created_at IS NOT NULL"
+        )
+    }
     storage.conn.execute("DELETE FROM thought_embeddings")
     storage.conn.execute("DELETE FROM thoughts")
 
@@ -266,17 +336,14 @@ def _full_reindex(
             report.embedding_failures += 1
 
         try:
-            storage.capture(
-                content=thought.content,
-                prefix=thought.prefix,
-                portability=thought.portability,
-                source=thought.source,
-                tags=thought.tags,
-                vault=thought.vault,
+            _insert_index_row(
+                storage,
+                md_path,
+                thought,
                 embedding=embedding,
-                legacy_id=thought.legacy_id,
-                thought_id=thought.id,
-                created_at=thought.created_at,
+                legacy_created_at=(
+                    _legacy_created_at_from_file(md_path) or legacy_by_id.get(str(thought.id))
+                ),
             )
             report.inserted += 1
         except Exception:

@@ -340,7 +340,13 @@ class VaultStorage:
         )
 
         # Step 1: markdown write must succeed before anything else.
-        write_thought(thought, base_dir=self.thoughts_dir, extra_fields=extra_frontmatter)
+        # legacy_created_at is not carried on the Thought model, so it is
+        # emitted as a frontmatter extra - the markdown SoT must hold
+        # everything a full reindex needs to rebuild the row.
+        extras = dict(extra_frontmatter) if extra_frontmatter else {}
+        if legacy_created_at is not None and "legacy_created_at" not in extras:
+            extras["legacy_created_at"] = legacy_created_at.isoformat()
+        write_thought(thought, base_dir=self.thoughts_dir, extra_fields=extras or None)
 
         # Step 2 + 3: insert SQLite row (with embedding if provided).
         try:

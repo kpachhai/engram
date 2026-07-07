@@ -11,6 +11,7 @@ from engram.storage.facade import VaultStorage
 from engram.storage.markdown import write_thought
 from engram.storage.reindex import ReindexMode, reindex_vault
 from engram.storage.sqlite_queries import get_thought_row
+from engram.utils.fingerprint import compute_fingerprint
 
 _DIM = 384
 
@@ -246,3 +247,107 @@ def test_report_records_duration_and_mode(vault: VaultStorage):
     report = reindex_vault(vault, mode=ReindexMode.INCREMENTAL, embed_fn=_embed_stub)
     assert report.mode is ReindexMode.INCREMENTAL
     assert report.duration_seconds >= 0.0
+
+
+# === index-only contract: reindex must never rewrite the markdown SoT ===
+
+_TEAM_FP = "1234567890ABCDEF1234567890ABCDEF12345678"  # pii-allow: synthetic test fingerprint
+
+
+def test_full_reindex_preserves_markdown_and_row_metadata(vault: VaultStorage):
+    """--full must not rewrite markdown; captured_by + updated_at survive.
+
+    Regression: _full_reindex used to route through storage.capture(),
+    which rewrote the file, reset updated_at to created_at, and dropped
+    captured_by from both the row and the markdown.
+    """
+    captured = vault.capture(
+        content="[Lesson] team attribution survives reindex",
+        embedding=_vec_a(),
+        captured_by=_TEAM_FP,
+    )
+    assert vault.update_body(
+        captured.id,
+        new_content="[Lesson] edited after capture",
+        embedding=_vec_b(),
+    )
+    row_before = get_thought_row(vault.conn, captured.id)
+    assert row_before is not None
+    assert row_before["captured_by"] == _TEAM_FP
+    assert row_before["updated_at"] > row_before["created_at"]
+    bytes_before = captured.file_path.read_bytes()
+
+    report = reindex_vault(vault, mode=ReindexMode.FULL, embed_fn=_embed_stub)
+
+    assert report.inserted == 1
+    assert captured.file_path.read_bytes() == bytes_before
+    row_after = get_thought_row(vault.conn, captured.id)
+    assert row_after is not None
+    assert row_after["captured_by"] == _TEAM_FP
+    assert row_after["updated_at"] == row_before["updated_at"]
+    assert row_after["created_at"] == row_before["created_at"]
+
+
+def test_full_reindex_no_duplicate_file_on_slug_drift(vault: VaultStorage):
+    """A hand-edited body (slug source drifted) must not spawn a second file."""
+    captured = vault.capture(
+        content="[Lesson] original body text here",
+        embedding=_vec_a(),
+    )
+    new_content = "[Lesson] a wholly different opening line"
+    edited = captured.model_copy(
+        update={
+            "content": new_content,
+            "fingerprint": compute_fingerprint(new_content),
+        }
+    )
+    write_thought(edited, base_dir=vault.thoughts_dir)
+
+    reindex_vault(vault, mode=ReindexMode.FULL, embed_fn=_embed_stub)
+
+    md_files = list(vault.thoughts_dir.rglob("*.md"))
+    assert len(md_files) == 1, f"duplicate markdown files created: {md_files}"
+    row = get_thought_row(vault.conn, captured.id)
+    assert row is not None
+    assert (vault.thoughts_dir / row["file_path"]).resolve() == captured.file_path.resolve()
+
+
+def test_full_reindex_preserves_legacy_created_at(vault: VaultStorage):
+    """Migrated thoughts keep their legacy_created_at through --full."""
+    legacy_dt = datetime(2020, 1, 1, tzinfo=UTC)
+    captured = vault.capture(
+        content="[Lesson] migrated from another store",
+        embedding=_vec_a(),
+        legacy_id="ob-123",
+        legacy_created_at=legacy_dt,
+    )
+    row_before = get_thought_row(vault.conn, captured.id)
+    assert row_before is not None
+    assert row_before["legacy_created_at"] is not None
+
+    reindex_vault(vault, mode=ReindexMode.FULL, embed_fn=_embed_stub)
+
+    row_after = get_thought_row(vault.conn, captured.id)
+    assert row_after is not None
+    assert row_after["legacy_created_at"] == row_before["legacy_created_at"]
+    assert row_after["legacy_id"] == "ob-123"
+
+
+def test_incremental_missing_row_insert_is_index_only(vault: VaultStorage):
+    """The incremental missing-row branch must not rewrite markdown either."""
+    captured = vault.capture(
+        content="[Lesson] incremental attribution",
+        embedding=_vec_a(),
+        captured_by=_TEAM_FP,
+    )
+    bytes_before = captured.file_path.read_bytes()
+    vault.conn.execute("DELETE FROM thoughts WHERE id = ?", (str(captured.id),))
+    vault.conn.execute("DELETE FROM thought_embeddings WHERE thought_id = ?", (str(captured.id),))
+
+    report = reindex_vault(vault, mode=ReindexMode.INCREMENTAL, embed_fn=_embed_stub)
+
+    assert report.inserted == 1
+    assert captured.file_path.read_bytes() == bytes_before
+    row = get_thought_row(vault.conn, captured.id)
+    assert row is not None
+    assert row["captured_by"] == _TEAM_FP
