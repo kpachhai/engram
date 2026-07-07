@@ -38,6 +38,7 @@ from engram.diagnostics.check_codes import (
 
 if TYPE_CHECKING:
     from engram.config.models import UserConfig
+    from engram.diagnostics.doctor import DoctorReport
     from engram.team.identity import GpgIdentity
     from engram.team.members import MembersList
 
@@ -271,6 +272,66 @@ def check_branch_drift(
     return rows
 
 
+def run_phase4_checks(
+    report: DoctorReport,
+    user_config: UserConfig,
+    *,
+    primary_vault_path: Path | None,
+    gpg_identity: GpgIdentity | None = None,
+) -> None:
+    """Fold the team-vault (phase4) rows into the doctor report.
+
+    One-shot doctor scope: ``check_serve_config_stale`` and
+    ``check_branch_drift`` need a live serve process's state (config
+    load time / mount-time storages) and cannot fire from a fresh
+    doctor process, so they are not run here.
+    """
+    from ruamel.yaml import YAML
+
+    from engram.diagnostics.doctor import CheckStatus
+    from engram.team.members import MembersList
+
+    status_map = {
+        "OK": CheckStatus.OK,
+        "INFO": CheckStatus.OK,
+        "WARN": CheckStatus.WARN,
+        "FAIL": CheckStatus.FAIL,
+    }
+
+    team_vaults = [v for v in user_config.vaults if v.role == "team-write"]
+    members_lookup: dict[str, MembersList] = {}
+    yaml_safe = YAML(typ="safe", pure=True)
+    for vault in team_vaults:
+        members_path = Path(vault.path).expanduser() / ".engram" / "members.yaml"
+        try:
+            members_lookup[vault.name] = MembersList.from_yaml_dict(
+                yaml_safe.load(members_path.read_text(encoding="utf-8")) or {}
+            )
+        except Exception as exc:
+            _log.warning("doctor: could not load %s: %s", members_path, exc)
+
+    if gpg_identity is None and team_vaults:
+        from engram.team.identity import GpgIdentity as _GpgIdentity
+
+        candidate = _GpgIdentity()
+        if candidate.is_gpg_available():
+            gpg_identity = candidate
+
+    rows: list[Phase4DoctorRow] = [check_multiple_team_write_vaults(user_config)]
+    rows.extend(
+        check_team_member_enrollment(
+            config=user_config,
+            members_lookup=members_lookup,
+            gpg_identity=gpg_identity,
+        )
+    )
+    rows.extend(check_pending_pushes(config=user_config))
+    rows.extend(check_orphan_quarantine(personal_vault_path=primary_vault_path))
+    rows.extend(check_routing_rule_priority_collision(user_config))
+    for row in rows:
+        report.add(row.code, status_map[row.status], row.detail)
+
+
 __all__ = [
     "DoctorStatus",
     "Phase4DoctorRow",
@@ -281,4 +342,5 @@ __all__ = [
     "check_routing_rule_priority_collision",
     "check_serve_config_stale",
     "check_team_member_enrollment",
+    "run_phase4_checks",
 ]

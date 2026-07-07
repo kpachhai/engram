@@ -95,6 +95,26 @@ def register(app: typer.Typer) -> None:
         if user_config is not None and len(user_config.vaults) > 1:
             _append_phase3_rows(report=report, user_config=user_config)
 
+        # Team-vault checks: surfaced whenever a team-write vault is
+        # configured (enrollment, pending pushes, orphan quarantine,
+        # routing-priority collisions).
+        if user_config is not None and any(v.role == "team-write" for v in user_config.vaults):
+            from engram.diagnostics.phase4_checks import run_phase4_checks
+
+            try:
+                run_phase4_checks(
+                    report,
+                    user_config,
+                    primary_vault_path=config.vault_path,
+                )
+            except Exception as exc:
+                report.add(
+                    "phase4_checks_internal",
+                    CheckStatus.FAIL,
+                    "team-vault diagnostics raised an unexpected error",
+                    detail=str(exc),
+                )
+
         for check in report.checks:
             color = _STATUS_COLOR[check.status]
             label = check.status.value.upper()

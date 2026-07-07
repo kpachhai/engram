@@ -21,7 +21,7 @@ from pathlib import Path
 
 import pytest
 
-VALID_FP = "1234567890ABCDEF1234567890ABCDEF12345678"
+VALID_FP = "1234567890ABCDEF1234567890ABCDEF12345678"  # pii-allow: synthetic test fingerprint
 
 
 def _engram_bin() -> str:
@@ -229,3 +229,57 @@ def test_engram_team_vault_setup_writes_canonical_files_with_real_setup(tmp_path
     assert (tmp_path / "vault" / ".engram" / "members.yaml").exists()
     assert (tmp_path / "vault" / ".gitignore").exists()
     assert (tmp_path / "vault" / ".engram" / "setup_complete").exists()
+
+
+# ----- doctor surfaces team-vault (phase4) rows ----------------------
+
+
+def test_doctor_emits_phase4_rows_on_team_write_config(tmp_path: Path) -> None:
+    """`engram doctor` on a team-write configuration must emit phase4 rows.
+
+    The local key is deliberately NOT in members.yaml, so the
+    team_member_not_enrolled FAIL row must appear (it also appears when
+    no GPG key exists at all - both paths prove the family is wired).
+    """
+    import tempfile
+
+    with tempfile.TemporaryDirectory(prefix="eng-smk-p4-", dir="/tmp") as root:
+        home = Path(root)
+        primary = home / "vault-a"
+        team = home / "team-x"
+        for vault in (primary, team):
+            (vault / "thoughts").mkdir(parents=True)
+            (vault / ".indexes").mkdir(parents=True)
+        (team / ".engram").mkdir()
+        (team / ".engram" / "members.yaml").write_text(
+            f"members:\n  - fingerprint: {VALID_FP}\nrevoked: []\n",
+            encoding="utf-8",
+        )
+        cfg_dir = home / ".config" / "engram"
+        cfg_dir.mkdir(parents=True)
+        (cfg_dir / "config.yaml").write_text(
+            f"""\
+default_user: engram-test
+vaults:
+  - name: vault-a
+    path: {primary}
+    role: primary
+  - name: team-x
+    path: {team}
+    role: team-write
+    remote_url: git@example.com:team/x.git
+""",
+            encoding="utf-8",
+        )
+        result = subprocess.run(  # noqa: S603 - test-only, controlled args
+            [_engram_bin(), "doctor"],
+            capture_output=True,
+            text=True,
+            check=False,
+            timeout=120.0,
+            env={**_smoke_env(), "HOME": str(home)},
+        )
+        assert "team_member_not_enrolled" in result.stdout, (
+            f"phase4 doctor rows absent (exit={result.returncode}):\n"
+            f"stdout: {result.stdout}\nstderr: {result.stderr}"
+        )
