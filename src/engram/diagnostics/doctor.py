@@ -714,6 +714,20 @@ def run_diagnostics(
             detail=str(exc),
         )
 
+    try:
+        # Imported lazily: daemon_checks uses CheckStatus from this module.
+        from engram.diagnostics.daemon_checks import run_daemon_checks
+
+        run_daemon_checks(report, config)
+    except Exception as exc:
+        _log.exception("daemon diagnostics raised: %s", exc)
+        report.add(
+            "daemon_checks_internal",
+            CheckStatus.FAIL,
+            "daemon diagnostics raised an unexpected error",
+            detail=str(exc),
+        )
+
     return report
 
 

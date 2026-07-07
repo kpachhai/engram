@@ -18,7 +18,7 @@ import time
 from dataclasses import dataclass
 from datetime import UTC, datetime
 from pathlib import Path
-from typing import Literal
+from typing import TYPE_CHECKING, Literal
 
 from engram.daemon.socket_paths import (
     _INDEXES_SUBDIR,
@@ -35,6 +35,10 @@ from engram.diagnostics.check_codes import (
     DAEMON_UPTIME_EXCESSIVE,
 )
 from engram.errors import DaemonError
+
+if TYPE_CHECKING:
+    from engram.config.models import EffectiveConfig
+    from engram.diagnostics.doctor import DoctorReport
 
 DaemonDoctorStatus = Literal["OK", "INFO", "WARN", "FAIL"]
 
@@ -281,6 +285,38 @@ def check_daemon_socket_path_too_long(vault_path: Path) -> DaemonDoctorRow:
     )
 
 
+def run_daemon_checks(report: DoctorReport, config: EffectiveConfig) -> None:
+    """Fold the six daemon-mode rows into the doctor report.
+
+    ``INFO`` maps to :attr:`CheckStatus.OK` - the doctor report has no
+    info tier and INFO rows are advisory, not degraded.
+    """
+    from engram.diagnostics.doctor import CheckStatus
+
+    status_map = {
+        "OK": CheckStatus.OK,
+        "INFO": CheckStatus.OK,
+        "WARN": CheckStatus.WARN,
+        "FAIL": CheckStatus.FAIL,
+    }
+    rows = [check_daemon_socket_path_too_long(config.vault_path)]
+    # resolve_paths refuses over-limit UDS paths with DaemonError; the
+    # path-length row above already carries the WARN + remediation, and
+    # no daemon can exist there for the other checks to inspect.
+    with contextlib.suppress(DaemonError):
+        rows.extend(
+            [
+                check_daemon_running(config.vault_path),
+                check_daemon_socket_permissions(config.vault_path),
+                check_daemon_socket_stale(config.vault_path),
+                check_daemon_log_rotation_healthy(config.vault_path),
+                check_daemon_uptime_excessive(config.vault_path),
+            ]
+        )
+    for row in rows:
+        report.add(row.code, status_map[row.status], row.detail)
+
+
 __all__ = [
     "DaemonDoctorRow",
     "DaemonDoctorStatus",
@@ -290,4 +326,5 @@ __all__ = [
     "check_daemon_socket_permissions",
     "check_daemon_socket_stale",
     "check_daemon_uptime_excessive",
+    "run_daemon_checks",
 ]

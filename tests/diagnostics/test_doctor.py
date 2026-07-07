@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import tempfile
+from collections.abc import Iterator
 from pathlib import Path
 
 import pytest
@@ -81,11 +83,24 @@ def _stub_factory(_config: EffectiveConfig) -> EmbeddingProvider:
     return _StubEmbedder()
 
 
+@pytest.fixture
+def short_vault() -> Iterator[Path]:
+    """Daemon-legal vault root.
+
+    The daemon doctor rows treat an over-limit UDS socket path (104
+    bytes on macOS) as a WARN, and pytest's tmp_path is routinely
+    longer than that on macOS. Status-sensitive tests use this short
+    mkdtemp root so "all green" stays achievable.
+    """
+    with tempfile.TemporaryDirectory(prefix="eng-doc-", dir="/tmp") as root:
+        yield Path(root)
+
+
 # === fresh vault: all green (or near-green) ===
 
 
-def test_fresh_vault_all_ok(tmp_path: Path):
-    config = _make_config(tmp_path)
+def test_fresh_vault_all_ok(short_vault: Path):
+    config = _make_config(short_vault)
     # Pre-create an empty SQLite db so the dim/model settings get recorded.
     storage = VaultStorage(
         thoughts_dir=config.thoughts_dir,
@@ -119,8 +134,8 @@ def test_missing_thoughts_dir_is_fail(tmp_path: Path):
     assert report.exit_code == 2
 
 
-def test_pending_embeddings_warn(tmp_path: Path):
-    config = _make_config(tmp_path)
+def test_pending_embeddings_warn(short_vault: Path):
+    config = _make_config(short_vault)
     storage = VaultStorage(
         thoughts_dir=config.thoughts_dir,
         index_db_path=config.index_dir / "engram.db",
@@ -265,8 +280,8 @@ def test_repair_with_remove_orphans(tmp_path: Path):
 # === DoctorReport behavior ===
 
 
-def test_exit_code_zero_on_all_ok(tmp_path: Path):
-    config = _make_config(tmp_path)
+def test_exit_code_zero_on_all_ok(short_vault: Path):
+    config = _make_config(short_vault)
     storage = VaultStorage(
         thoughts_dir=config.thoughts_dir,
         index_db_path=config.index_dir / "engram.db",
@@ -345,9 +360,9 @@ def test_cache_integrity_ok_when_snapshot_intact(tmp_path: Path):
     assert "snapshot intact" in check.message
 
 
-def test_cache_integrity_warn_when_snapshot_partial(tmp_path: Path):
+def test_cache_integrity_warn_when_snapshot_partial(short_vault: Path, tmp_path: Path):
     """Reproduces the broken-partial cache mode: symlinks exist, blobs don't."""
-    config = _make_config(tmp_path)
+    config = _make_config(short_vault)
     storage = VaultStorage(
         thoughts_dir=config.thoughts_dir,
         index_db_path=config.index_dir / "engram.db",
@@ -360,6 +375,7 @@ def test_cache_integrity_warn_when_snapshot_partial(tmp_path: Path):
     # Drop the model_optimized.onnx file - the exact failure mode that triggers
     # ONNX NO_SUCHFILE on first embed call.
     partial = [f for f in expected if f != "model_optimized.onnx"]
+    # The cache-isolation autouse fixture points FastEmbed at tmp_path.
     _seed_snapshot(tmp_path, files=partial)
 
     report = run_diagnostics(config, embedder_factory=_stub_factory)
@@ -406,3 +422,31 @@ def test_cache_integrity_warn_when_symlink_target_missing(tmp_path: Path):
     assert check.status is CheckStatus.WARN
     assert check.detail is not None
     assert "model_optimized.onnx" in check.detail
+
+
+# === daemon-mode rows fold into the doctor report ===
+
+
+def test_run_diagnostics_includes_daemon_rows(short_vault: Path):
+    """Every ALL_DAEMON_CHECK_CODES row must appear in the doctor report.
+
+    Regression: the daemon check functions existed (and were unit-tested)
+    but had zero callers in src/, so `engram doctor` never surfaced stale
+    sockets, bad socket perms, or over-long UDS paths.
+    """
+    from engram.diagnostics.check_codes import ALL_DAEMON_CHECK_CODES
+
+    config = _make_config(short_vault)
+    storage = VaultStorage(
+        thoughts_dir=config.thoughts_dir,
+        index_db_path=config.index_dir / "engram.db",
+        embedding_dim=_DIM,
+        embedding_model_name=DEFAULT_EMBEDDING_MODEL,
+    )
+    storage.close()
+
+    report = run_diagnostics(config, embedder_factory=_stub_factory, skip_sync_checks=True)
+
+    names = {c.name for c in report.checks}
+    missing = set(ALL_DAEMON_CHECK_CODES) - names
+    assert not missing, f"daemon doctor rows missing from report: {sorted(missing)}"

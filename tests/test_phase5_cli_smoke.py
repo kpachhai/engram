@@ -425,3 +425,17 @@ def test_daemon_logs_negative_tail_rejected(smoke_vault: Path) -> None:
         expect_zero=False,
     )
     assert result.returncode != 0
+
+
+# ----- doctor surfaces daemon-mode rows ------------------------------
+
+
+def test_doctor_emits_daemon_check_rows(smoke_vault: Path) -> None:
+    """`engram doctor` output must include the daemon-mode check family."""
+    result = _run(
+        ["doctor", "--config", str(smoke_vault / "engram.config.yaml")],
+        expect_zero=False,  # model-cache warnings are fine; wiring is the target
+    )
+    assert "daemon_running" in result.stdout, (
+        f"daemon doctor rows absent from `engram doctor` output:\n{result.stdout}"
+    )
