@@ -9,7 +9,49 @@ The MCP tool surface is committed-stable for the v1.x lifetime per the API stabi
 
 ## [Unreleased]
 
+### Security
+
+- Team-vault pre-receive hook: committer identity now resolves the GPG
+  primary-key fingerprint from VALIDSIG (subkey-signed pushes were
+  universally rejected before); `captured_by` is now required on every
+  pushed thought, and revoked or never-enrolled keys are refused.
+  Covered by a real-GPG integration suite (ephemeral keyrings,
+  subkey-signed commits).
+- `sync.signed_pull_required` is now enforced on every pull path
+  (coordinator rebase gate, `explicit_pull`, `engram sync --pull`,
+  startup pull) via a trusted-keys verify-commit gate that fails closed
+  on a missing/empty allow-list. The control was previously documented
+  but inert, and `verify_commit`'s VALIDSIG parsing could never match
+  real gpg output.
+
+### Fixed
+
+- `engram reindex --full` is now index-only: it no longer rewrites the
+  markdown source of truth, preserves `updated_at` / `captured_by` /
+  `legacy_created_at`, and no longer creates duplicate files after a
+  body edit drifted the slug. Capture also persists `legacy_created_at`
+  into frontmatter so the SoT carries everything a rebuild needs.
+- Sync coordinator surfaces `git commit` failures (re-enqueues the
+  batch, transitions to manual-resolution) instead of silently
+  reporting success and dropping captures from the pipeline.
+- `engram serve` now loads each team-write vault's policy + members and
+  the operator GPG identity, so team-write captures over MCP work.
+- Multi-statement SQLite index writes run inside real transactions;
+  under autocommit the previous `with conn:` blocks could half-commit
+  (thought row marked ok with no embedding row).
+- `engram doctor` now runs the daemon-mode and team-vault check
+  families (stale sockets, socket perms, enrollment, orphan quarantine,
+  routing collisions) that previously had no callers.
+- `engram move-thought` performs the relocation (was a stub exiting 0);
+  `engram daemon logs --tail 0` prints nothing instead of the whole
+  log, and negative `--tail` values are rejected.
+
 ### Added
+
+- `engram team-vault rotate-member-key <old-fp> <new-fp>` (steward-only
+  key rotation per ADR 007 Q6). Members serialization now goes through
+  one canonical writer that round-trips `superseded_by` and
+  force-quotes fingerprints.
 
 - **`engram consolidate` - report-then-action vault curation.** Four
   detection passes (exact-duplicate keep-newest, near-duplicate
