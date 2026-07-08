@@ -120,7 +120,7 @@ Test taxonomy:
 - `tests/test_phase4_cli_smoke.py` — **hermetic CLI smoke against the installed binary**. This catches wiring bugs the handler-level tests miss (Typer registration, argument plumbing, exit codes, --help output). Add a smoke test for every new CLI subcommand.
 - `tests/team/test_phase4_exit_criteria.py` — 23-scenario integration suite covering the team-vault pinned invariants end-to-end via in-process composition.
 
-**Tests must be hermetic.** No network calls (use `httpx.MockTransport` for HTTP-backed providers). No real GPG keyring (mock `gpg --list-secret-keys` output via `subprocess` substitute). No cross-test SQLite reuse (every test owns its own `tmp_path`).
+**Tests must be hermetic.** No network calls (use `httpx.MockTransport` for HTTP-backed providers). Never touch the USER's GPG keyring: unit tests mock `gpg --list-secret-keys` output via a `subprocess` substitute; security-boundary tests (signature parsing, attribution, enrollment) instead use a real `gpg` in an ephemeral `GNUPGHOME` on a short `/tmp` path with a cert-only primary + signing subkey, skipif-gated when gpg is absent - see `tests/team/test_pre_receive_gpg_integration.py` (mock-only coverage of gpg status output shipped a P0). No cross-test SQLite reuse (every test owns its own `tmp_path`).
 
 ## Common operations
 
