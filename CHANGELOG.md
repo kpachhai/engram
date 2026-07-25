@@ -9,6 +9,8 @@ The MCP tool surface is committed-stable for the v1.x lifetime per the API stabi
 
 ## [Unreleased]
 
+## [0.6.0] - 2026-07-25 — Consolidation
+
 ### Security
 
 - Team-vault pre-receive hook: committer identity now resolves the GPG
