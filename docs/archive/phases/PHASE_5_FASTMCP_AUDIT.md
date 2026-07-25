@@ -108,8 +108,8 @@ The shared `FastMCP` is constructed once at daemon start; each accepted UDS conn
 
 ## Absolute paths referenced
 
-- `/Users/kpachhai/repos/github.com/kpachhai/engram/.venv/lib/python3.11/site-packages/fastmcp/server/server.py` (FastMCP, `_mcp_server` at line 376)
-- `/Users/kpachhai/repos/github.com/kpachhai/engram/.venv/lib/python3.11/site-packages/fastmcp/server/low_level.py` (`LowLevelServer.run` at line 225)
-- `/Users/kpachhai/repos/github.com/kpachhai/engram/.venv/lib/python3.11/site-packages/fastmcp/server/mixins/transport.py` (`run_stdio_async` at line 184 — upstream usage pattern)
-- `/Users/kpachhai/repos/github.com/kpachhai/engram/.venv/lib/python3.11/site-packages/mcp/shared/message.py` (`SessionMessage` at line 46)
-- `/Users/kpachhai/repos/github.com/kpachhai/engram/.venv/lib/python3.11/site-packages/fastmcp-3.2.4.dist-info/METADATA` (version pin)
+- `<repo>/.venv/lib/python3.11/site-packages/fastmcp/server/server.py` (FastMCP, `_mcp_server` at line 376)
+- `<repo>/.venv/lib/python3.11/site-packages/fastmcp/server/low_level.py` (`LowLevelServer.run` at line 225)
+- `<repo>/.venv/lib/python3.11/site-packages/fastmcp/server/mixins/transport.py` (`run_stdio_async` at line 184 — upstream usage pattern)
+- `<repo>/.venv/lib/python3.11/site-packages/mcp/shared/message.py` (`SessionMessage` at line 46)
+- `<repo>/.venv/lib/python3.11/site-packages/fastmcp-3.2.4.dist-info/METADATA` (version pin)

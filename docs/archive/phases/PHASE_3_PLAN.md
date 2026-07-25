@@ -1,7 +1,7 @@
 # engram Phase 3 - Multi-vault foundation + friend-share + optional LLM (Implementation Plan)
 
 **Authored**: 2026-05-05 via `superpowers:deep-plan` (3 parallel sub-agents + critique + 1 revision pass)
-**Spec sources** (live in the maintainer's idea-forge planning repo at `~/repos/github.com/kpachhai/idea-forge/docs/superpowers/specs/2026-05-04-engram/`):
+**Spec sources** (live in the maintainer's idea-forge planning repo at `<your-meta-stack-repo>/docs/superpowers/specs/2026-05-04-engram/`):
 - `03-ROADMAP.md` Phase 3 (9 deliverables + exit criteria - enumerated below)
 - `02-TECHNICAL_DESIGN.md` Vault Model + Cross-vault search query structure + Optional LLM-Mediated Features
 - `06-SECURITY.md` Boundary B2 (read-only role) + B4 (portability) + bundle import constraints (1 MB/file + 4 GB/bundle + safe_load + path-traversal refusal + id-collision refusal)

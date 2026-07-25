@@ -5,7 +5,8 @@ members, and the disaster-recovery flows.
 
 ## Prerequisites
 
-* engram installed (`pip install engram-mcp-server` ≥ 0.4.0).
+* engram installed (`pip install engram-mcp-server` ≥ 0.6.0 — the first
+  published release; earlier version numbers exist only in the git history).
 * GPG installed (`brew install gnupg` / `apt install gnupg`).
 * A git remote you control (Forgejo / Gitea / GitLab CE / GitHub
   Enterprise / etc.) where you can install pre-receive hooks.

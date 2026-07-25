@@ -48,22 +48,22 @@ Uptime concerns translate cleanly to local-first patterns:
 | "What if my disk fails?" | Restore from any other machine that has cloned the vault. Or restore from the git remote. The markdown files ARE the data; nothing to recover from a database. |
 | "What if I need to access my memory from a device I haven't set up yet?" | Clone the vault repo + install engram on the new device. Five minutes. See `docs/QUICKSTART.md` + `docs/MULTI_MACHINE_SETUP.md`. |
 
-## The maintainer-specific case: kpachhai/memex
+## The private-vault-repo pattern
 
-If you're the engram maintainer (or following the same convention), your personal vault lives in a git repo named `memex`. The repo is private and holds:
+A common convention: your personal vault lives in its own private git repo (the maintainer's is named `memex`). The repo holds:
 
 - `thoughts/` — the markdown source of truth
 - `engram.config.yaml` — vault config (committed)
 - `.gitignore` — ensures `.indexes/` and `.engram/` are never committed
 
-You DON'T deploy `memex` anywhere. You:
+You DON'T deploy that repo anywhere. You:
 
-1. Push it to a private git remote you control (typically `git@github.com:kpachhai/memex.git`).
+1. Push it to a private git remote you control (e.g. `git@github.com:<your-username>/<your-vault-repo>.git`).
 2. Clone it on every personal device you want AI memory on.
 3. Run `engram serve` on each device against its local clone.
 4. Let the sync coordinator handle push/pull.
 
-The full setup walkthrough lives in `~/repos/github.com/kpachhai/idea-forge/workspace/engram/MEMEX_SETUP_GUIDE.md` (in the maintainer's planning repo).
+The full setup walkthrough lives in `<your-meta-stack-repo>/workspace/engram/MEMEX_SETUP_GUIDE.md` (in the maintainer's planning repo).
 
 ## What about teams?
 
@@ -97,7 +97,7 @@ These are designed-for, not built. The watch trigger is real-org adoption (a 50+
 - **Don't deploy engram to the cloud.** It's local-first by design.
 - **Sync the markdown vault via git** to a private remote you control.
 - **Run `engram serve` on each device** that has an AI client.
-- **Your `kpachhai/memex` repo is the right pattern.** See `MEMEX_SETUP_GUIDE.md` in the planning workspace for the full walkthrough.
+- **A private vault repo is the right pattern.** See `MEMEX_SETUP_GUIDE.md` in the planning workspace for the full walkthrough.
 - **"Always available" comes from "the data is on every device,"** not from "the server is in the cloud."
 
 ## See also

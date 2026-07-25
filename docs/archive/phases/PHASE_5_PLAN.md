@@ -8,7 +8,7 @@
 
 **Tech Stack:** Python 3.11+, `fastmcp` (engram's pinned MCP server), `asyncio`, `fcntl.flock`, stdio JSON-RPC over UDS, `typer` CLI, Pydantic v2 strict, ruff + mypy strict, pytest + Hypothesis.
 
-**Spec source:** `~/repos/github.com/kpachhai/engram/docs/superpowers/specs/2026-05-12-engram-daemon-mode-design.md` (the canonical design document — all design decisions traceable there).
+**Spec source:** `<repo>/docs/superpowers/specs/2026-05-12-engram-daemon-mode-design.md` (the canonical design document — all design decisions traceable there).
 
 **Status:** Ready to execute (post-deep-plan synthesis with 3-sub-agent critique + revision pass).
 
@@ -255,7 +255,7 @@ Per engram CLAUDE.md "Code Project Completion Gate":
 **Operational criterion** (deferred to live deployment):
 - **Phase 5 Op #1:** Maintainer runs 2 concurrent Claude Code sessions against memex personal vault for ≥7 consecutive days. `engram daemon status` checked daily for proxy count + uptime + error counter. Laptop sleep/wake cycles survived without orphaned sockets. No fallback to `--no-daemon` or per-session vaults.
 
-Added to `~/repos/github.com/kpachhai/idea-forge/workspace/engram/PENDING_TASKS.md` in Layer H.
+Added to `<your-meta-stack-repo>/workspace/engram/PENDING_TASKS.md` in Layer H.
 
 ---
 
@@ -264,7 +264,7 @@ Added to `~/repos/github.com/kpachhai/idea-forge/workspace/engram/PENDING_TASKS.
 **Goal:** Establish the foundational types, configuration surface, path helpers, and doctor scaffolding that Layers B-H depend on. Reconcile the spec with deep-plan sub-agent findings.
 
 **Files this layer creates or modifies:**
-- Modify: `~/repos/github.com/kpachhai/engram/docs/superpowers/specs/2026-05-12-engram-daemon-mode-design.md` (Amendments 1-11 above)
+- Modify: `<repo>/docs/superpowers/specs/2026-05-12-engram-daemon-mode-design.md` (Amendments 1-11 above)
 - Modify: `src/engram/errors.py` (add 5 new error classes)
 - Modify: `src/engram/config/models.py` (add `DaemonConfig`; wire into `EffectiveConfig`)
 - Modify: `src/engram/config/loader.py` (5-layer precedence for `DaemonConfig`)
@@ -300,7 +300,7 @@ The new tasks are described inline below in numeric order.
 ### Task A0: Apply spec amendments
 
 **Files:**
-- Modify: `~/repos/github.com/kpachhai/engram/docs/superpowers/specs/2026-05-12-engram-daemon-mode-design.md`
+- Modify: `<repo>/docs/superpowers/specs/2026-05-12-engram-daemon-mode-design.md`
 
 - [ ] **Step 1: Apply the 11 amendments from the "Phase 5 SPEC AMENDMENTS" section above**
 
@@ -308,14 +308,14 @@ Each amendment is a delta against the spec's existing section. Apply via `Edit` 
 
 - [ ] **Step 2: Verify amendments applied**
 
-Run: `grep -n "Amendment\\|wal_recovery_grace_seconds\\|connection_idle_timeout_seconds\\|max_frame_bytes\\|shutdown_drain_seconds\\|coordinator_flush_seconds\\|log_redact_thought_content\\|connect_during_drain" ~/repos/github.com/kpachhai/engram/docs/superpowers/specs/2026-05-12-engram-daemon-mode-design.md`
+Run: `grep -n "Amendment\\|wal_recovery_grace_seconds\\|connection_idle_timeout_seconds\\|max_frame_bytes\\|shutdown_drain_seconds\\|coordinator_flush_seconds\\|log_redact_thought_content\\|connect_during_drain" <repo>/docs/superpowers/specs/2026-05-12-engram-daemon-mode-design.md`
 Expected: 8+ matches across the amended sections.
 
 ### Task A0.5: FastMCP API introspection sub-agent (NEW — critique S2 + S8)
 
 **Files:**
-- Inspect: `~/repos/github.com/kpachhai/engram/.venv/lib/python*/site-packages/fastmcp/`
-- Inspect: `~/repos/github.com/kpachhai/engram/uv.lock` (fastmcp version pin)
+- Inspect: `<repo>/.venv/lib/python*/site-packages/fastmcp/`
+- Inspect: `<repo>/uv.lock` (fastmcp version pin)
 - Create: `docs/PHASE_5_FASTMCP_AUDIT.md`
 
 - [ ] **Step 1: Dispatch a research sub-agent**
@@ -351,7 +351,7 @@ The document is the input to Layer C step 1's Option A vs B decision. Include:
 - [ ] **Step 1: Capture baseline test metrics**
 
 ```bash
-cd ~/repos/github.com/kpachhai/engram
+cd <repo>
 uv run pytest --collect-only -q 2>&1 | tail -3 > /tmp/baseline.txt
 uv run pytest tests/test_phase4_cli_smoke.py --collect-only -q 2>&1 | tail -3 >> /tmp/baseline.txt
 uv run pytest --cov=src --cov-fail-under=0 2>&1 | grep "TOTAL" >> /tmp/baseline.txt
@@ -1130,7 +1130,7 @@ Expected: ruff/mypy clean; ~17 new daemon tests pass; existing serve tests still
 ```bash
 git commit -S -s -m "feat(daemon): Layer A — errors + DaemonConfig + path helpers + audits + helper extraction
 
-Spec: ~/repos/github.com/kpachhai/engram/docs/superpowers/specs/2026-05-12-engram-daemon-mode-design.md
+Spec: <repo>/docs/superpowers/specs/2026-05-12-engram-daemon-mode-design.md
 
 - 5 new DaemonError subclasses with unique error_codes
 - DaemonConfig Pydantic model with Field bounds on all numerics
@@ -2089,7 +2089,7 @@ git commit -S -s -m "feat(daemon): Layer B — protocol, auth, spawn, state, log
 - log_rotation.py: size+retention rotation with mode 0o600
   (closes M2, F4)
 
-Spec: ~/repos/github.com/kpachhai/engram/docs/superpowers/specs/2026-05-12-engram-daemon-mode-design.md"
+Spec: <repo>/docs/superpowers/specs/2026-05-12-engram-daemon-mode-design.md"
 ```
 
 **Approx LOC Layer B:** ~430 source + ~250 test = ~680 total.
@@ -2108,7 +2108,7 @@ Spec: ~/repos/github.com/kpachhai/engram/docs/superpowers/specs/2026-05-12-engra
 ### Task C0: Pick FastMCP dispatch approach (Audit 2 resolution)
 
 **Files:**
-- Inspect: `~/repos/github.com/kpachhai/engram/.venv/lib/python*/site-packages/fastmcp/`
+- Inspect: `<repo>/.venv/lib/python*/site-packages/fastmcp/`
 
 - [ ] **Step 1: Introspect FastMCP for per-connection dispatch entrypoints**
 
@@ -2571,7 +2571,7 @@ git commit -S -s -m "feat(daemon): Layer C — server (accept loop + per-conn ta
 - Per-connection inactivity timeout (Amendment 4; L3)
 - FastMCP per-connection dispatch shim (Audit 2 resolution)
 
-Spec: ~/repos/github.com/kpachhai/engram/docs/superpowers/specs/2026-05-12-engram-daemon-mode-design.md"
+Spec: <repo>/docs/superpowers/specs/2026-05-12-engram-daemon-mode-design.md"
 ```
 
 **Approx LOC Layer C:** ~340 source + ~180 test = ~520 total.
@@ -2954,7 +2954,7 @@ git commit -S -s -m "feat(daemon): Layer D — proxy client (byte shuffler + spa
 - WAL recovery grace folded into spawn timeout (Amendment 4)
 - Fingerprint dedup in capture replay guards idempotency
 
-Spec: ~/repos/github.com/kpachhai/engram/docs/superpowers/specs/2026-05-12-engram-daemon-mode-design.md"
+Spec: <repo>/docs/superpowers/specs/2026-05-12-engram-daemon-mode-design.md"
 ```
 
 **Approx LOC Layer D:** ~250 source + ~180 test = ~430 total.
@@ -3183,7 +3183,7 @@ git commit -S -s -m "feat(daemon): Layer E — 6 doctor checks for daemon mode
 - daemon_uptime_excessive    (INFO after 7d uptime)
 - daemon_socket_path_too_long (WARN on macOS 104-byte limit; Amendment 5)
 
-Spec: ~/repos/github.com/kpachhai/engram/docs/superpowers/specs/2026-05-12-engram-daemon-mode-design.md Section 13.2"
+Spec: <repo>/docs/superpowers/specs/2026-05-12-engram-daemon-mode-design.md Section 13.2"
 ```
 
 **Approx LOC Layer E:** ~150 source + ~100 test = ~250 total.
@@ -3457,7 +3457,7 @@ git commit -S -s -m "feat(daemon): Layer F — CLI integration (serve refactor +
 - engram daemon start --readiness-fd: internal hook for spawn-pipe handshake
 - Mutual exclusion: --no-daemon + running daemon -> clear LockError + remediation hint (M3)
 
-Spec: ~/repos/github.com/kpachhai/engram/docs/superpowers/specs/2026-05-12-engram-daemon-mode-design.md Section 10"
+Spec: <repo>/docs/superpowers/specs/2026-05-12-engram-daemon-mode-design.md Section 10"
 ```
 
 **Approx LOC Layer F:** ~280 source + ~80 test = ~360 total.
@@ -3857,7 +3857,7 @@ Coverage:
 - Embedding cache concurrent write (closes M1)
 - 9 hermetic CLI smoke tests against installed binary
 
-Spec: ~/repos/github.com/kpachhai/engram/docs/superpowers/specs/2026-05-12-engram-daemon-mode-design.md Section 14"
+Spec: <repo>/docs/superpowers/specs/2026-05-12-engram-daemon-mode-design.md Section 14"
 ```
 
 **Approx LOC Layer G:** ~600 test code (no new source).
@@ -3870,7 +3870,7 @@ Spec: ~/repos/github.com/kpachhai/engram/docs/superpowers/specs/2026-05-12-engra
 
 **Files this layer creates or modifies:**
 
-**engram repo (`~/repos/github.com/kpachhai/engram/`):**
+**engram repo (`<repo>/`):**
 - Create: `docs/adr/008-daemon-mode.md`
 - Create: `docs/DAEMON_MODE.md`
 - Modify: `CLAUDE.md`
@@ -3884,7 +3884,7 @@ Spec: ~/repos/github.com/kpachhai/engram/docs/superpowers/specs/2026-05-12-engra
 - Modify: `docs/DEPLOYMENT_MODEL.md`
 - Modify: `CHANGELOG.md`
 
-**idea-forge repo (`~/repos/github.com/kpachhai/idea-forge/`):**
+**idea-forge repo (`<your-meta-stack-repo>/`):**
 - Modify: `workspace/engram/MANIFEST.md`
 - Modify: `workspace/engram/PENDING_TASKS.md`
 - Modify: `workspace/engram/skill-audit-log.md`
@@ -3899,17 +3899,17 @@ Spec: ~/repos/github.com/kpachhai/engram/docs/superpowers/specs/2026-05-12-engra
 - Modify: `docs/superpowers/specs/2026-05-04-engram/09-MESH_BRAIN.md`
 - Modify: `docs/superpowers/specs/2026-05-04-engram/11-IMPLEMENTATION_PROMPT.md`
 
-**dotfiles repo (`~/repos/github.com/kpachhai/dotfiles/`):**
+**dotfiles repo (`<your-dotfiles-repo>/`):**
 - Modify: `dot_claude/CLAUDE.md.tmpl` ("Multiple Persistent-Memory MCPs" — small note)
 
 ### Task H1: ADR 008
 
 **Files:**
-- Create: `~/repos/github.com/kpachhai/engram/docs/adr/008-daemon-mode.md`
+- Create: `<repo>/docs/adr/008-daemon-mode.md`
 
 - [ ] **Step 1: Author from the spec's Section 20 outline**
 
-Use the outline in `~/repos/github.com/kpachhai/engram/docs/superpowers/specs/2026-05-12-engram-daemon-mode-design.md` Section 20. Sections: Context (link to Section 2 of spec), Decision (link to each design choice's spec section), Alternatives Considered, Consequences (positive/negative/neutral), Pinned-Invariant Analysis (link to spec Section 20.5 table), CLAUDE.md operational-line amendment.
+Use the outline in `<repo>/docs/superpowers/specs/2026-05-12-engram-daemon-mode-design.md` Section 20. Sections: Context (link to Section 2 of spec), Decision (link to each design choice's spec section), Alternatives Considered, Consequences (positive/negative/neutral), Pinned-Invariant Analysis (link to spec Section 20.5 table), CLAUDE.md operational-line amendment.
 
 Target length: ~250-400 lines. Match the format of ADRs 001-007 in `docs/adr/`.
 
@@ -3921,7 +3921,7 @@ Expected: 250-400 lines.
 ### Task H2: DAEMON_MODE.md operator guide
 
 **Files:**
-- Create: `~/repos/github.com/kpachhai/engram/docs/DAEMON_MODE.md`
+- Create: `<repo>/docs/DAEMON_MODE.md`
 
 - [ ] **Step 1: Author**
 
@@ -3950,7 +3950,7 @@ Run: `wc -l docs/DAEMON_MODE.md`
 ### Task H3: Update existing engram docs
 
 **Files:**
-- Modify: `CLAUDE.md` (TWO edits: amend the "MCP server: stdio only" line PLUS amend the "Repository layout" section's spec back-reference — the spec moved INTO engram on 2026-05-12, so the back-reference paragraph saying *"The spec lives outside this repo at `~/repos/github.com/kpachhai/idea-forge/docs/superpowers/specs/2026-05-04-engram/`"* must be updated to *"The spec lives in this repo at `docs/superpowers/specs/2026-05-04-engram/` (gitignored — local working artifact, not part of the public release)."* The PII discipline carve-out for "spec back-reference exception" becomes moot since there's no cross-repo back-reference anymore — that bullet in CLAUDE.md PII section can simplify.)
+- Modify: `CLAUDE.md` (TWO edits: amend the "MCP server: stdio only" line PLUS amend the "Repository layout" section's spec back-reference — the spec moved INTO engram on 2026-05-12, so the back-reference paragraph saying *"The spec lives outside this repo at `<your-meta-stack-repo>/docs/superpowers/specs/2026-05-04-engram/`"* must be updated to *"The spec lives in this repo at `docs/superpowers/specs/2026-05-04-engram/` (gitignored — local working artifact, not part of the public release)."* The PII discipline carve-out for "spec back-reference exception" becomes moot since there's no cross-repo back-reference anymore — that bullet in CLAUDE.md PII section can simplify.)
 - Modify: `README.md`
 - Modify: `docs/ARCHITECTURE.md`
 - Modify: `docs/QUICKSTART.md`
@@ -3992,7 +3992,7 @@ Add a fresh `[Unreleased]` header above.
 
 **Note (post-2026-05-12 spec move):** The `docs/superpowers/specs/2026-05-04-engram/` directory moved INTO the engram repo (`docs/superpowers/` is gitignored there per engram's `.gitignore:64`). The spec renumber sweep is now an engram-internal local-only edit (Task H5a below), not a cross-repo commit. This cross-repo task is now smaller — just idea-forge planning-surface updates + a stale-path fix in MANIFEST.
 
-**Files:** (in `~/repos/github.com/kpachhai/idea-forge/`)
+**Files:** (in `<your-meta-stack-repo>/`)
 - Modify: `workspace/engram/MANIFEST.md` (update phase table AND update the `Spec source:` field — it currently says `docs/superpowers/specs/2026-05-04-engram/ (in idea-forge)`; should now say `docs/superpowers/specs/2026-05-04-engram/ (in engram, gitignored)`)
 - Modify: `workspace/engram/PENDING_TASKS.md`
 - Modify: `workspace/engram/skill-audit-log.md`
@@ -4020,7 +4020,7 @@ The spec renumber sweep originally lived here as a cross-repo task. Post-2026-05
 
 ### Task H5a (NEW — post spec move): Engram-local spec renumber sweep
 
-**Files:** (in `~/repos/github.com/kpachhai/engram/`, all under `docs/superpowers/specs/2026-05-04-engram/` — local-only since `docs/superpowers/` is gitignored)
+**Files:** (in `<repo>/`, all under `docs/superpowers/specs/2026-05-04-engram/` — local-only since `docs/superpowers/` is gitignored)
 - Modify: `docs/superpowers/specs/2026-05-04-engram/03-ROADMAP.md` (primary edit + new Phase 5 section)
 - Modify: `docs/superpowers/specs/2026-05-04-engram/00-VISION.md` (renumber sweep)
 - Modify: `docs/superpowers/specs/2026-05-04-engram/01-PRODUCT_SPEC.md`
@@ -4040,7 +4040,7 @@ The spec renumber sweep originally lived here as a cross-repo task. Post-2026-05
 - [ ] **Step 2: Sweep the other 8 spec files for "Phase 5" / "Phase 6" references**
 
 ```bash
-cd ~/repos/github.com/kpachhai/engram
+cd <repo>
 for f in docs/superpowers/specs/2026-05-04-engram/{00,01,02,05,06,08,09,11}-*.md; do
   grep -n "Phase [56]" "$f"
 done
@@ -4054,7 +4054,7 @@ Then edit each file via Edit tool, applying the bump rule from spec Section 18.2
 ### Task H6: Cross-repo — dotfiles note
 
 **Files:**
-- Modify: `~/repos/github.com/kpachhai/dotfiles/dot_claude/CLAUDE.md.tmpl`
+- Modify: `<your-dotfiles-repo>/dot_claude/CLAUDE.md.tmpl`
 
 - [ ] **Step 1: Add a brief note in "Multiple Persistent-Memory MCPs" section**
 
@@ -4094,7 +4094,7 @@ mcp__engram__capture_thought(content="<same content>")
 - [ ] **Step 1: Stage engram repo files + verify + commit**
 
 ```bash
-cd ~/repos/github.com/kpachhai/engram
+cd <repo>
 git add docs/adr/008-daemon-mode.md docs/DAEMON_MODE.md \
         CLAUDE.md README.md docs/ARCHITECTURE.md docs/QUICKSTART.md \
         docs/USE_CASES.md docs/COMPARISONS.md docs/MULTI_MACHINE_SETUP.md \
@@ -4112,7 +4112,7 @@ git commit -S -s -m "docs(daemon): Layer H — ADR 008 + DAEMON_MODE guide + 9 d
   note (closes M6)
 - PII Pre-Write Checklist applied to all 11 files
 
-Spec: ~/repos/github.com/kpachhai/engram/docs/superpowers/specs/2026-05-12-engram-daemon-mode-design.md"
+Spec: <repo>/docs/superpowers/specs/2026-05-12-engram-daemon-mode-design.md"
 ```
 
 ### Cross-repo commits (idea-forge + dotfiles — separate commits per repo's own conventions)
@@ -4120,7 +4120,7 @@ Spec: ~/repos/github.com/kpachhai/engram/docs/superpowers/specs/2026-05-12-engra
 - [ ] **Step 1: idea-forge commit (post-spec-move: smaller scope, planning surface only)**
 
 ```bash
-cd ~/repos/github.com/kpachhai/idea-forge
+cd <your-meta-stack-repo>
 git add workspace/engram/MANIFEST.md workspace/engram/PENDING_TASKS.md \
         workspace/engram/skill-audit-log.md
 git commit -S -s -m "docs(engram): Phase 5 (daemon mode) planning surface updates
@@ -4140,7 +4140,7 @@ repo under docs/superpowers/ which is gitignored — local working artifacts."
 - [ ] **Step 2: dotfiles commit**
 
 ```bash
-cd ~/repos/github.com/kpachhai/dotfiles
+cd <your-dotfiles-repo>
 git add dot_claude/CLAUDE.md.tmpl
 git commit -S -s -m "docs(claude-md): engram v0.5.0 resolves single-session friction
 
@@ -4171,7 +4171,7 @@ Per the engram CLAUDE.md "Code Project Completion Gate" — three blockers (not 
   - **no-7-day-dogfood**: operational criterion deferred to live deployment (Phase 5 Op #1).
   - **no-launchd/systemd-test**: V1.1 / Phase 5.5 deferred.
   - **no-load-test**: 100+ concurrent proxies tested by property test but not in a sustained-load scenario.
-- [ ] **Section 6 spec audit** (public-release-shipping milestone): sub-agent walks `~/repos/github.com/kpachhai/engram/docs/superpowers/specs/2026-05-12-engram-daemon-mode-design.md` and cross-checks against `src/engram/daemon/` + `src/engram/cli/daemon.py`. Classifications: IMPLEMENTED / PARTIAL / MISSING / DEFERRED. The audit is itself a commit (`docs/PHASE_5_SPEC_AUDIT.md`).
+- [ ] **Section 6 spec audit** (public-release-shipping milestone): sub-agent walks `<repo>/docs/superpowers/specs/2026-05-12-engram-daemon-mode-design.md` and cross-checks against `src/engram/daemon/` + `src/engram/cli/daemon.py`. Classifications: IMPLEMENTED / PARTIAL / MISSING / DEFERRED. The audit is itself a commit (`docs/PHASE_5_SPEC_AUDIT.md`).
 
 ### 2. `comprehension-gate` Step 5 — 4-question artifact
 
@@ -4182,7 +4182,7 @@ Maintainer authors the four-question artifact:
 3. **Where does state live?** (markdown SoT, SQLite cache, daemon in-memory connected-count + last-request-at + counters)
 4. **What's the failure mode?** (daemon crash → proxy 3-retry exp backoff → MCP error to Claude; idle shutdown → auto-wake on next session)
 
-Committed alongside the Phase 5 retrospective in `~/repos/github.com/kpachhai/idea-forge/workspace/engram/PHASE_5_RETROSPECTIVE.md`.
+Committed alongside the Phase 5 retrospective in `<your-meta-stack-repo>/workspace/engram/PHASE_5_RETROSPECTIVE.md`.
 
 ### 3. Hermetic CLI smoke
 
@@ -4221,14 +4221,14 @@ Aggregated from spec Section 22 + deep-plan sub-agent findings + this plan's ame
 
 ## References
 
-- **Design spec:** `~/repos/github.com/kpachhai/engram/docs/superpowers/specs/2026-05-12-engram-daemon-mode-design.md`
-- **Engram CLAUDE.md** (conventions, pinned invariants): `~/repos/github.com/kpachhai/engram/CLAUDE.md`
-- **Original engram spec** (Phase 1-4 + roadmap): `~/repos/github.com/kpachhai/engram/docs/superpowers/specs/2026-05-04-engram/`
-- **Python-package-builder skill** (cadence, Phase Exit discipline): `~/repos/github.com/kpachhai/idea-forge/skills/code-projects/python-package-builder/SKILL.md`
-- **Code-project foundation** (8-layer model, exit criteria split): `~/repos/github.com/kpachhai/idea-forge/skills/code-projects/code-project-foundation/SKILL.md`
-- **Code-project-retrospective skill** (post-Phase artifacts): `~/repos/github.com/kpachhai/idea-forge/skills/code-projects/code-project-retrospective/SKILL.md`
-- **Existing engram lock implementation** (single-writer rationale): `~/repos/github.com/kpachhai/engram/src/engram/utils/lock.py`
-- **Existing engram serve flow** (the path Phase 5 wraps): `~/repos/github.com/kpachhai/engram/src/engram/cli/serve.py`
+- **Design spec:** `<repo>/docs/superpowers/specs/2026-05-12-engram-daemon-mode-design.md`
+- **Engram CLAUDE.md** (conventions, pinned invariants): `<repo>/CLAUDE.md`
+- **Original engram spec** (Phase 1-4 + roadmap): `<repo>/docs/superpowers/specs/2026-05-04-engram/`
+- **Python-package-builder skill** (cadence, Phase Exit discipline): `<your-meta-stack-repo>/skills/code-projects/python-package-builder/SKILL.md`
+- **Code-project foundation** (8-layer model, exit criteria split): `<your-meta-stack-repo>/skills/code-projects/code-project-foundation/SKILL.md`
+- **Code-project-retrospective skill** (post-Phase artifacts): `<your-meta-stack-repo>/skills/code-projects/code-project-retrospective/SKILL.md`
+- **Existing engram lock implementation** (single-writer rationale): `<repo>/src/engram/utils/lock.py`
+- **Existing engram serve flow** (the path Phase 5 wraps): `<repo>/src/engram/cli/serve.py`
 
 ---
 

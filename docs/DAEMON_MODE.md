@@ -302,7 +302,7 @@ drop the ``--no-daemon`` flag and let the proxy attach normally.
 
 ### Daemon dies every time Claude Code session restarts
 
-In v0.5.0.0, the daemon shared the spawning proxy's process group.
+In v0.5.0, the daemon shared the spawning proxy's process group.
 When Claude Code sent SIGTERM to the proxy's PGID on session close,
 the signal also reached the daemon. Fixed in a subsequent patch:
 the daemon now calls ``os.setsid()`` immediately after fork, placing

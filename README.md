@@ -25,6 +25,10 @@ If you run an AI assistant daily and want its memory to (a) survive across sessi
 
 ## Quickstart
 
+> **Install `engram-mcp-server`, not `engram-mcp`.** The shorter name on PyPI
+> belongs to an unrelated project. The package installs the `engram` command
+> and the `engram` import package; only the install-time name differs.
+
 ```bash
 # 1. Install (Python 3.11+; macOS or Linux)
 pip install engram-mcp-server

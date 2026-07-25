@@ -25,13 +25,13 @@ Open Brain on at least one machine, and let CI go green on push.
 
 ## Code-side criteria (9/9)
 
-### 1. `pip install engram-mcp` succeeds in a fresh virtualenv on macOS and Linux
+### 1. `pip install engram-mcp-server` succeeds in a fresh virtualenv on macOS and Linux
 
 **Status**: Pass at the package-build level; final verification requires `pip install` on a clean venv on each platform.
 
 **Evidence**:
 
-* `pyproject.toml` is PEP 621 with `requires-python = ">=3.11"`, project name `engram-mcp`, console script `engram = "engram.cli:app"`.
+* `pyproject.toml` is PEP 621 with `requires-python = ">=3.11"`, project name `engram-mcp-server`, console script `engram = "engram.cli:app"`.
 * All transitive deps are pinned in `uv.lock` and resolve without conflict.
 * `onnxruntime>=1.17,<1.21` keeps Intel Mac users in scope while staying compatible with apple-silicon and Linux x86_64 wheels.
 * Local install: `uv sync --all-extras --dev` succeeds; `uv run engram --version` prints `engram 0.1.0`.
@@ -165,11 +165,11 @@ Open Brain on at least one machine, and let CI go green on push.
 These six criteria require operator action against a live install. The
 repository is ready; they are not solved by code.
 
-### 10. `pip install engram-mcp` succeeds in a fresh virtualenv on macOS and Linux
+### 10. `pip install engram-mcp-server` succeeds in a fresh virtualenv on macOS and Linux
 
 **Status**: Pending.
 
-**What's needed**: publish to PyPI (or test PyPI), then `python -m venv .venv && .venv/bin/pip install engram-mcp` on a clean macOS box and a clean Linux box.
+**What's needed**: publish to PyPI (or test PyPI), then `python -m venv .venv && .venv/bin/pip install engram-mcp-server` on a clean macOS box and a clean Linux box.
 
 ### 11. `engram serve` starts without errors when given a valid `engram.config.yaml`
 

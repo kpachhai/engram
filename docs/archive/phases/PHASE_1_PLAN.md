@@ -13,7 +13,7 @@ This plan breaks Phase 1 into ordered tasks with explicit dependencies, delivera
 
 When complete, all five conditions are simultaneously true:
 
-1. `pip install engram-mcp` succeeds in fresh virtualenvs on macOS (Intel + Apple Silicon) and Linux x86_64.
+1. `pip install engram-mcp-server` succeeds in fresh virtualenvs on macOS (Intel + Apple Silicon) and Linux x86_64.
 2. All 5 MCP tools (`capture_thought`, `search_thoughts`, `list_thoughts`, `thought_stats`, `fetch`) match the `02-TECHNICAL_DESIGN.md` MCP API Contract byte-for-byte and function end-to-end with Claude Code as the client.
 3. `engram migrate-from-open-brain` against the maintainer's actual Open Brain corpus completes with zero errors and 100% deterministic round-trip on the 10-thought sample (via `fetch(id)` byte-for-byte after engram's body normalization, NOT semantic search).
 4. All Phase 1 exit criteria from `03-ROADMAP.md` Phase 1 Exit Criteria are explicitly verified item by item, with evidence captured in a ship-readiness checklist.
@@ -30,7 +30,7 @@ The plan tracks two milestones:
 
 (From code-analysis sub-agent.)
 
-**Already in scaffold** at `~/repos/github.com/kpachhai/engram/`:
+**Already in scaffold** at `<repo>/`:
 
 - Tooling-first foundation per `10-CODE_QUALITY.md`: `pyproject.toml` (PEP 621 + ruff + mypy strict + pytest config), `.pre-commit-config.yaml`, `.github/workflows/ci.yml` (Python 3.11+3.12 × macOS+Ubuntu), Apache-2.0 LICENSE, README/CHANGELOG/CONTRIBUTING shells, `.python-version`, `uv.lock`.
 - Minimal package: `src/engram/__init__.py` (version), `src/engram/cli/__init__.py` (Typer app shell with `--version`), `src/engram/py.typed`.
@@ -47,7 +47,7 @@ The plan tracks two milestones:
 - Property-based tests (hypothesis) for storage + embedding invariants.
 - E2E tests spawning `engram serve` as subprocess and exercising MCP over stdio.
 
-**Open Brain source schema** (from `~/repos/github.com/kpachhai/memex/open-brain/schema.sql`): 7 columns - `id` (UUID-v4), `content` (text), `embedding` (vector(1536)), `metadata` (jsonb), `created_at`, `updated_at`, `content_fingerprint` (lowercased+whitespace-collapsed SHA-256). Migration recomputes both fingerprint (engram's normalization) and embedding (engram's 384-dim model). Source UUID-v4 always becomes `legacy_id`; engram mints fresh UUID-v7.
+**Open Brain source schema** (from `<your-persistent-memory-repo>/open-brain/schema.sql`): 7 columns - `id` (UUID-v4), `content` (text), `embedding` (vector(1536)), `metadata` (jsonb), `created_at`, `updated_at`, `content_fingerprint` (lowercased+whitespace-collapsed SHA-256). Migration recomputes both fingerprint (engram's normalization) and embedding (engram's 384-dim model). Source UUID-v4 always becomes `legacy_id`; engram mints fresh UUID-v7.
 
 ---
 
@@ -361,7 +361,7 @@ Walk each spec exit criterion EXCEPT bullet 6 (the 14-day trial which begins now
 
 Spec exit criteria addressable at Code-Complete:
 
-1. `pip install engram-mcp` in fresh macOS+Linux venv → SUCCESS.
+1. `pip install engram-mcp-server` in fresh macOS+Linux venv → SUCCESS.
 2. `engram serve` clean start with valid config → SUCCESS.
 3. All 5 MCP tools end-to-end with Claude Code → manual smoke test transcript.
 4. Maintainer's actual OB corpus migrates with zero errors + 10/10 round-trip → migration report + transcript.
@@ -374,7 +374,7 @@ Spec exit criteria addressable at Code-Complete:
 11. ADRs in `docs/adr/` for major decisions → file listing.
 12. README/CHANGELOG/CONTRIBUTING/public-API docstrings present → grep + manual review.
 
-Hand-off to maintainer at Code-Complete: working `pip install engram-mcp` package, migration command verified against their corpus, all 11 of-12 criteria met (criterion 6 starts now).
+Hand-off to maintainer at Code-Complete: working `pip install engram-mcp-server` package, migration command verified against their corpus, all 11 of-12 criteria met (criterion 6 starts now).
 
 -> verify: `release/PHASE_1_CODE_COMPLETE_CHECKLIST.md` has criterion-1-through-12-except-6 marked ✅ with evidence; criterion 6 marked "trial in progress, day 0/14."
 

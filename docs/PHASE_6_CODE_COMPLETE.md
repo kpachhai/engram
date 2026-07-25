@@ -66,7 +66,7 @@ field set; everything else round-trips verbatim
 | 7 | Live test on the real personal vault | **DONE 2026-06-10**: tool reinstalled from source; `engram daemon stop` -> `engram doctor` all green (new consolidate rows present, correctly skipped-OK); daemon restarted; report mode ran BESIDE the live daemon: 16 near-duplicate clusters (sizes 2-3), zero exclusions, sane report JSON. |
 | 8 | Apply rehearsal on a vault copy | **DONE 2026-06-10**: copy seeded with an exact-duplicate pair; report -> `--apply --yes` archived the older duplicate (non-git notice correct); doctor on the copy: consolidate rows OK, only expected pending-embedding warning from the unembedded seed. |
 | 9 | Multi-machine convergence observation | **PENDING** - next personal-vault sync window: confirm machine B surfaces orphan rows and `engram doctor --repair --remove-orphans` converges. |
-| 10 | PyPI release 0.6.0 | **PENDING** - maintainer action per `docs/PUBLISHING.md`; version stays 0.5.0 + `[Unreleased]` until then. |
+| 10 | PyPI release 0.6.0 | **DONE 2026-07-25**: published as `engram-mcp-server` 0.6.0 (the `engram-mcp` name belongs to an unrelated project). Signed tag `v0.6.0` + GitHub release with both artifacts; clean-venv install from PyPI verified, `engram doctor` all green. |
 
 ## Explicitly NOT verified
 

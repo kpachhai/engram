@@ -1,7 +1,7 @@
 # engram Phase 4 - Team Brain (Implementation Plan)
 
 **Authored**: 2026-05-05 via `superpowers:deep-plan` (3 parallel sub-agents + critique + 1 revision pass)
-**Spec sources** (live in the maintainer's idea-forge planning repo at `~/repos/github.com/kpachhai/idea-forge/docs/superpowers/specs/2026-05-04-engram/`):
+**Spec sources** (live in the maintainer's idea-forge planning repo at `<your-meta-stack-repo>/docs/superpowers/specs/2026-05-04-engram/`):
 - `03-ROADMAP.md` Phase 4 lines 121-153 (6 deliverables + 3 exit criteria)
 - `02-TECHNICAL_DESIGN.md` Vault Model + Per-Vault Identity sections
 - `06-SECURITY.md` Boundary B5 (team-vault read/write principal) - to be added in Phase 4
@@ -480,4 +480,4 @@ These two operational criteria cannot be verified from repo state; they require 
 
 Once Phase 4 dogfood completes with all 7 daily checkpoints green, Phase 1 op #1-#6 + Phase 2 op #11 + Phase 3 op #14 + Phase 4 op #16-#17 are all simultaneously satisfied.
 
-Phase 4 also inherits Phase 1+2+3 unfilled item #1 (PyPI publish of `engram-mcp` 0.4.0); the version-bump + tag is pre-requisite to the dogfood window so teammates can install via `pip install`.
+Phase 4 also inherits Phase 1+2+3 unfilled item #1 (PyPI publish of `engram-mcp-server` 0.4.0); the version-bump + tag is pre-requisite to the dogfood window so teammates can install via `pip install`.

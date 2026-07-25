@@ -50,7 +50,7 @@ The model is **lazy-loaded on first use** under a `threading.Lock` so cold-start
 * **`all-MiniLM-L6-v2` via sentence-transformers** - viable; smaller (90MB), older quality. Rejected only because BGE small ships at near-parity for retrieval at a comparable footprint.
 * **`BAAI/bge-m3` (multilingual)** - rejected as default; ~2GB on disk blows the package budget. Available as a configurable swap for multilingual users.
 * **`text-embedding-3-large` (hosted)** - rejected for the same reason as text-embedding-3-small, plus the 3072-dim vectors would push SQLite index size past NFR2.
-* **Local LLM-derived embeddings (e.g. nomic-embed via ollama)** - viable but adds an ollama dependency on the install path. Rejected for Phase 1 to keep `pip install engram-mcp` self-contained; revisitable if user demand surfaces.
+* **Local LLM-derived embeddings (e.g. nomic-embed via ollama)** - viable but adds an ollama dependency on the install path. Rejected for Phase 1 to keep `pip install engram-mcp-server` self-contained; revisitable if user demand surfaces.
 
 ## References
 

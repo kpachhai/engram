@@ -51,24 +51,26 @@ Look at the changes since the last release:
 - Did you add a new tool / CLI subcommand / doctor code / optional field? → MINOR.
 - Bug fixes / docs only? → PATCH.
 
-Historical releases:
+Version history:
 
-- **v0.4.0** (MINOR) — first public release. Team Brain feature set
-  was additive: new `team-write` role, GPG-bound sender attribution,
-  server-side `pre-receive` hook, `CaptureInputMetadata.vault` field,
-  and a seven-tool MCP surface.
+- **v0.4.0** (MINOR) — Team Brain. Additive: new `team-write` role,
+  GPG-bound sender attribution, server-side `pre-receive` hook,
+  `CaptureInputMetadata.vault` field, and a seven-tool MCP surface.
+  **Never published to PyPI** — repo version bump only.
 - **v0.5.0** (MINOR) — daemon mode. ``engram serve`` runs as a thin
   proxy that auto-spawns a per-vault daemon over UDS; N concurrent
   Claude Code sessions can attach to the same vault. New
   ``engram daemon {start,stop,status,logs}`` subcommand group. The
   MCP wire format is unchanged so existing client configurations
-  need no edits.
-- **v0.6.0** (MINOR) — consolidation. New `engram consolidate`
-  report-then-action vault curation (four detection passes; `--apply`
-  executes merge proposals only, archiving originals body-untouched).
-  New `engram team-vault rotate-member-key` steward-only key rotation.
-  Also carries the signed-pull and pre-receive attribution fixes. The
-  MCP wire format is unchanged.
+  need no edits. **Never published to PyPI** — repo version bump only.
+- **v0.6.0** (MINOR) — consolidation, and the **first public release**.
+  New `engram consolidate` report-then-action vault curation (four
+  detection passes; `--apply` executes merge proposals only, archiving
+  originals body-untouched). New `engram team-vault rotate-member-key`
+  steward-only key rotation. Also carries the signed-pull and
+  pre-receive attribution fixes. The MCP wire format is unchanged.
+  Published as `engram-mcp-server` — the shorter `engram-mcp` name on
+  PyPI belongs to an unrelated project and was never available to us.
 
 ### 2. Update version + CHANGELOG
 
@@ -244,14 +246,17 @@ If the canonical flow works, the release is live and the announcement can go out
 If a release ships with a critical bug:
 
 ```bash
-# Yank it (mark as broken; pip refuses to install but existing installs continue working):
-uv publish --yank "Critical bug; use 0.4.1+" engram-mcp-server==0.4.0
+# Yank it (mark as broken; pip refuses to install but existing installs continue working).
+# BAD is the broken version; FIX is the version that supersedes it:
+BAD=0.6.0
+FIX=0.6.1
+uv publish --yank "Critical bug; use ${FIX}+" "engram-mcp-server==${BAD}"
 
 # Then publish a fix:
-# (bump version in pyproject.toml to 0.4.1, fix bug, repeat the release checklist)
+# (bump version in pyproject.toml to ${FIX}, fix bug, repeat the release checklist)
 ```
 
-Yanking is preferred over deletion. Deletion permanently frees the version number and breaks reproducibility for any user who pinned `engram-mcp-server==0.4.0`. Yanking signals "this is broken; upgrade" without destroying history.
+Yanking is preferred over deletion. Deletion permanently frees the version number and breaks reproducibility for any user who pinned that exact version. Yanking signals "this is broken; upgrade" without destroying history.
 
 ## Hash manifest refresh
 

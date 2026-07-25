@@ -87,7 +87,7 @@ A clear-eyed look at what makes engram different — and when other tools are th
 
 Crucially, **engram is not a drop-in feature replacement for Open Brain.** Engram was scoped to its own thesis (markdown SoT + git sync + MCP) from day 1, not to clone every Open Brain feature. The two systems are feature-overlapping with divergence in both directions.
 
-**Feature gap matrix (as of v0.4.0, 2026-05-07):**
+**Feature gap matrix (snapshot: 2026-05-07):**
 
 engram has, Open Brain doesn't:
 

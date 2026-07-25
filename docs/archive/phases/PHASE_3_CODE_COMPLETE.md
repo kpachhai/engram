@@ -199,7 +199,7 @@ Per `docs/PHASE_1_CODE_COMPLETE.md` and
 `docs/PHASE_2_CODE_COMPLETE.md`, these remain operationally pending
 and are inherited by Phase 3:
 
-1. `pip install engram-mcp` against a clean venv (macOS + Linux) -
+1. `pip install engram-mcp-server` against a clean venv (macOS + Linux) -
    blocked on PyPI publish of v0.2.0 / v0.3.0.
 2. `engram serve` standalone against a real config + 5 MCP tools
    exercised against Claude Code as the client.

@@ -108,7 +108,7 @@ uv sync --all-extras --dev          # install + lock deps
 uv run pytest -q                     # full suite (1554 tests; ~4 min)
 uv run ruff format                   # auto-format
 uv run ruff check --fix              # lint + auto-fix
-uv run mypy                          # strict type-check (188 source files)
+uv run mypy                          # strict type-check (259 source files)
 uv run pytest --cov=src --cov-fail-under=80   # coverage gate
 ```
 

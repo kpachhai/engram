@@ -114,7 +114,7 @@ Or rely on the devkit identity convention: if `~/.config/devkit/identity.json` e
 
 ### Recommended path: direct Postgres (works against current OB1)
 
-This is the path that actually works today. A reference script at `<your-companion-repo>/scripts/migrate_thoughts_to_engram.py` (the maintainer's lives at `kpachhai/memex/scripts/`) imports engram as a library and reads the Supabase Postgres `thoughts` table directly. Copy the script into your own setup repo and adapt as needed. <!-- pii-allow:maintainer-ref -->
+This is the path that actually works today. A reference script at `<your-companion-repo>/scripts/migrate_thoughts_to_engram.py` imports engram as a library and reads the Supabase Postgres `thoughts` table directly. Copy the script into your own setup repo and adapt as needed.
 
 The script's high-level shape:
 

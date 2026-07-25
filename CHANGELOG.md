@@ -996,4 +996,5 @@ Design spec lives locally at
   diagnostics, embedding, mcp, migration, models, storage, utils, fixtures,
   properties).
 
-[Unreleased]: https://github.com/kpachhai/engram/compare/...HEAD <!-- pii-allow:repo-url -->
+[Unreleased]: https://github.com/kpachhai/engram/compare/v0.6.0...HEAD <!-- pii-allow:repo-url -->
+[0.6.0]: https://github.com/kpachhai/engram/releases/tag/v0.6.0 <!-- pii-allow:repo-url -->
