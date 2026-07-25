@@ -11,6 +11,14 @@ The MCP tool surface is committed-stable for the v1.x lifetime per the API stabi
 
 ## [0.6.0] - 2026-07-25 — Consolidation
 
+### Changed
+
+- The PyPI distribution name is **`engram-mcp-server`** — install with
+  `pip install engram-mcp-server`. The `engram-mcp` name on PyPI belongs
+  to an unrelated project. The import package (`import engram`), the
+  `engram` CLI, the MCP wire format, and the on-disk vault layout are all
+  unchanged; only the name you type at install time differs.
+
 ### Security
 
 - Team-vault pre-receive hook: committer identity now resolves the GPG

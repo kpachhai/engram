@@ -127,8 +127,8 @@ jobs:
       - name: Inspect dist artifacts
         run: |
           ls -la dist/
-          test -f dist/engram_mcp-*.whl
-          test -f dist/engram_mcp-*.tar.gz
+          test -f dist/engram_mcp_server-*.whl
+          test -f dist/engram_mcp_server-*.tar.gz
 
       - name: Twine check (PEP 503 metadata validation)
         run: uv run --with twine python -m twine check dist/*
@@ -169,7 +169,7 @@ jobs:
         run: |
           uv venv /tmp/smoke-venv
           source /tmp/smoke-venv/bin/activate
-          uv pip install dist/engram_mcp-*.whl
+          uv pip install dist/engram_mcp_server-*.whl
           engram --version
           python -m engram --version
           engram daemon --help

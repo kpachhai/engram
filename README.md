@@ -27,7 +27,7 @@ If you run an AI assistant daily and want its memory to (a) survive across sessi
 
 ```bash
 # 1. Install (Python 3.11+; macOS or Linux)
-pip install engram-mcp
+pip install engram-mcp-server
 
 # 2. Scaffold a vault
 engram init ~/.local/share/engram/personal
@@ -149,7 +149,7 @@ uv run engram serve
 # Build a wheel + install in a clean venv to validate packaging
 uv build
 python -m venv /tmp/engram-test-venv
-/tmp/engram-test-venv/bin/pip install dist/engram_mcp-*.whl
+/tmp/engram-test-venv/bin/pip install dist/engram_mcp_server-*.whl
 /tmp/engram-test-venv/bin/engram --version
 ```
 
@@ -160,7 +160,7 @@ Pick the section that matches how you installed.
 ### Installed via PyPI
 
 ```bash
-uv tool upgrade engram-mcp     # or: pip install --upgrade engram-mcp
+uv tool upgrade engram-mcp-server     # or: pip install --upgrade engram-mcp-server
 engram doctor                  # surface any vault / schema drift
 # Restart your MCP client (Claude Code, Claude Desktop, etc.)
 ```

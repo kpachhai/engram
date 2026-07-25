@@ -5,12 +5,12 @@ members, and the disaster-recovery flows.
 
 ## Prerequisites
 
-* engram installed (`pip install engram-mcp` ≥ 0.4.0).
+* engram installed (`pip install engram-mcp-server` ≥ 0.4.0).
 * GPG installed (`brew install gnupg` / `apt install gnupg`).
 * A git remote you control (Forgejo / Gitea / GitLab CE / GitHub
   Enterprise / etc.) where you can install pre-receive hooks.
 * All team members have:
-  * the same `engram-mcp` version installed.
+  * the same `engram-mcp-server` version installed.
   * a GPG signing key generated.
   * git configured to sign commits (`git config commit.gpgsign true`).
 
@@ -29,13 +29,13 @@ After generation, find your primary fingerprint:
 
 ```bash
 engram team-vault enroll-key
-# Output: primary fingerprint: 1234567890ABCDEF1234567890ABCDEF12345678
+# Output: primary fingerprint: 1234567890ABCDEF1234567890ABCDEF12345678  # pii-allow:doc-placeholder
 ```
 
 Configure git to sign commits with this key:
 
 ```bash
-git config --global user.signingkey 1234567890ABCDEF1234567890ABCDEF12345678
+git config --global user.signingkey 1234567890ABCDEF1234567890ABCDEF12345678  # pii-allow:doc-placeholder
 git config --global commit.gpgsign true
 ```
 

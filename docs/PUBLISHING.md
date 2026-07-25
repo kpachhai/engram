@@ -1,10 +1,10 @@
-# Publishing engram-mcp to PyPI
+# Publishing engram-mcp-server to PyPI
 
-**Audience:** the maintainer publishing a new release of `engram-mcp`. Skip this if you're a user — `pip install engram-mcp` is all you need.
+**Audience:** the maintainer publishing a new release of `engram-mcp-server`. Skip this if you're a user — `pip install engram-mcp-server` is all you need.
 
 ## Versioning policy
 
-`engram-mcp` follows [Semantic Versioning](https://semver.org/):
+`engram-mcp-server` follows [Semantic Versioning](https://semver.org/):
 
 - **MAJOR** (v2.0.0): breaking changes to the MCP wire format or storage schema. Per the API stability commitment in `02-TECHNICAL_DESIGN.md`, the v1.x line is stable for the lifetime of v1; only non-breaking additions ship as MINOR / PATCH.
 - **MINOR** (v0.X.0 → v0.(X+1).0): new MCP tools, new CLI subcommands, new doctor codes, new optional fields, new opt-in features. Backwards compatible.
@@ -16,7 +16,7 @@ Pre-1.0 (v0.X.Y) is the current series; the v0 → v1 cut happens after the oper
 
 You need:
 
-- A PyPI account with publish access to the `engram-mcp` project ([pypi.org/project/engram-mcp/](https://pypi.org/project/engram-mcp/)).
+- A PyPI account with publish access to the `engram-mcp-server` project ([pypi.org/project/engram-mcp-server/](https://pypi.org/project/engram-mcp-server/)).
 - A TestPyPI account with publish access to the same project name on [test.pypi.org](https://test.pypi.org/) (for dry-run publishes).
 - API tokens for both. **`uv publish` does not read `~/.pypirc`** — that is
   twine's config format. Pass the token to uv per-invocation instead:
@@ -123,13 +123,13 @@ All four must pass. If any fails, fix it before continuing.
 
 ```bash
 uv build
-ls -la dist/                            # expect engram_mcp-${NEW}-py3-none-any.whl + .tar.gz
+ls -la dist/                            # expect engram_mcp_server-${NEW}-py3-none-any.whl + .tar.gz
 ```
 
 The build artifacts go in `dist/`. Inspect the wheel to make sure nothing surprising shipped:
 
 ```bash
-unzip -l "dist/engram_mcp-${NEW}-py3-none-any.whl" | head -30
+unzip -l "dist/engram_mcp_server-${NEW}-py3-none-any.whl" | head -30
 ```
 
 Expected: `src/engram/**/*.py` only. No tests, no docs, no `.indexes/`, no random caches. If anything unexpected is in the wheel, audit `pyproject.toml` `[tool.hatch.build.targets.wheel]` (or whatever build backend is configured) and re-build.
@@ -140,7 +140,7 @@ This catches packaging bugs that don't surface in the dev workflow.
 
 ```bash
 python -m venv /tmp/engram-publish-smoke
-/tmp/engram-publish-smoke/bin/pip install "dist/engram_mcp-${NEW}-py3-none-any.whl"
+/tmp/engram-publish-smoke/bin/pip install "dist/engram_mcp_server-${NEW}-py3-none-any.whl"
 /tmp/engram-publish-smoke/bin/engram --version       # confirms install
 /tmp/engram-publish-smoke/bin/python -m engram --version  # confirms `python -m engram` works (daemon spawn dance relies on this)
 /tmp/engram-publish-smoke/bin/engram doctor --help   # confirms CLI wires up
@@ -168,7 +168,7 @@ Then publish for real:
 ```bash
 UV_PUBLISH_TOKEN=pypi-<your-testpypi-token> uv publish --index testpypi
 # Or with twine if you prefer (twine reads ~/.pypirc; uv does not):
-# python -m twine upload --repository testpypi "dist/engram_mcp-${NEW}"*
+# python -m twine upload --repository testpypi "dist/engram_mcp_server-${NEW}"*
 ```
 
 Wait ~30 seconds for TestPyPI to index the release. Then test it:
@@ -178,7 +178,7 @@ python -m venv /tmp/engram-testpypi-smoke
 /tmp/engram-testpypi-smoke/bin/pip install \
   --index-url https://test.pypi.org/simple/ \
   --extra-index-url https://pypi.org/simple/ \
-  "engram-mcp==${NEW}"
+  "engram-mcp-server==${NEW}"
 /tmp/engram-testpypi-smoke/bin/engram --version
 /tmp/engram-testpypi-smoke/bin/engram doctor --help
 rm -rf /tmp/engram-testpypi-smoke
@@ -193,13 +193,13 @@ If the TestPyPI install succeeds and the binary works, proceed to step 7.
 ```bash
 UV_PUBLISH_TOKEN=pypi-<your-token> uv publish
 # Or:
-# python -m twine upload "dist/engram_mcp-${NEW}"*
+# python -m twine upload "dist/engram_mcp_server-${NEW}"*
 ```
 
 Wait ~30 seconds. Verify the release page lands:
 
 ```bash
-curl -s https://pypi.org/pypi/engram-mcp/json | python -c "import json, sys; d=json.load(sys.stdin); print(d['info']['version'])"
+curl -s https://pypi.org/pypi/engram-mcp-server/json | python -c "import json, sys; d=json.load(sys.stdin); print(d['info']['version'])"
 # Expected: the value of ${NEW}
 ```
 
@@ -219,8 +219,8 @@ The `-s` flag GPG-signs the tag (per the maintainer's git commit policy). Push t
 gh release create "v${NEW}" \
   --title "v${NEW}" \
   --notes-from-tag \
-  "dist/engram_mcp-${NEW}-py3-none-any.whl" \
-  "dist/engram_mcp-${NEW}.tar.gz"
+  "dist/engram_mcp_server-${NEW}-py3-none-any.whl" \
+  "dist/engram_mcp_server-${NEW}.tar.gz"
 ```
 
 Or use the GitHub web UI: Releases → Draft new release → pick the tag → paste the relevant CHANGELOG section as the release notes → attach the wheel + sdist as binary attachments.
@@ -232,7 +232,7 @@ Wait 5 minutes (PyPI CDN propagation). Then run the canonical install flow on a 
 ```bash
 docker run --rm -it python:3.11-slim bash
 # Inside the container:
-pip install engram-mcp
+pip install engram-mcp-server
 engram --version
 engram doctor --help
 ```
@@ -245,13 +245,13 @@ If a release ships with a critical bug:
 
 ```bash
 # Yank it (mark as broken; pip refuses to install but existing installs continue working):
-uv publish --yank "Critical bug; use 0.4.1+" engram-mcp==0.4.0
+uv publish --yank "Critical bug; use 0.4.1+" engram-mcp-server==0.4.0
 
 # Then publish a fix:
 # (bump version in pyproject.toml to 0.4.1, fix bug, repeat the release checklist)
 ```
 
-Yanking is preferred over deletion. Deletion permanently frees the version number and breaks reproducibility for any user who pinned `engram-mcp==0.4.0`. Yanking signals "this is broken; upgrade" without destroying history.
+Yanking is preferred over deletion. Deletion permanently frees the version number and breaks reproducibility for any user who pinned `engram-mcp-server==0.4.0`. Yanking signals "this is broken; upgrade" without destroying history.
 
 ## Hash manifest refresh
 
@@ -274,7 +274,7 @@ Save this for the next release:
 - [ ] `CHANGELOG.md` `[Unreleased]` → `[<version>] - <date>` rename
 - [ ] `uv run ruff format && uv run ruff check && uv run mypy` clean
 - [ ] `uv run pytest --cov=src --cov-fail-under=80` clean
-- [ ] `uv build` produces a `dist/engram_mcp-<version>-py3-none-any.whl` that contains only `src/engram/**/*.py`
+- [ ] `uv build` produces a `dist/engram_mcp_server-<version>-py3-none-any.whl` that contains only `src/engram/**/*.py`
 - [ ] Clean-venv smoke test passes
 - [ ] TestPyPI publish + smoke passes
 - [ ] Real PyPI publish + smoke passes

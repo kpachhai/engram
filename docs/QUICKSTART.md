@@ -17,13 +17,13 @@ Optional, only needed for specific features:
 ## Step 1: Install
 
 ```bash
-pip install engram-mcp
+pip install engram-mcp-server
 ```
 
 Or with uv:
 
 ```bash
-uv tool install engram-mcp
+uv tool install engram-mcp-server
 ```
 
 Or from a source clone (editable - tracks your local `git pull`s, and is the path most contributors use):
@@ -170,7 +170,7 @@ Your Python's stdlib `sqlite3` was built without `--enable-loadable-sqlite-exten
 
 ```bash
 uv python install 3.11
-uv tool install engram-mcp
+uv tool install engram-mcp-server
 ```
 
 ### Search returns no results even though I captured thoughts

@@ -58,9 +58,9 @@ Expected: a JSON response with `result.protocolVersion` (or similar). A 401/403 
 ### 3. Install engram
 
 ```bash
-pip install engram-mcp
+pip install engram-mcp-server
 # Or with uv (recommended):
-uv tool install engram-mcp
+uv tool install engram-mcp-server
 
 engram --version          # confirms install
 ```
@@ -114,7 +114,7 @@ Or rely on the devkit identity convention: if `~/.config/devkit/identity.json` e
 
 ### Recommended path: direct Postgres (works against current OB1)
 
-This is the path that actually works today. A reference script at `<your-companion-repo>/scripts/migrate_thoughts_to_engram.py` (the maintainer's lives at `kpachhai/memex/scripts/`) imports engram as a library and reads the Supabase Postgres `thoughts` table directly. Copy the script into your own setup repo and adapt as needed.
+This is the path that actually works today. A reference script at `<your-companion-repo>/scripts/migrate_thoughts_to_engram.py` (the maintainer's lives at `kpachhai/memex/scripts/`) imports engram as a library and reads the Supabase Postgres `thoughts` table directly. Copy the script into your own setup repo and adapt as needed. <!-- pii-allow:maintainer-ref -->
 
 The script's high-level shape:
 
@@ -392,7 +392,7 @@ When the underlying issue is fixed, re-run the migration with `--append`. Idempo
 | Symptom | What it means | What to do |
 |---|---|---|
 | Migration aborts with "embedding model failed to load" | FastEmbed couldn't initialize | Run `engram doctor --download-model` separately, then retry. |
-| Migration aborts with "sqlite-vec extension fails to load" | Your Python's stdlib `sqlite3` was built without loadable extensions | Use uv-managed Python: `uv python install 3.11 && uv tool install engram-mcp`. |
+| Migration aborts with "sqlite-vec extension fails to load" | Your Python's stdlib `sqlite3` was built without loadable extensions | Use uv-managed Python: `uv python install 3.11 && uv tool install engram-mcp-server`. |
 | `migration-report.json` shows `errors[]` with "embedding generation failed" for some thoughts | Transient FastEmbed error | Re-run migration with `--append`; the second pass retries failed thoughts. |
 | `fallback_assignments.prefix_Note_default` is large | Many Open Brain thoughts had no `[Prefix]` token | Open Brain didn't enforce prefix discipline; engram defaults to `Note` for these. You can manually re-categorize markdown files post-migration. |
 | Your Open Brain has thoughts with image / file attachments stored in Supabase Storage | Engram's migration is text-and-metadata only; URLs to Supabase-hosted assets are migrated AS-IS | The migration report flags any thought whose body contains URLs to your Open Brain Supabase domain. Decide whether to archive assets manually before decommissioning. After decommissioning, those URLs will 404 unless preserved separately. |
@@ -420,4 +420,4 @@ After migration, when using engram day-to-day, expect these differences:
 - `docs/USE_CASES.md` — five concrete personas with example flows.
 - `docs/ARCHITECTURE.md` — engram's components, data flow, storage layout.
 - `docs/MULTI_MACHINE_SETUP.md` — once you've migrated, sync your vault across personal devices via git.
-- The original Open Brain → engram migration spec lives at `~/repos/github.com/kpachhai/idea-forge/docs/superpowers/specs/2026-05-04-engram/04-MIGRATION.md` in the maintainer's planning repo (historical authority on the design).
+- The original Open Brain → engram migration spec lives at `~/repos/github.com/kpachhai/idea-forge/docs/superpowers/specs/2026-05-04-engram/04-MIGRATION.md` in the maintainer's planning repo (historical authority on the design). <!-- pii-allow:spec-back-ref -->

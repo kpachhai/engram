@@ -58,7 +58,7 @@ uv sync
 uv tool install --editable . --reinstall
 
 # Or from PyPI (when published):
-pip install --upgrade engram-mcp
+pip install --upgrade engram-mcp-server
 ```
 
 Verify the version:

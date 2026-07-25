@@ -3,7 +3,7 @@ requires = ["hatchling>=1.21"]
 build-backend = "hatchling.build"
 
 [project]
-name = "engram-mcp"
+name = "engram-mcp-server"
 version = "0.6.0"
 description = "Personal AI memory backend - portable, sovereign, protocol-compatible (MCP server with markdown source-of-truth and local vector search)."
 readme = "README.md"
