@@ -62,22 +62,33 @@ Historical releases:
   ``engram daemon {start,stop,status,logs}`` subcommand group. The
   MCP wire format is unchanged so existing client configurations
   need no edits.
+- **v0.6.0** (MINOR) — consolidation. New `engram consolidate`
+  report-then-action vault curation (four detection passes; `--apply`
+  executes merge proposals only, archiving originals body-untouched).
+  New `engram team-vault rotate-member-key` steward-only key rotation.
+  Also carries the signed-pull and pre-receive attribution fixes. The
+  MCP wire format is unchanged.
 
 ### 2. Update version + CHANGELOG
 
-```bash
-cd ~/repos/github.com/kpachhai/engram
+Set the release version once. Later steps reuse `${NEW}`, so keep this
+shell open for the rest of the checklist.
 
-# Edit pyproject.toml AND src/engram/__init__.py to bump the version.
-# Example for v0.5.0:
-sed -i '' 's/^version = "0\.4\.0"$/version = "0.5.0"/' pyproject.toml
-sed -i '' 's/^__version__ = "0\.4\.0"$/__version__ = "0.5.0"/' src/engram/__init__.py
+```bash
+cd "$(git rev-parse --show-toplevel)"
+
+NEW=0.6.0                                                    # the version you are releasing
+OLD="$(grep '^version = ' pyproject.toml | cut -d'"' -f2)"   # the version currently on disk
+
+# Bump pyproject.toml AND src/engram/__init__.py together.
+sed -i '' "s/^version = \"${OLD}\"\$/version = \"${NEW}\"/" pyproject.toml
+sed -i '' "s/^__version__ = \"${OLD}\"\$/__version__ = \"${NEW}\"/" src/engram/__init__.py
 
 # Relock so uv.lock matches the new project version:
 uv sync
 
 # In CHANGELOG.md, rename the [Unreleased] section header to:
-#   ## [0.5.0] - 2026-05-13
+#   ## [<NEW>] - <YYYY-MM-DD>
 # And add a fresh [Unreleased] section above it.
 ```
 
@@ -111,13 +122,13 @@ All four must pass. If any fails, fix it before continuing.
 
 ```bash
 uv build
-ls -la dist/                            # expect engram_mcp-0.5.0-py3-none-any.whl + .tar.gz
+ls -la dist/                            # expect engram_mcp-${NEW}-py3-none-any.whl + .tar.gz
 ```
 
 The build artifacts go in `dist/`. Inspect the wheel to make sure nothing surprising shipped:
 
 ```bash
-unzip -l dist/engram_mcp-0.5.0-py3-none-any.whl | head -30
+unzip -l "dist/engram_mcp-${NEW}-py3-none-any.whl" | head -30
 ```
 
 Expected: `src/engram/**/*.py` only. No tests, no docs, no `.indexes/`, no random caches. If anything unexpected is in the wheel, audit `pyproject.toml` `[tool.hatch.build.targets.wheel]` (or whatever build backend is configured) and re-build.
@@ -128,7 +139,7 @@ This catches packaging bugs that don't surface in the dev workflow.
 
 ```bash
 python -m venv /tmp/engram-publish-smoke
-/tmp/engram-publish-smoke/bin/pip install dist/engram_mcp-0.5.0-py3-none-any.whl
+/tmp/engram-publish-smoke/bin/pip install "dist/engram_mcp-${NEW}-py3-none-any.whl"
 /tmp/engram-publish-smoke/bin/engram --version       # confirms install
 /tmp/engram-publish-smoke/bin/python -m engram --version  # confirms `python -m engram` works (daemon spawn dance relies on this)
 /tmp/engram-publish-smoke/bin/engram doctor --help   # confirms CLI wires up
@@ -146,7 +157,7 @@ If any step fails, do NOT publish. Fix the issue, re-build, re-test.
 ```bash
 uv publish --index testpypi
 # Or with twine if you prefer:
-# python -m twine upload --repository testpypi dist/engram_mcp-0.4.0*
+# python -m twine upload --repository testpypi "dist/engram_mcp-${NEW}"*
 ```
 
 Wait ~30 seconds for TestPyPI to index the release. Then test it:
@@ -156,7 +167,7 @@ python -m venv /tmp/engram-testpypi-smoke
 /tmp/engram-testpypi-smoke/bin/pip install \
   --index-url https://test.pypi.org/simple/ \
   --extra-index-url https://pypi.org/simple/ \
-  engram-mcp==0.4.0
+  "engram-mcp==${NEW}"
 /tmp/engram-testpypi-smoke/bin/engram --version
 /tmp/engram-testpypi-smoke/bin/engram doctor --help
 rm -rf /tmp/engram-testpypi-smoke
@@ -171,22 +182,22 @@ If the TestPyPI install succeeds and the binary works, proceed to step 7.
 ```bash
 uv publish
 # Or:
-# python -m twine upload dist/engram_mcp-0.4.0*
+# python -m twine upload "dist/engram_mcp-${NEW}"*
 ```
 
 Wait ~30 seconds. Verify the release page lands:
 
 ```bash
 curl -s https://pypi.org/pypi/engram-mcp/json | python -c "import json, sys; d=json.load(sys.stdin); print(d['info']['version'])"
-# Expected: 0.4.0
+# Expected: the value of ${NEW}
 ```
 
 ### 8. Tag the release in git
 
 ```bash
-cd ~/repos/github.com/kpachhai/engram
-git tag -s v0.4.0 -m "Release v0.4.0 - Team Brain"
-git push origin v0.4.0
+cd "$(git rev-parse --show-toplevel)"
+git tag -s "v${NEW}" -m "Release v${NEW}"
+git push origin "v${NEW}"
 ```
 
 The `-s` flag GPG-signs the tag (per the maintainer's git commit policy). Push the tag separately from `git push` so it lands as a distinct event in CI / GitHub.
@@ -194,11 +205,11 @@ The `-s` flag GPG-signs the tag (per the maintainer's git commit policy). Push t
 ### 9. Create a GitHub release
 
 ```bash
-gh release create v0.4.0 \
-  --title "v0.4.0 - Team Brain" \
+gh release create "v${NEW}" \
+  --title "v${NEW}" \
   --notes-from-tag \
-  dist/engram_mcp-0.5.0-py3-none-any.whl \
-  dist/engram_mcp-0.4.0.tar.gz
+  "dist/engram_mcp-${NEW}-py3-none-any.whl" \
+  "dist/engram_mcp-${NEW}.tar.gz"
 ```
 
 Or use the GitHub web UI: Releases → Draft new release → pick the tag → paste the relevant CHANGELOG section as the release notes → attach the wheel + sdist as binary attachments.
