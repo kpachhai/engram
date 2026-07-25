@@ -18,23 +18,24 @@ You need:
 
 - A PyPI account with publish access to the `engram-mcp` project ([pypi.org/project/engram-mcp/](https://pypi.org/project/engram-mcp/)).
 - A TestPyPI account with publish access to the same project name on [test.pypi.org](https://test.pypi.org/) (for dry-run publishes).
-- API tokens for both, stored in `~/.pypirc` (mode `0600`):
+- API tokens for both. **`uv publish` does not read `~/.pypirc`** — that is
+  twine's config format. Pass the token to uv per-invocation instead:
 
-  ```ini
-  [distutils]
-  index-servers =
-      pypi
-      testpypi
+  ```bash
+  # TestPyPI (step 6) — token from test.pypi.org:
+  UV_PUBLISH_TOKEN=pypi-<your-testpypi-token> uv publish --index testpypi
 
-  [pypi]
-  username = __token__
-  password = pypi-<your-token>
-
-  [testpypi]
-  repository = https://test.pypi.org/legacy/
-  username = __token__
-  password = pypi-<your-testpypi-token>
+  # Real PyPI (step 7) — token from pypi.org:
+  UV_PUBLISH_TOKEN=pypi-<your-token> uv publish
   ```
+
+  The two indexes take *different* tokens; a PyPI token is rejected by
+  TestPyPI and vice versa. The `testpypi` upload target is declared as
+  `[[tool.uv.index]]` in `pyproject.toml` so `--index testpypi` resolves;
+  real PyPI needs no declaration because it is uv's default publish URL.
+
+  Only keep a `~/.pypirc` if you also publish with twine (the commented-out
+  fallbacks in steps 6-7). It has no effect on the `uv publish` path.
 
 - `uv` installed locally (`uv build` is the canonical build command).
 - A clean working tree on `main` with all desired changes committed + signed.
@@ -154,9 +155,19 @@ If any step fails, do NOT publish. Fix the issue, re-build, re-test.
 
 ### 6. Publish to TestPyPI first
 
+Rehearse the upload first. `--dry-run` walks the whole publish path —
+resolving the index, finding `dist/*`, contacting the endpoint — without
+uploading anything:
+
 ```bash
-uv publish --index testpypi
-# Or with twine if you prefer:
+uv publish --index testpypi --dry-run
+```
+
+Then publish for real:
+
+```bash
+UV_PUBLISH_TOKEN=pypi-<your-testpypi-token> uv publish --index testpypi
+# Or with twine if you prefer (twine reads ~/.pypirc; uv does not):
 # python -m twine upload --repository testpypi "dist/engram_mcp-${NEW}"*
 ```
 
@@ -180,7 +191,7 @@ If the TestPyPI install succeeds and the binary works, proceed to step 7.
 ### 7. Publish to real PyPI
 
 ```bash
-uv publish
+UV_PUBLISH_TOKEN=pypi-<your-token> uv publish
 # Or:
 # python -m twine upload "dist/engram_mcp-${NEW}"*
 ```

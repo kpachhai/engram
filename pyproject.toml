@@ -75,6 +75,16 @@ Repository = "https://github.com/kpachhai/engram"
 Issues = "https://github.com/kpachhai/engram/issues"
 Changelog = "https://github.com/kpachhai/engram/blob/main/CHANGELOG.md"
 
+# Named publish target for the TestPyPI dry-run in docs/PUBLISHING.md step 6.
+# `uv publish --index testpypi` resolves the name here; uv does not read
+# ~/.pypirc (that is twine's config). `explicit` keeps dependency resolution
+# off TestPyPI - it is an upload target only, never a source for `uv sync`.
+[[tool.uv.index]]
+name = "testpypi"
+url = "https://test.pypi.org/simple/"
+publish-url = "https://test.pypi.org/legacy/"
+explicit = true
+
 [tool.hatch.build.targets.wheel]
 packages = ["src/engram"]
 
