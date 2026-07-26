@@ -585,10 +585,13 @@ class SyncCoordinator:
                     )
                     return
                 if last_result.error_class is GitErrorClass.NON_FAST_FORWARD:
-                    handled = await self._reflog_gate_and_rebase()
-                    if not handled:
+                    verified_sha = await self._reflog_gate_and_rebase()
+                    if not verified_sha:
                         return
-                    # Successful rebase; loop to retry the push (force_with_lease).
+                    # Successful rebase; loop to retry the push. The lease is
+                    # pinned to the SHA the gate verified, so a remote that moved
+                    # again in the meantime rejects the push instead of losing
+                    # the other machine's commits.
                     self._transition(
                         SyncState.PUSHING,
                         note="post-rebase push retry",
@@ -599,6 +602,7 @@ class SyncCoordinator:
                         self.config.git_remote,
                         self.config.git_branch,
                         force_with_lease=True,
+                        lease_expect=verified_sha,
                         timeout=self.config.push_timeout_seconds,
                     )
                     if last_result.error_class is GitErrorClass.OK:
@@ -651,17 +655,29 @@ class SyncCoordinator:
                 note="exhausted push retries",
             )
 
-    async def _reflog_gate_and_rebase(self) -> bool:
-        """Run the reflog gate and (if safe) attempt rebase.
+    async def _reflog_gate_and_rebase(self) -> str | None:
+        """Run the reflog gate and (if safe) rebase onto the verified remote SHA.
 
-        Returns True when rebase succeeded and the caller should retry the push.
-        Returns False when the gate refused or rebase failed; the caller should
-        return without retrying.
+        Returns the verified remote SHA when the rebase succeeded and the caller
+        should retry the push; the caller pins its ``--force-with-lease`` to that
+        SHA. Returns None when the gate refused or the rebase failed, and the
+        caller returns without retrying.
         """
+        remote_ref = f"refs/remotes/{self.config.git_remote}/{self.config.git_branch}"
         # Capture the previous remote ref BEFORE fetching.
-        prev_sha = await self._rev_parse(
-            f"refs/remotes/{self.config.git_remote}/{self.config.git_branch}"
-        )
+        prev_sha = await self._rev_parse(remote_ref)
+        if prev_sha is None:
+            # No baseline means no way to prove the remote was not rewritten.
+            # Auto-rebasing here would land on an unverified head and the retry
+            # would force-push the result, so refuse instead.
+            self._transition(
+                SyncState.MANUAL_RESOLUTION_REQUIRED,
+                note=(
+                    "reflog gate: no previous origin SHA (baseline missing); refusing auto-rebase"
+                ),
+                allow_from_any=True,
+            )
+            return None
         # Fetch.
         fetch_result = await gitops.fetch(
             self.repo_dir,
@@ -677,22 +693,26 @@ class SyncCoordinator:
                     f"{fetch_result.stderr.strip()[:200]}"
                 ),
             )
-            return False
-        # Reflog reachability check.
-        if prev_sha:
-            new_sha = await self._rev_parse(
-                f"refs/remotes/{self.config.git_remote}/{self.config.git_branch}"
+            return None
+        # Reflog reachability check against the freshly fetched head.
+        new_sha = await self._rev_parse(remote_ref)
+        if new_sha is None:
+            self._transition(
+                SyncState.MANUAL_RESOLUTION_REQUIRED,
+                note="reflog gate: origin ref unresolvable after fetch; refusing auto-rebase",
+                allow_from_any=True,
             )
-            if new_sha and not await self._is_ancestor(prev_sha, new_sha):
-                self._transition(
-                    SyncState.MANUAL_RESOLUTION_REQUIRED,
-                    note=(
-                        "reflog gate: previous origin SHA unreachable from new origin "
-                        "(force-push detected upstream); refusing auto-rebase"
-                    ),
-                    allow_from_any=True,
-                )
-                return False
+            return None
+        if not await self._is_ancestor(prev_sha, new_sha):
+            self._transition(
+                SyncState.MANUAL_RESOLUTION_REQUIRED,
+                note=(
+                    "reflog gate: previous origin SHA unreachable from new origin "
+                    "(force-push detected upstream); refusing auto-rebase"
+                ),
+                allow_from_any=True,
+            )
+            return None
         refusal = await gitops.signed_pull_gate(
             self.repo_dir,
             remote=self.config.git_remote,
@@ -707,12 +727,13 @@ class SyncCoordinator:
                 note=f"signed-pull gate: {refusal}",
                 allow_from_any=True,
             )
-            return False
+            return None
         self._transition(SyncState.FETCHING, note="rebase begin", allow_from_any=True)
-        pull_result: PullResult = await gitops.pull_rebase(
+        # Rebase onto the SHA that just passed the ancestor + signature gates.
+        # `git pull --rebase` would re-fetch and could land on a different head.
+        pull_result: PullResult = await gitops.rebase_onto(
             self.repo_dir,
-            self.config.git_remote,
-            self.config.git_branch,
+            new_sha,
             timeout=self.config.push_timeout_seconds,
         )
         if pull_result.error_class is not GitErrorClass.OK:
@@ -724,8 +745,8 @@ class SyncCoordinator:
                     f"{pull_result.stderr.strip()[:200]}"
                 ),
             )
-            return False
-        return True
+            return None
+        return new_sha
 
     async def _rev_parse(self, ref: str) -> str | None:
         cp = await asyncio.to_thread(

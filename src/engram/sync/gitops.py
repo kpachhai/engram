@@ -421,9 +421,9 @@ async def pull_rebase(
 ) -> PullResult:
     """Run ``git pull --rebase=true <remote> <branch>`` and classify failure.
 
-    On exit-zero, also walks the working tree for conflict markers (a clean
-    rebase leaves the markers behind only when the underlying file genuinely
-    contains the literal sequence; the coordinator decides what to do).
+    This re-fetches as part of the pull. Callers that have already fetched and
+    verified a specific remote SHA should use :func:`rebase_onto` instead, so
+    the commit that passed the gates is the commit they rebase onto.
     """
     cp = await _git(
         ["pull", "--rebase=true", "--no-edit", remote, branch],
@@ -434,12 +434,37 @@ async def pull_rebase(
     return PullResult(error_class=error_class, stderr=cp.stderr)
 
 
+async def rebase_onto(cwd: Path, target_sha: str, *, timeout: float = 60.0) -> PullResult:
+    """Rebase the current branch onto ``target_sha`` without re-fetching.
+
+    ``git pull --rebase`` performs its own fetch, so the commit that passed the
+    ancestor and signature gates is not necessarily the commit being rebased
+    onto. Rebasing a known SHA closes that window.
+
+    On failure the in-progress rebase is aborted, so a conflicted rebase never
+    leaves a detached HEAD and conflict markers in the markdown source of truth
+    while the daemon keeps serving the vault.
+    """
+    cp = await _git(["rebase", target_sha], cwd=cwd, timeout=timeout)
+    if cp.returncode == 0:
+        return PullResult(error_class=GitErrorClass.OK, stderr=cp.stderr)
+    abort = await _git(["rebase", "--abort"], cwd=cwd, timeout=timeout)
+    if abort.returncode != 0:
+        _log.warning(
+            "rebase onto %s failed and `git rebase --abort` also failed: %s",
+            target_sha,
+            abort.stderr.strip(),
+        )
+    return PullResult(error_class=classify_stderr(cp.stderr), stderr=cp.stderr)
+
+
 async def push(
     cwd: Path,
     remote: str,
     branch: str,
     *,
     force_with_lease: bool = False,
+    lease_expect: str | None = None,
     timeout: float = 60.0,
     set_upstream: bool = False,
 ) -> PushResult:
@@ -447,10 +472,20 @@ async def push(
 
     ``force_with_lease=True`` translates to ``--force-with-lease``;
     plain ``--force`` is never invoked from this module by design.
+
+    Pass ``lease_expect`` with the remote SHA this machine actually verified.
+    The bare lease form leases against whatever the remote-tracking ref happens
+    to say at push time, so any unrelated ``git fetch`` in the vault (a terminal,
+    an IDE autofetch, another engram process) silently re-arms it and the push
+    can overwrite commits this machine never saw. Pinning the lease to the
+    verified SHA makes the remote reject exactly that case.
     """
     args = ["push"]
     if force_with_lease:
-        args.append("--force-with-lease")
+        if lease_expect is not None:
+            args.append(f"--force-with-lease=refs/heads/{branch}:{lease_expect}")
+        else:
+            args.append("--force-with-lease")
     if set_upstream:
         args.append("--set-upstream")
     args += [remote, branch]
@@ -621,6 +656,7 @@ __all__ = [
     "load_trusted_keys",
     "pull_rebase",
     "push",
+    "rebase_onto",
     "remote_url",
     "signed_pull_gate",
     "status_porcelain",
