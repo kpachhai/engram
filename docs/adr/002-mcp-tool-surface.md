@@ -1,8 +1,22 @@
-# ADR 002 - MCP tool surface: five tools, frozen for v1.x
+# ADR 002 - MCP tool surface: a frozen core, extended only additively
 
 ## Status
 
-Accepted (Phase 1).
+Accepted (Phase 1). Extended additively — see "Later additions" below.
+
+## Later additions
+
+The five-tool core decided here has since grown by additive, non-breaking
+extension, exactly as the freeze clause below contemplates. None of the five
+original tools changed shape.
+
+| Added | Version | Tool |
+|---|---|---|
+| Optional LLM tools | v0.3.0 | `summarize_thought`, `synthesize_thoughts` (ADR 006) |
+| Sixth core tool | v0.5.0 | `delete_thought(id, confirm)` — mandatory two-call confirmation |
+
+The surface today is **eight tools: six core + two optional LLM**. The freeze
+commitment is unchanged: existing tools never change shape within v1.x.
 
 ## Context
 

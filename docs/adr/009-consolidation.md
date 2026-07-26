@@ -37,7 +37,7 @@ Constraints that shaped the design:
 3. **The daemon owns the vault.** A second SQLite writer while the
    daemon holds the vault has empirically wedged the daemon's
    connection into ``disk I/O error`` and silently dropped in-flight
-   capture rows (see ``docs/DAEMON_WRITE_RESILIENCE_INVESTIGATION.md``).
+   capture rows (see ``docs/archive/DAEMON_WRITE_RESILIENCE_INVESTIGATION.md``).
    The one-shot advisory marker check used by ``delete``/``reindex``
    leaves a TOCTOU window that is unacceptable for a long-running
    write command: any MCP client connecting mid-run auto-spawns the

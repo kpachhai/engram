@@ -213,7 +213,7 @@ Claude Code sessions causes the daemon to exit within about 30 seconds.
 
 ### Schema migrations
 
-For most updates, `engram doctor` post-update is the catch-all: if any check is RED, the message tells you the remediation command. Watch for `embedding_model_changed` (run `engram reindex --full --model <new-model>`) or `schema_version_mismatch` (engram surfaces an explicit migration path). Skip the restart of your MCP client until doctor is all-green.
+For most updates, `engram doctor` post-update is the catch-all: if any check is RED, the message tells you the remediation command. Changing the embedding model is the one case worth calling out: set `embedding_model` in your config first, then run `engram reindex --full` to regenerate every embedding under the new model. Skip the restart of your MCP client until doctor is all-green.
 
 ## Development
 
@@ -226,7 +226,7 @@ uv run ruff check .
 uv run mypy
 ```
 
-The test suite (1300+ tests) covers unit, integration, and hermetic CLI smoke against the installed binary.
+The test suite (1605 tests) covers unit, integration, and hermetic CLI smoke against the installed binary.
 
 ## Migrating from Open Brain
 

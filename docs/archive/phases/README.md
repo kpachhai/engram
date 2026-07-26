@@ -2,7 +2,7 @@
 
 These are historical artifacts from the phased delivery of engram. They are preserved because:
 
-1. The 8 ADRs in `docs/adr/` reference them as the design context.
+1. The 9 ADRs in `docs/adr/` reference them as the design context.
 2. The retrospectives in `<your-meta-stack-repo>/workspace/engram/PHASE_<N>_RETROSPECTIVE.md` reference them.
 3. They document the load-bearing rationale behind decisions that the shipped code embodies (why a state machine over a coroutine, why `(fingerprint, source, created_at)` triple-match for migration idempotency, why two-layer enforcement at security boundaries, why per-vault UDS daemon vs per-user, etc).
 
@@ -24,6 +24,8 @@ These are historical artifacts from the phased delivery of engram. They are pres
 | `PHASE_5_BASELINE.md` | Pre-daemon-mode test/coverage baseline + regression-delta targets |
 | `PHASE_5_FASTMCP_AUDIT.md` | FastMCP per-connection dispatch entrypoint audit; rationale for the compat shim in `src/engram/daemon/fastmcp_dispatch.py` |
 | `PHASE_5_LAYER_A_AUDIT.md` | Pre-implementation audits (SQLite WAL connection model + FastMCP dispatch) captured before daemon-mode build started |
+| `PHASE_6_PLAN.md` | Consolidation (`engram consolidate` report-then-action vault curation): 8-layer plan + pinned-invariant analysis |
+| `PHASE_6_CODE_COMPLETE.md` | Phase 6 exit-criteria evidence |
 
 ## See also
 

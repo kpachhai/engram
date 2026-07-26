@@ -152,7 +152,7 @@ question of duration and real workload, not of whether the code works.
   + `tests/sync/test_gitops_real_git_smoke.py` cover those mock + real
   cases.
 * MCP integration with Claude Code. Wire engram into
-  `~/.config/claude-code/mcp.json` and exercise the five tools
+  `~/.config/claude-code/mcp.json` and exercise the six core tools
   (capture / search / list / stats / fetch) in a real chat session
   to close that gap.
 

@@ -213,7 +213,7 @@ All 7 pinned invariants from `CLAUDE.md` hold after Phase 6:
 3. `tests/test_consolidate_cli_smoke.py` green against the installed binary (Pattern 5), including `python -m engram` parity intact.
 4. Drift-clean: consolidated/archived files produce no doctor WARNs (A3 verified).
 5. ADR 009 + CONSOLIDATION.md + CHANGELOG + README updates present; PII + planning-vocab scans clean.
-6. `docs/PHASE_6_CODE_COMPLETE.md` authored with this split + evidence.
+6. `docs/archive/phases/PHASE_6_CODE_COMPLETE.md` authored with this split + evidence.
 
 **Operational** (require live action):
 7. Live test per engram discipline: daemon restart + `engram doctor` clean + report mode against the real personal vault; sane report.

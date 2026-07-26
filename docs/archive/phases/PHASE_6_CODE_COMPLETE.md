@@ -1,7 +1,7 @@
 # Phase 6 - Consolidation: Code-Complete Declaration
 
 **Date:** 2026-06-10
-**Plan:** `docs/PHASE_6_PLAN.md` | **Design record:** `docs/adr/009-consolidation.md`
+**Plan:** `docs/archive/phases/PHASE_6_PLAN.md` | **Design record:** `docs/adr/009-consolidation.md`
 **Status:** Code-complete; 2 of 4 operational criteria pending (see below).
 
 ## Code-side exit criteria (verifiable from repo state)

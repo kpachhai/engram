@@ -184,7 +184,7 @@ The full transition table is in `src/engram/sync/coordinator.py:ALLOWED_TRANSITI
 
 **Debouncing:** captures within `debounce_window_seconds` (default 60s) are coalesced into a single commit. A `max_deferral_seconds` ceiling (default 5min) ensures continuous activity still flushes.
 
-**Push retry + persistent queue:** team-write vaults keep a persistent push queue at `<vault>/.engram/push-queue.local`. Engram restart replays pending pushes from disk. Auth-failure during push moves affected files to an orphan tarball under `<personal>/.engram/orphans/` for the operator's `engram orphan-recover` flow.
+**Push retry + persistent queue:** team-write vaults keep a persistent push queue at `<vault>/.engram/push-queue.local`. Engram restart replays pending pushes from disk. Auth-failure during push moves affected files to an orphan tarball under `<personal>/.engram/orphans/` for the operator's `engram team-vault orphan-recover` flow.
 
 ## Two-layer security boundary (team vaults)
 
@@ -353,7 +353,7 @@ Each probe maps to a stable string code (see `src/engram/diagnostics/check_codes
 
 `BAAI/bge-small-en-v1.5` is the pinned default. 384-dim. ~130MB model file. Runs on CPU in milliseconds via FastEmbed. Local; no API calls.
 
-The embedding model is recorded in the SQLite settings table on first capture. Subsequent opens with a different model raise `EmbeddingModelMismatch` until you run `engram reindex --full --model <new-model>`.
+The embedding model is recorded in the SQLite settings table on first capture. Subsequent opens with a different model raise `EmbeddingModelMismatch` until you run `engram reindex --full`, which regenerates every embedding under the model named by the `embedding_model` config key.
 
 Multi-vault deployments require all vaults to agree on the embedding model — cross-vault similarity scores are not comparable across embedding models.
 

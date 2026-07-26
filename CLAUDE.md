@@ -32,11 +32,12 @@ engram/
 │   ├── TEAM_BRAIN_GUIDE.md           # shared team vault + GPG attribution
 │   ├── LLM_FEATURES.md               # opt-in summarize / synthesize tools
 │   ├── CONSOLIDATION.md              # report-then-action vault curation guide
+│   ├── DAEMON_MODE.md                # daemon operator + migration guide (v0.5.0+)
 │   ├── PUBLISHING.md                 # PyPI release procedure (maintainer-only)
 │   ├── DEPLOYMENT_MODEL.md           # local-first thesis (why not cloud-hosted)
 │   ├── adr/                          # 9 ADRs (one per major design choice)
-│   └── archive/
-│       └── phases/                   # historical: PHASE_<N>_PLAN + PHASE_<N>_CODE_COMPLETE
+│   └── archive/                      # historical: shipped plans + closed investigations
+│       └── phases/                   # PHASE_<N>_PLAN + PHASE_<N>_CODE_COMPLETE (1-6)
 ├── src/engram/
 │   ├── cli/                          # all engram CLI commands (typer-based)
 │   ├── config/                       # 5-layer config loader + Pydantic models
@@ -53,7 +54,7 @@ engram/
 │   ├── migration/                    # Open Brain migration pipeline
 │   ├── diagnostics/                  # engram doctor; check codes enumerated in check_codes.py
 │   └── utils/                        # atomic_write, fingerprint, file_naming, lock
-├── tests/                            # 1554 tests (unit + integration + smoke)
+├── tests/                            # 1605 tests (unit + integration + smoke)
 └── bench/                            # NFR1 search-latency benchmarks
 ```
 
@@ -61,7 +62,7 @@ The spec lives outside this repo at `~/repos/github.com/kpachhai/idea-forge/docs
 
 ## Phase history (historical context, not active work)
 
-engram shipped in four phases (solo MVP + Open Brain migration -> multi-machine git sync -> multi-vault/friend-share/LLM -> Team Brain), all code-complete; the record lives in `docs/archive/phases/`, `docs/adr/`, and `CHANGELOG.md`. Future work is operational dogfood and incremental polish, not phased delivery.
+engram shipped in six phases (solo MVP + Open Brain migration -> multi-machine git sync -> multi-vault/friend-share/LLM -> Team Brain -> daemon mode, v0.5.0 -> consolidation, v0.6.0), all code-complete; the record lives in `docs/archive/phases/`, `docs/adr/`, and `CHANGELOG.md`. Future work is operational dogfood and incremental polish, not phased delivery.
 
 **Don't reintroduce "Phase N" framing in source comments.** That historical context belongs in plan / ADR / retrospective docs. Source code reads as a polished v1.0 product.
 
@@ -105,7 +106,7 @@ Follow the global rules in `~/.claude/CLAUDE.md` (use hyphens or semicolons inst
 
 ```bash
 uv sync --all-extras --dev          # install + lock deps
-uv run pytest -q                     # full suite (1554 tests; ~4 min)
+uv run pytest -q                     # full suite (1605 tests; ~7 min)
 uv run ruff format                   # auto-format
 uv run ruff check --fix              # lint + auto-fix
 uv run mypy                          # strict type-check (259 source files)

@@ -129,6 +129,30 @@ git push
 # Expected: pre-receive hook refuses with "prefix_not_allowed".
 ```
 
+### What the hook enforces, and where it reads policy from
+
+Two properties are worth knowing before you operate a team vault:
+
+* **Policy and membership come from the remote's canonical state (`HEAD`,
+  i.e. the default branch), never from the tree being pushed.** Otherwise a
+  pusher could supply the rules they are judged against. The practical
+  consequence: after `engram team-vault setup`, push `main` first. Only a
+  repository with no commits at all may seed policy from the push itself, and
+  creating a *new branch* does not reset the trust root.
+* **Every commit a push introduces must be signed by an enrolled, non-revoked
+  member** - including commits that touch no thought file, and commits between
+  your base and your tip. Signatures from revoked or expired keys are refused.
+  Pushing a range whose middle commits are unsigned is refused even when the tip
+  is signed, so avoid rebasing in unsigned work from elsewhere before pushing.
+
+Content is gated per commit rather than by diffing the range endpoints, so
+adding a `portability=block` thought and deleting it again in a later commit of
+the same push is still refused - the blobs would remain reachable in the shared
+remote either way.
+
+Deleting `.engram/members.yaml` or `.engram/team-policy.yaml` is steward-only,
+exactly like modifying them.
+
 ## Step 4: Add team members
 
 Each member runs `engram team-vault enroll-key` to discover their

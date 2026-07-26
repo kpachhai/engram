@@ -195,7 +195,7 @@ verified.
 
 ## Cross-reference
 
-- Plan + first attempt at delete-CLI test: `docs/DELETE_THOUGHT_PLAN.md`
+- Plan + first attempt at delete-CLI test: `docs/archive/DELETE_THOUGHT_PLAN.md`
 - FastEmbed broken-cache doctor check (already shipped): commit
   `e087a19`
 - CLI vault-lock refusal (just shipped): commit `019c583`

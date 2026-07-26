@@ -225,7 +225,7 @@ and are inherited by Phase 3:
 
 * [`PHASE_3_PLAN.md`](./PHASE_3_PLAN.md) - the implementation plan
   this document closes.
-* [`adr/006-multi-vault-and-llm.md`](./adr/006-multi-vault-and-llm.md) - design rationale.
-* [`MULTI_VAULT_SETUP.md`](./MULTI_VAULT_SETUP.md) - operator setup.
-* [`FRIEND_SHARE_GUIDE.md`](./FRIEND_SHARE_GUIDE.md) - export / import flow.
-* [`LLM_FEATURES.md`](./LLM_FEATURES.md) - provider config + portability rules.
+* [`adr/006-multi-vault-and-llm.md`](../../adr/006-multi-vault-and-llm.md) - design rationale.
+* [`MULTI_VAULT_SETUP.md`](../../MULTI_VAULT_SETUP.md) - operator setup.
+* [`FRIEND_SHARE_GUIDE.md`](../../FRIEND_SHARE_GUIDE.md) - export / import flow.
+* [`LLM_FEATURES.md`](../../LLM_FEATURES.md) - provider config + portability rules.

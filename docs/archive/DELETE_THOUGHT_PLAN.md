@@ -1,8 +1,12 @@
 # Feature Plan: delete_thought — MCP Tool + CLI Command
 
-**Status**: Planned (not yet implemented)
+**Status**: Shipped in v0.5.0. Archived historical plan — kept for design rationale only.
 **Created**: 2026-05-13
 **Priority**: High — completes the CRUD surface; current workaround (rm + reindex) is error-prone
+
+> The shipped behaviour is documented in `README.md`, `docs/ARCHITECTURE.md`, and
+> the v0.5.0 CHANGELOG entry. Where this plan and the shipped code disagree, the
+> code wins. The "currently" framing below describes the pre-v0.5.0 state.
 
 ---
 

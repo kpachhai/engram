@@ -6,7 +6,7 @@
 
 `engram-mcp-server` follows [Semantic Versioning](https://semver.org/):
 
-- **MAJOR** (v2.0.0): breaking changes to the MCP wire format or storage schema. Per the API stability commitment in `02-TECHNICAL_DESIGN.md`, the v1.x line is stable for the lifetime of v1; only non-breaking additions ship as MINOR / PATCH.
+- **MAJOR** (v2.0.0): breaking changes to the MCP wire format or storage schema. Per the API stability commitment in [ADR 002](adr/002-mcp-tool-surface.md), the v1.x line is stable for the lifetime of v1; only non-breaking additions ship as MINOR / PATCH.
 - **MINOR** (v0.X.0 → v0.(X+1).0): new MCP tools, new CLI subcommands, new doctor codes, new optional fields, new opt-in features. Backwards compatible.
 - **PATCH** (v0.X.Y → v0.X.(Y+1)): bug fixes, documentation improvements, security fixes that don't change behavior, dependency bumps.
 

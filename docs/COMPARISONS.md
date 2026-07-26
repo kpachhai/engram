@@ -6,7 +6,7 @@ A clear-eyed look at what makes engram different — and when other tools are th
 
 | Tool | Storage SoT | MCP-native | Local embeddings | Multi-machine sync | Team-shared writes | Multi-session per vault | License |
 |---|---|---|---|---|---|---|---|
-| **engram** | Markdown + SQLite | Yes (5+2 tools) | Yes (FastEmbed) | Yes (git) | Yes (GPG-attributed) | Yes (per-vault UDS daemon) | Apache-2.0 |
+| **engram** | Markdown + SQLite | Yes (6+2 tools) | Yes (FastEmbed) | Yes (git) | Yes (GPG-attributed) | Yes (per-vault UDS daemon) | Apache-2.0 |
 | Mem0 | Vector DB (Qdrant/pg) | Yes (cloud + self-host) | Optional | Cloud only | Cloud only | Yes (cloud) | Apache-2.0 |
 | Letta (MemGPT) | Postgres / SQLite | Yes | Internal tiered | DB replication | n/a (single tier) | Yes (DB-backed) | Apache-2.0 |
 | basic-memory | Markdown + SQLite | Yes (FastMCP) | Yes (FastEmbed) | git (DIY) | n/a (single project) | One stdio client per vault | AGPL-3.0 |

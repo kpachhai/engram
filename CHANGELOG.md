@@ -5,9 +5,83 @@ All notable changes to engram will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-The MCP tool surface is committed-stable for the v1.x lifetime per the API stability commitment in `02-TECHNICAL_DESIGN.md`.
+The MCP tool surface is committed-stable for the v1.x lifetime per the API stability commitment in [ADR 002](docs/adr/002-mcp-tool-surface.md).
 
 ## [Unreleased]
+
+### Security
+
+- **Team-vault pre-receive hook: policy and membership are now read from the
+  repository's canonical state (`HEAD`), never from the tree being pushed.**
+  `old_sha` is all zeros for *any* newly created ref, not just a repository's
+  first push, so a non-member could push a side branch carrying its own
+  `members.yaml` + `team-policy.yaml` and self-enroll as steward. Only a
+  repository with no commits at all may still seed policy from the push.
+- **Every commit a push introduces is now validated, not just the range
+  endpoints.** Endpoint diffing could not see content added and then deleted
+  within the same push (the blobs remain reachable in the shared remote either
+  way), attributed the whole range to the tip signer, and left commits between
+  base and tip signature-unchecked.
+- **Identity is now required per commit, independent of what it touches.**
+  A push whose commits modified no `thoughts/*.md` and no canonical file
+  previously met no signature or membership requirement at all.
+- **Non-ASCII paths no longer skip validation.** `_changed_files` now uses
+  NUL-delimited git output; previously `core.quotePath` rendered such a path as
+  `"thoughts/caf\303\251.md"`, which failed the `thoughts/` prefix check and
+  skipped every content, portability, and attribution gate for that file.
+- **Ref names containing non-ASCII whitespace no longer bypass the hook.**
+  `str.split()` separates on U+00A0/U+0085, so a ref legal to git yielded four
+  fields and the whole ref update was silently dropped. Unparseable stdin is now
+  refused rather than skipped.
+- **Deleting `members.yaml` / `team-policy.yaml` is now steward-gated.** The
+  diff filter excluded deletions, so a non-member could remove the canonical
+  files unchallenged - after which every later push failed
+  `missing_team_canonical_files`, permanently bricking the vault.
+- **`accept_sensitive` no longer fails open on YAML 1.1 booleans.** The hook's
+  parser coerced only `true`/`false`, so `accept_sensitive: no` became the
+  truthy string `'no'` and disabled the sensitive-thought gate server-side while
+  the client (PyYAML) read the same file as `False`. The two enforcement layers
+  disagreed in the unsafe direction; the gate now also requires an explicit
+  `True`.
+- **`portability` comparisons in the hook are case-folded.** `portability: BLOCK`
+  slipped past a gate whose purpose is keeping block content out of team vaults.
+- **GPG status parsing is anchored to the `[GNUPG:] VALIDSIG ` status line, and
+  `git verify-commit`'s exit status is honoured.** A substring match for
+  `VALIDSIG` also matched the `GOODSIG` line, whose trailing field is the
+  attacker-controlled key UID, so a crafted UID could supply the authorization
+  fingerprint. Signatures from revoked (`REVKEYSIG`) or expired (`EXPKEYSIG`)
+  keys no longer yield an authorizing identity.
+- **`portability=sensitive` prefix defaults are no longer case-sensitive.**
+  `[domain]` and `[artifact]` missed the defaults map and fell through to
+  `portable` - the tier permitted to reach remote LLM providers. Applied at all
+  three resolution sites (capture, storage facade, Open Brain migration).
+- **Thought content and `source` can no longer forge the `<thought>` delimiter**
+  used to frame untrusted data for the LLM. A body containing `</thought>` could
+  continue outside its own block, defeating the anti-injection framing.
+
+### Fixed
+
+- **`--force-with-lease` now pins the expected remote SHA.** The bare form leases
+  against whatever the remote-tracking ref says at push time, so any concurrent
+  `git fetch` in the vault (a terminal, an IDE autofetch) re-armed the lease and
+  let the post-rebase push overwrite commits this machine never saw. Reproduced
+  as real data loss before the fix.
+- **The rebase now targets the SHA that passed the gates.** The coordinator
+  fetched and verified one remote head, then called `git pull --rebase`, which
+  re-fetches - so the ancestor and signed-pull gates could validate a different
+  commit than the one rebased onto.
+- **The reflog gate fails closed when it has no baseline.** With the
+  remote-tracking ref unresolvable there is no previous SHA to prove the remote
+  was not rewritten, yet the gate proceeded to auto-rebase and force-push.
+- **A failed rebase no longer leaves the vault mid-rebase.** `rebase_onto` aborts
+  on failure, so a conflicted rebase cannot leave a detached HEAD and conflict
+  markers in the markdown source of truth while the daemon keeps serving.
+- **`delete` no longer reports success when the markdown source of truth
+  survives.** The SQLite row was removed first and an `OSError` from the file
+  unlink was swallowed, so the caller was told the thought was deleted while the
+  next reindex re-imported it from the file that never went away. Markdown is
+  now removed first and its failure is fatal to the delete, leaving the index
+  row intact.
 
 ## [0.6.0] - 2026-07-25 — Consolidation
 

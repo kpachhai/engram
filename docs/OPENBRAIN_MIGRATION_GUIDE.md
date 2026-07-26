@@ -236,7 +236,7 @@ For larger corpora (10K+), expect proportionally longer runtimes. Migration is d
 
 ## Validate the migration
 
-The migration script self-validates with a 10-sample byte-equality check via `engram fetch <id>` (NOT semantic search; semantic search is non-deterministic and would produce flaky validation). The report includes the sample results.
+The migration script self-validates with a 10-sample byte-equality check via the `fetch` MCP tool (NOT semantic search; semantic search is non-deterministic and would produce flaky validation). There is no `engram fetch` CLI subcommand — `fetch` is exposed over MCP only. The report includes the sample results.
 
 After the migration completes, do these manual checks:
 
