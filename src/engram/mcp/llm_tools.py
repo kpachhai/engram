@@ -23,6 +23,7 @@ the documented ``error_code`` constants.
 from __future__ import annotations
 
 import logging
+import re
 from dataclasses import dataclass, field
 from typing import TYPE_CHECKING
 from uuid import UUID
@@ -154,10 +155,38 @@ class HandlerDeps:
     gpg_identity: object | None = None
 
 
+#: Matches an opening or closing ``<thought>`` delimiter in any casing.
+_THOUGHT_DELIMITER_RE = re.compile(r"<(/?)\s*thought\b", re.IGNORECASE)
+
+
+def _neutralize_delimiters(text: str) -> str:
+    """Defuse ``<thought>`` delimiters inside untrusted text.
+
+    Only the delimiter sequence is escaped, so ordinary prose containing ``<``
+    or ``>`` (``if a < b``) still reads naturally to the model.
+    """
+    return _THOUGHT_DELIMITER_RE.sub(lambda m: f"&lt;{m.group(1)}thought", text)
+
+
+def _escape_attribute(value: str) -> str:
+    """Escape a value interpolated into a delimiter attribute."""
+    return (
+        value.replace("&", "&amp;").replace('"', "&quot;").replace("<", "&lt;").replace(">", "&gt;")
+    )
+
+
 def _wrap_thought_for_prompt(t: ThoughtWithSimilarity) -> str:
-    """Render a thought as a delimited block for the LLM context window."""
-    src = t.source or ""
-    return f'<thought id="{t.id}" vault="{t.vault}" source="{src}">\n{t.content}\n</thought>'
+    """Render a thought as a delimited block for the LLM context window.
+
+    The whole anti-injection posture rests on the model treating everything
+    inside the delimiters as data, so neither the body nor the attacker-
+    influenced ``source`` (it travels with imported bundles) may forge a
+    delimiter and continue outside the block.
+    """
+    src = _escape_attribute(t.source or "")
+    vault = _escape_attribute(t.vault or "")
+    body = _neutralize_delimiters(t.content)
+    return f'<thought id="{t.id}" vault="{vault}" source="{src}">\n{body}\n</thought>'
 
 
 def _is_friend_thought(t: ThoughtWithSimilarity) -> bool:

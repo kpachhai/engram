@@ -37,8 +37,8 @@ from uuid_extensions import uuid7
 from engram.errors import ThoughtNotFoundError, VaultError, VaultReadOnlyError
 from engram.models import Thought, ThoughtWithSimilarity
 from engram.models.frontmatter import (
-    DEFAULT_PORTABILITY_BY_PREFIX,
     Portability,
+    default_portability_for_prefix,
 )
 from engram.models.mcp import Filter, PortabilityCounts, SortOption, StatsOutput
 from engram.storage.markdown import read_thought, write_thought
@@ -306,7 +306,7 @@ class VaultStorage:
         resolved_portability: Portability = (
             portability
             if portability is not None
-            else (DEFAULT_PORTABILITY_BY_PREFIX.get(resolved_prefix, "portable"))  # type: ignore[assignment]
+            else (default_portability_for_prefix(resolved_prefix))  # type: ignore[assignment]
         )
         now = created_at or datetime.now(UTC)
         tid = thought_id or _new_uuid7()
@@ -547,24 +547,27 @@ class VaultStorage:
         Raises:
             VaultReadOnlyError: if mounted with ``read_only_role=True``.
             ThoughtNotFoundError: if no thought with this id exists.
+            OSError: if the markdown source of truth cannot be removed. The
+                index row is left intact so the vault stays consistent; the
+                thought is NOT deleted.
         """
         self._refuse_if_read_only("delete")
         existing = self.get_by_id(thought_id)
         if existing is None:
             msg = f"no thought with id={thought_id!r}"
             raise ThoughtNotFoundError(msg)
-        # SQLite first: if this fails, the markdown is still on disk and
-        # the row is still in the index - clean transaction failure, no
-        # half-deleted state.
+        # Markdown is the source of truth, so it goes first and its failure is
+        # fatal to the delete: if the file survives, the thought is not deleted.
+        # Dropping the index row first would report success and let the next
+        # reindex re-import the thought from the markdown that never went away.
+        existing.file_path.unlink(missing_ok=True)
         if not _q_delete_thought(self.conn, thought_id):
-            msg = f"sqlite delete failed for id={thought_id!r}"
-            raise ThoughtNotFoundError(msg)
-        try:
-            existing.file_path.unlink(missing_ok=True)
-        except OSError:
-            _log.exception(
-                "SQLite row deleted but markdown unlink failed for %s; manual cleanup required",
-                existing.file_path,
+            # The source of truth is gone, so the delete stands. A missing row
+            # is a stale-cache condition, not a failed delete.
+            _log.warning(
+                "markdown removed for id=%s but no SQLite row was deleted; "
+                "run `engram doctor --repair --remove-orphans` to reconcile",
+                thought_id,
             )
         _log.info(
             "thought_deleted id=%s prefix=%s portability=%s fingerprint=%s vault=%s source=%s",

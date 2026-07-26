@@ -33,7 +33,7 @@ import httpx
 
 from engram.embedding.protocol import EmbeddingProvider
 from engram.errors import MigrationError
-from engram.models.frontmatter import DEFAULT_PORTABILITY_BY_PREFIX, Portability
+from engram.models.frontmatter import Portability, default_portability_for_prefix
 from engram.storage.facade import VaultStorage, parse_prefix_from_content
 from engram.storage.sqlite_queries import (
     record_migration_complete,
@@ -275,7 +275,7 @@ def _resolve_portability_from_metadata(
         normalized = raw_value.strip().lower()
         if normalized in {"portable", "sensitive", "block"}:
             return normalized  # type: ignore[return-value]
-    default: str = DEFAULT_PORTABILITY_BY_PREFIX.get(prefix, "portable")
+    default: str = default_portability_for_prefix(prefix)
     return default  # type: ignore[return-value]
 
 

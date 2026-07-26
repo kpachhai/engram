@@ -66,6 +66,23 @@ def is_canonical_prefix(prefix: str) -> bool:
     return prefix in CANONICAL_PREFIXES
 
 
+def default_portability_for_prefix(prefix: str | None) -> str:
+    """Return the default portability for ``prefix``, matching case-insensitively.
+
+    Prefixes are parsed out of capture bodies verbatim, so ``[domain]`` and
+    ``[Domain]`` both reach this lookup. Matching exactly would silently
+    downgrade a BYOC-sensitive capture to ``portable`` - which is the tier
+    permitted to reach remote LLM providers - so the comparison is folded.
+    """
+    if prefix is None:
+        return "portable"
+    folded = prefix.casefold()
+    for known, portability in DEFAULT_PORTABILITY_BY_PREFIX.items():
+        if known.casefold() == folded:
+            return portability
+    return "portable"
+
+
 def _check_path_safe(value: str, kind: str) -> str:
     if _PATH_TRAVERSAL_RE.search(value):
         msg = f"{kind} contains path-traversal characters: {value!r}"
@@ -167,5 +184,6 @@ __all__ = [
     "DEFAULT_PORTABILITY_BY_PREFIX",
     "Frontmatter",
     "Portability",
+    "default_portability_for_prefix",
     "is_canonical_prefix",
 ]

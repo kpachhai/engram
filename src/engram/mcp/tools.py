@@ -1,17 +1,21 @@
-"""Pure async tool handlers for the 5 MCP tools.
+"""Pure async tool handlers for the six core MCP tools.
 
 These handlers take an explicit :class:`VaultStorage` and
 :class:`EmbeddingProvider` so unit tests can call them directly without
 spinning up the FastMCP server. The wiring layer in :mod:`engram.mcp.server`
 binds them to FastMCP's tool registration.
 
-Per ``02-TECHNICAL_DESIGN.md`` MCP API Contract, the 5 tools are:
+Per the MCP tool-surface contract (ADR 002), the six core tools are:
 
 * ``capture_thought`` - write a new thought; embedding may fail (pending status).
 * ``search_thoughts`` - sqlite-vec ANN search with metadata filter; pending rows excluded.
 * ``list_thoughts`` - filtered + sorted + paginated list including pending rows.
 * ``thought_stats`` - aggregates for the entire vault.
 * ``fetch`` - lookup by id; returns null thought (NOT an error) when absent.
+* ``delete_thought`` - delete by id; ``confirm`` is mandatory and the first
+  (``confirm=False``) call returns a preview without mutating the vault.
+
+The two optional LLM-mediated tools live in :mod:`engram.mcp.llm_tools`.
 """
 
 from __future__ import annotations
@@ -73,7 +77,7 @@ def resolve_capture_metadata(
     first-prefix BEFORE the actual write happens). Mirrors the resolution
     logic baked into :meth:`engram.storage.facade.VaultStorage.capture`.
     """
-    from engram.models.frontmatter import DEFAULT_PORTABILITY_BY_PREFIX
+    from engram.models.frontmatter import default_portability_for_prefix
     from engram.storage.facade import parse_prefix_from_content
 
     metadata = payload.metadata
@@ -87,7 +91,7 @@ def resolve_capture_metadata(
     resolved_portability: Portability = (
         explicit_portability
         if explicit_portability is not None
-        else DEFAULT_PORTABILITY_BY_PREFIX.get(resolved_prefix, "portable")  # type: ignore[assignment]
+        else default_portability_for_prefix(resolved_prefix)  # type: ignore[assignment]
     )
     resolved_source = metadata.source if metadata and metadata.source else default_user
     return ResolvedCaptureMetadata(
