@@ -9,17 +9,23 @@ Hook responsibilities:
 
 * Refuse any pushed file under ``.indexes/``.
 * Refuse non-fast-forward / force-push.
-* Read the team policy YAML and ``members.yaml`` from the just-pushed
-  tree (atomic with the push; reads from new commit's tree, NOT the
-  working dir).
+* Read the team policy YAML and ``members.yaml`` from the canonical state
+  already in the repository (``HEAD``, i.e. the remote's default branch),
+  never from the tree being pushed - otherwise the pusher supplies the
+  rules they are judged against. Only a repository with no commits at all
+  may seed policy from the push itself.
 * For each pushed thought file: assert ``prefix`` in
   ``allowed_prefixes``, ``source`` in ``allowed_sources``,
   ``portability != "block"``, AND ``captured_by`` is PRESENT and matches
   the committer GPG primary fingerprint.
-* Enforce membership: the committer's primary fingerprint must be an
-  enrolled, non-revoked entry in ``members.yaml`` for any pushed thought.
-* For pushes mutating policy.yaml or members.yaml: refuses if committer
-  is not in the OLD-tree's ``stewards:`` list.
+* Enforce membership per commit: every commit the push introduces must be
+  signed by an enrolled, non-revoked member - including commits that touch
+  no thought file, and commits between the base and the tip.
+* Validate every commit in the pushed range, not just its endpoints, so
+  content added and deleted within one push is still gated (its blobs stay
+  reachable in the shared remote either way).
+* For pushes mutating OR deleting policy.yaml / members.yaml: refuses if
+  the committer is not in the canonical ``stewards:`` list.
 * Lists ALL violating files (not just the first) in the rejection
   message.
 
@@ -124,14 +130,22 @@ def _parse_simple_yaml(text: str) -> dict[str, object]:
     return result
 
 
+#: YAML 1.1 boolean spellings. PyYAML (used by the client-side policy model)
+#: reads all of these as booleans, so the hook must agree: ``accept_sensitive: no``
+#: coerced to the truthy string ``'no'`` disables the sensitive-thought gate on the
+#: server while the client believes it is switched off.
+_YAML_TRUE = frozenset({"true", "yes", "on", "y"})
+_YAML_FALSE = frozenset({"false", "no", "off", "n"})
+
+
 def _coerce_scalar(value: str) -> object:
     """Coerce a YAML scalar to its Python type (str / int / bool / None / list)."""
     v = value.strip()
     if v in {"null", "~", ""}:
         return None
-    if v.lower() == "true":
+    if v.lower() in _YAML_TRUE:
         return True
-    if v.lower() == "false":
+    if v.lower() in _YAML_FALSE:
         return False
     if v.startswith('"') and v.endswith('"'):
         return v[1:-1]
@@ -190,12 +204,26 @@ class _Violation:
 
 
 def _parse_stdin(stdin_text: str) -> list[_RefUpdate]:
-    """Parse ``<old> <new> <ref>`` lines from stdin into RefUpdates."""
+    """Parse ``<old> <new> <ref>`` lines from stdin into RefUpdates.
+
+    Splits on ASCII space only. git forbids space in a ref name but permits
+    non-ASCII bytes, and ``str.split()`` also separates on Unicode whitespace
+    (U+00A0, U+0085, ...), so a ref name containing U+00A0 would yield four
+    fields and be dropped - skipping every check for that ref.
+
+    Raises:
+        ValueError: a non-empty line that is not three space-separated fields.
+            Silently ignoring it is the same bypass by another route.
+    """
     updates: list[_RefUpdate] = []
-    for line in stdin_text.splitlines():
-        parts = line.split()
-        if len(parts) != 3:
+    for raw_line in stdin_text.split("\n"):
+        line = raw_line.rstrip("\r")
+        if not line:
             continue
+        parts = line.split(" ")
+        if len(parts) != 3 or not all(parts):
+            msg = f"malformed pre-receive stdin line: {line!r}"
+            raise ValueError(msg)
         updates.append(_RefUpdate(old_sha=parts[0], new_sha=parts[1], ref=parts[2]))
     return updates
 
@@ -223,20 +251,122 @@ def _ls_tree_at(sha: str, path: str, *, cwd: str | None = None) -> str | None:
         return None
 
 
-def _changed_files(old_sha: str, new_sha: str, *, cwd: str | None = None) -> list[str]:
-    """Return file paths changed by the push (added / modified)."""
+def _changed_files(
+    old_sha: str,
+    new_sha: str,
+    *,
+    cwd: str | None = None,
+    include_deletions: bool = False,
+) -> list[str]:
+    r"""Return file paths changed by the push.
+
+    Uses ``-z`` (NUL-delimited) output. Without it git applies ``core.quotePath``
+    and renders a non-ASCII path as ``"thoughts/caf\303\251.md"`` - quotes and
+    all - which then fails every ``startswith("thoughts/")`` check and skips
+    validation for that file entirely.
+
+    ``include_deletions`` adds removed paths, which the steward gate needs:
+    deleting ``members.yaml`` must be as gated as modifying it.
+    """
+    diff_filter = "AMRTD" if include_deletions else "AMRT"
     try:
         # Handle initial branch push: old_sha is all zeros.
         if set(old_sha) == {"0"}:
-            output = _git_cmd(["ls-tree", "-r", "--name-only", new_sha], cwd=cwd)
+            output = _git_cmd(["ls-tree", "-r", "-z", "--name-only", new_sha], cwd=cwd)
         else:
             output = _git_cmd(
-                ["diff", "--name-only", "--diff-filter=AMRT", old_sha, new_sha],
+                ["diff", "-z", "--name-only", f"--diff-filter={diff_filter}", old_sha, new_sha],
                 cwd=cwd,
             )
     except RuntimeError:
         return []
-    return [p for p in output.splitlines() if p]
+    return [p for p in output.split("\0") if p]
+
+
+#: gpg's machine-readable status lines are prefixed with this marker.
+_GNUPG_STATUS_PREFIX = "[GNUPG:] "
+
+
+def _status_payload(line: str) -> str | None:
+    """Return the status keyword + args of a gpg status line, else None.
+
+    Anchoring on the prefix is what separates a real status line from free-form
+    text (notably a key UID) that merely contains a status keyword.
+    """
+    stripped = line.strip()
+    if not stripped.startswith(_GNUPG_STATUS_PREFIX):
+        return None
+    return stripped[len(_GNUPG_STATUS_PREFIX) :].strip()
+
+
+def _commits_in_range(old_sha: str, new_sha: str, *, cwd: str | None = None) -> list[str]:
+    """Return the commits this push actually introduces.
+
+    For a newly created ref, "new" means not reachable from any existing ref,
+    so an existing branch's history is not re-validated. Endpoint diffing alone
+    cannot see content that a later commit in the same push removes.
+    """
+    args = (
+        ["rev-list", new_sha, "--not", "--all"]
+        if set(old_sha) == {"0"}
+        else ["rev-list", f"{old_sha}..{new_sha}"]
+    )
+    try:
+        output = _git_cmd(args, cwd=cwd)
+    except RuntimeError:
+        return []
+    return [line.strip() for line in output.splitlines() if line.strip()]
+
+
+def _commit_changed_files(
+    commit: str,
+    *,
+    cwd: str | None = None,
+    include_deletions: bool = False,
+) -> list[str]:
+    """Return paths touched by a single commit (NUL-delimited, unquoted)."""
+    diff_filter = "AMRTD" if include_deletions else "AMRT"
+    try:
+        output = _git_cmd(
+            [
+                "diff-tree",
+                "-z",
+                "--no-commit-id",
+                "--name-only",
+                "-r",
+                "--root",
+                f"--diff-filter={diff_filter}",
+                commit,
+            ],
+            cwd=cwd,
+        )
+    except RuntimeError:
+        return []
+    return [p for p in output.split("\0") if p]
+
+
+def _existing_head_sha(*, cwd: str | None = None) -> str | None:
+    """Return the commit holding the repository's canonical team state.
+
+    Prefers ``HEAD`` (on a bare remote this tracks the default branch). Falls
+    back to the first existing branch so a repository that has branches but an
+    unresolvable HEAD still has a trust root rather than deferring to the tree
+    being pushed. None means a genuinely empty repository (bootstrap).
+    """
+    try:
+        output = _git_cmd(["rev-parse", "--verify", "HEAD"], cwd=cwd)
+    except RuntimeError:
+        output = ""
+    if output.strip():
+        return output.strip()
+    try:
+        refs = _git_cmd(
+            ["for-each-ref", "--format=%(objectname)", "--count=1", "refs/heads/"],
+            cwd=cwd,
+        )
+    except RuntimeError:
+        return None
+    return refs.strip() or None
 
 
 def _committer_fingerprint(sha: str, *, cwd: str | None = None) -> str | None:
@@ -251,8 +381,18 @@ def _committer_fingerprint(sha: str, *, cwd: str | None = None) -> str | None:
         )
     except OSError:
         return None
+    # A failed verification must never yield an authorizing identity.
+    if result.returncode != 0:
+        return None
     # verify-commit emits its raw output to STDERR.
     text = (result.stderr or "") + (result.stdout or "")
+    lines = text.splitlines()
+    # gpg emits VALIDSIG alongside REVKEYSIG / EXPKEYSIG, so the presence of
+    # VALIDSIG alone does not mean the key is currently usable.
+    for line in lines:
+        status = _status_payload(line)
+        if status is not None and status.split(" ", 1)[0] in {"REVKEYSIG", "EXPKEYSIG"}:
+            return None
     # Per gnupg doc/DETAILS, the VALIDSIG status line is:
     #   [GNUPG:] VALIDSIG <sig-key-fpr> <date> <ts> <expire-ts> <ver>
     #            <reserved> <pk-algo> <hash-algo> <sig-class> <primary-key-fpr>
@@ -261,11 +401,17 @@ def _committer_fingerprint(sha: str, *, cwd: str | None = None) -> str | None:
     # is what captured_by / members.yaml / stewards bind to. Taking the
     # first fingerprint would reject every push signed with a separate
     # signing subkey (the standard GPG setup).
-    for line in text.splitlines():
-        if "VALIDSIG" in line:
-            candidates = [p for p in line.split() if _is_valid_fingerprint(p)]
-            if candidates:
-                return _normalize_fingerprint(candidates[-1])
+    #
+    # The match is anchored to the status-line prefix: a bare ``"VALIDSIG" in
+    # line`` also matches the GOODSIG line, whose trailing field is the
+    # attacker-controlled key UID, letting a crafted UID supply the principal.
+    for line in lines:
+        status = _status_payload(line)
+        if status is None or not status.startswith("VALIDSIG "):
+            continue
+        candidates = [p for p in status.split() if _is_valid_fingerprint(p)]
+        if candidates:
+            return _normalize_fingerprint(candidates[-1])
     return None
 
 
@@ -316,9 +462,13 @@ def _validate_thought(
         # Not a thought file; skip validation (could be README.md, etc.).
         return []
     fm, _body = parsed
+    # Compare portability case-folded: an exact match lets `portability: BLOCK`
+    # through a gate whose whole job is to keep block content out.
+    raw_portability = fm.get("portability")
+    portability = raw_portability.strip().lower() if isinstance(raw_portability, str) else None
 
     # block portability is structural refusal.
-    if fm.get("portability") == "block":
+    if portability == "block":
         violations.append(
             _Violation(file_path=path, reason="block_thought_in_team_vault_disallowed", detail=""),
         )
@@ -351,7 +501,7 @@ def _validate_thought(
             ),
         )
 
-    if fm.get("portability") == "sensitive" and not policy.get("accept_sensitive", False):
+    if portability == "sensitive" and policy.get("accept_sensitive") is not True:
         violations.append(
             _Violation(
                 file_path=path,
@@ -412,6 +562,93 @@ def _validate_thought(
     return violations
 
 
+def _validate_range(
+    upd: _RefUpdate,
+    *,
+    repo_path: str | None,
+    policy: dict[str, object],
+    enrolled: set[str],
+    revoked: set[str],
+    stewards: set[str],
+) -> list[_Violation]:
+    """Validate every commit the push introduces, not just the range endpoints.
+
+    Covers three gaps in endpoint diffing: content added and deleted within the
+    same push (whose blobs still reach the shared remote), commits between the
+    base and the tip whose signatures were never checked, and pushes that touch
+    no thought file at all and so met no identity requirement.
+    """
+    violations: list[_Violation] = []
+    commits = _commits_in_range(upd.old_sha, upd.new_sha, cwd=repo_path)
+    if not commits:
+        return violations
+
+    for commit in commits:
+        commit_fp = _committer_fingerprint(commit, cwd=repo_path)
+        # Identity is required per commit, independent of what it touches.
+        if commit_fp is None:
+            violations.append(
+                _Violation(
+                    file_path=commit,
+                    reason="attribution_committer_mismatch",
+                    detail="commit carries no verifiable GPG signature",
+                ),
+            )
+        elif commit_fp in revoked:
+            violations.append(
+                _Violation(
+                    file_path=commit,
+                    reason="team_membership_revoked",
+                    detail=f"committer={commit_fp}",
+                ),
+            )
+        elif commit_fp not in enrolled:
+            violations.append(
+                _Violation(
+                    file_path=commit,
+                    reason="team_member_not_enrolled",
+                    detail=f"committer={commit_fp}",
+                ),
+            )
+
+        touched = _commit_changed_files(commit, cwd=repo_path)
+        touched_with_deletions = _commit_changed_files(
+            commit, cwd=repo_path, include_deletions=True
+        )
+
+        for path in touched_with_deletions:
+            if _is_indexes_path(path):
+                violations.append(
+                    _Violation(
+                        file_path=path,
+                        reason="indexes_path_refused",
+                        detail="machine-local index files must not be pushed",
+                    ),
+                )
+            if path in (".engram/team-policy.yaml", ".engram/members.yaml") and (
+                commit_fp is None or commit_fp not in stewards
+            ):
+                violations.append(
+                    _Violation(
+                        file_path=path,
+                        reason="steward_only_mutation",
+                        detail=f"committer {commit_fp!r} not in stewards: {sorted(stewards)!r}",
+                    ),
+                )
+
+        for path in touched:
+            if not path.startswith("thoughts/") or not path.endswith(".md"):
+                continue
+            content = _ls_tree_at(commit, path, cwd=repo_path)
+            if content is None:
+                continue
+            violations.extend(
+                _validate_thought(path, content, policy, commit_fp, enrolled, revoked)
+            )
+
+    return violations
+
+
 def run_hook(
     *,
     stdin_text: str,
@@ -423,7 +660,12 @@ def run_hook(
     invokes this and exits with ``exit_code``, printing
     ``stderr_message`` to stderr.
     """
-    updates = _parse_stdin(stdin_text)
+    try:
+        updates = _parse_stdin(stdin_text)
+    except ValueError as exc:
+        # Unparseable input is refused rather than skipped: a line the parser
+        # cannot read is a ref update that would otherwise go unchecked.
+        return 1, f"engram team-vault: push refused. {exc}\n"
     if not updates:
         return 0, ""
 
@@ -447,10 +689,15 @@ def run_hook(
                 )
                 continue
 
-        # Read team policy + members from the OLD tree (steward gate).
-        # On initial push, the OLD tree doesn't exist; both come from new tree.
-        is_initial = set(upd.old_sha) == {"0"}
-        policy_source_sha = upd.new_sha if is_initial else upd.old_sha
+        # Read team policy + members from the canonical state already in the
+        # repository, never from the tree being pushed - otherwise the pusher
+        # supplies the rules they are judged against. ``old_sha`` is all zeros
+        # for ANY newly created ref, so falling back to the new tree there would
+        # let a throwaway branch reset the trust root; only a repository with no
+        # commits at all (genuine bootstrap) may seed policy from the push.
+        policy_source_sha = upd.old_sha
+        if set(upd.old_sha) == {"0"}:
+            policy_source_sha = _existing_head_sha(cwd=repo_path) or upd.new_sha
 
         policy_text = _ls_tree_at(policy_source_sha, ".engram/team-policy.yaml", cwd=repo_path)
         members_text = _ls_tree_at(policy_source_sha, ".engram/members.yaml", cwd=repo_path)
@@ -479,6 +726,15 @@ def run_hook(
         committer_fp = _committer_fingerprint(upd.new_sha, cwd=repo_path)
 
         changed = _changed_files(upd.old_sha, upd.new_sha, cwd=repo_path)
+        # Deletions are excluded from `changed` because the thought validator
+        # needs file content, but removing a canonical file is a mutation the
+        # steward gate must still see.
+        changed_with_deletions = _changed_files(
+            upd.old_sha,
+            upd.new_sha,
+            cwd=repo_path,
+            include_deletions=True,
+        )
 
         # `.indexes/` path refusal.
         for path in changed:
@@ -493,7 +749,9 @@ def run_hook(
 
         # Steward-only mutation of policy / members.
         for sensitive_path in (".engram/team-policy.yaml", ".engram/members.yaml"):
-            if sensitive_path in changed and (committer_fp is None or committer_fp not in stewards):
+            if sensitive_path in changed_with_deletions and (
+                committer_fp is None or committer_fp not in stewards
+            ):
                 all_violations.append(
                     _Violation(
                         file_path=sensitive_path,
@@ -517,11 +775,36 @@ def run_hook(
                 _validate_thought(path, content, policy, committer_fp, enrolled, revoked)
             )
 
+        # Per-commit pass over the range. The endpoint diff above cannot see
+        # content a later commit in the same push removes, and it attributes the
+        # whole range to the tip signer.
+        all_violations.extend(
+            _validate_range(
+                upd,
+                repo_path=repo_path,
+                policy=policy,
+                enrolled=enrolled,
+                revoked=revoked,
+                stewards=stewards,
+            )
+        )
+
     if not all_violations:
         return 0, ""
 
+    # The endpoint pass and the per-commit pass overlap on files present at both;
+    # report each distinct problem once.
+    seen: set[tuple[str, str]] = set()
+    unique: list[_Violation] = []
+    for violation in all_violations:
+        key = (violation.file_path, violation.reason)
+        if key in seen:
+            continue
+        seen.add(key)
+        unique.append(violation)
+
     lines = ["engram team-vault: push refused. Violations:"]
-    for v in all_violations:
+    for v in unique:
         suffix = f" - {v.detail}" if v.detail else ""
         lines.append(f"  {v.file_path}: {v.reason}{suffix}")
     return 1, "\n".join(lines) + "\n"
