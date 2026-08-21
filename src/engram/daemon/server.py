@@ -344,7 +344,7 @@ class DaemonServer:
                 # disconnect path will re-arm the timer when the count
                 # returns to zero.
                 return
-            # Phase 2: close the listener atomically under the lock so
+            # Second phase: close the listener atomically under the lock so
             # any concurrent ``accept()`` either has succeeded already
             # (and bumped ``_connected_proxies``) or fails after this
             # point.

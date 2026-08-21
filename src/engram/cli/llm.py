@@ -7,7 +7,7 @@ validation); this module is the CLI shim so operators can invoke
 the same functionality from a terminal without going through an MCP
 client.
 
-Per the spec (``01-PRODUCT_SPEC.md`` F11):
+The two LLM-backed operations exposed here:
 
 * ``engram summarize <thought-id>`` - LLM compresses a single thought.
 * ``engram synthesize "<query>"`` - LLM synthesizes from cross-vault

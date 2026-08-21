@@ -53,7 +53,7 @@ from dataclasses import dataclass
 # YAML is a small fixed schema; we hand-parse it.
 
 _FRONTMATTER_FENCE = "---\n"
-_FINGERPRINT_RE = re.compile(r"^[A-F0-9]{40}$")
+_FINGERPRINT_RE = re.compile(r"^[A-F0-9]{40}$")  # vocab-allow: hex char class
 
 
 def _parse_simple_yaml(text: str) -> dict[str, object]:

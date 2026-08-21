@@ -8,8 +8,8 @@ structured-tree conflicts.
 Format (YAML):
 
     members:
-      - 1234567890ABCDEF1234567890ABCDEF12345678
-      - fingerprint: ABCDEFABCDEFABCDEFABCDEFABCDEFABCDEFABCD
+      - 1234567890ABCDEF1234567890ABCDEF12345678  # pii-allow: synthetic
+      - fingerprint: ABCDEFABCDEFABCDEFABCDEFABCDEFABCDEFABCD  # pii-allow: synthetic
         display_name: alice
         superseded_by: NEW9999NEW9999NEW9999NEW9999NEW9999NEW9
     revoked:
@@ -29,7 +29,7 @@ from typing import Any
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator
 
-_FINGERPRINT_RE = re.compile(r"^[A-F0-9]{40}$")
+_FINGERPRINT_RE = re.compile(r"^[A-F0-9]{40}$")  # vocab-allow: hex char class
 
 
 def normalize_fingerprint(fp: str) -> str:

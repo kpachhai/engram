@@ -94,7 +94,8 @@ def load_devkit_identity() -> str | None:
     """Return ``github_username`` from ``~/.config/devkit/identity.json`` if present.
 
     Returns ``None`` when the file is absent, malformed, or lacks the field.
-    Per F5 (soft dependency on devkit) and D5 (malformed file falls through).
+    devkit is a soft dependency: an absent or malformed file falls through to
+    ``None`` rather than raising.
     """
     if not _DEVKIT_IDENTITY_PATH.exists():
         return None

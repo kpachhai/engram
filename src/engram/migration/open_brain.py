@@ -429,7 +429,7 @@ def _migrate_one(
     """Migrate a single Open Brain thought; returns (engram_id, source_id) on success."""
     storage = config.vault_storage
 
-    # F6: empty body -> skip.
+    # An empty body carries nothing to migrate; record it and skip.
     if not ob_thought.content.strip():
         report.errors.append(
             {
@@ -452,7 +452,8 @@ def _migrate_one(
         )
         return None
 
-    # F5: future created_at -> use now() and preserve source value as legacy_created_at.
+    # A future-dated created_at is not trustworthy: use now() and preserve the
+    # source value as legacy_created_at.
     legacy_created_at: datetime | None = None
     now = datetime.now(UTC)
     if created_at > now:
