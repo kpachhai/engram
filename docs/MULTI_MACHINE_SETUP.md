@@ -306,18 +306,21 @@ either stop the serve loop or rely on its automatic sync.
 
 ### Quarterly maintenance
 
-There is no `engram sync compact` subcommand; engram defers reflog
-maintenance to plain git so operators can use whatever schedule + flags
-fit their workflow. Run the equivalent manually:
+```bash
+engram sync compact --vault personal
+```
+
+Pins `gc.reflogExpire=30.days.ago` on the vault and runs `git gc --auto`,
+so the reflog does not grow without bound (L3 mitigation per ADR 005). It
+refuses to run while a serve loop holds the vault, and takes the vault lock
+so a stray serve process cannot race it.
+
+To use your own schedule or flags instead, the equivalent by hand is:
 
 ```bash
 cd ~/engram-personal
 git -c gc.reflogExpire=30.days.ago gc --auto
 ```
-
-Runs `git gc --auto` against the vault and pins
-`gc.reflogExpire=30.days.ago` so the reflog does not grow without
-bound (L3 mitigation per ADR 005).
 
 ## Recovery scenarios
 

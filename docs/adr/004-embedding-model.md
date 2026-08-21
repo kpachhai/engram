@@ -35,7 +35,7 @@ The model is **lazy-loaded on first use** under a `threading.Lock` so cold-start
 * No network egress at runtime. NFR3 met without a runtime exception list.
 * Cold start fits the 2s `initialize` budget because model load is deferred.
 * 384 dimensions is small enough that 10K vectors fit in <16MB at float32 - the SQLite index size budget (NFR2: <50MB for 10K thoughts) has comfortable headroom.
-* Switching models is a `engram reindex --full --model <new>` away. The `engram_settings` row records the model name so reopening with a mismatched model raises a clear error pointing at the reindex command.
+* Switching models means setting `embedding.model` in the vault config and then running `engram reindex --full`. The `engram_settings` row records the model name, so reopening with a mismatched model raises a clear error pointing at that path.
 * `fastembed` is a thin wrapper over ONNX runtime; the default-model trajectory is well-trodden.
 
 ### Negative
