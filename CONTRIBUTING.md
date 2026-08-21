@@ -32,8 +32,8 @@ uv sync --all-extras --dev && uv run pre-commit install
 uv run ruff format --check . && uv run ruff check . && uv run mypy && uv run pytest
 ```
 
-CI runs the same gates plus property tests and benchmarks across Python 3.11/3.12 x
-macOS/Ubuntu. Coverage gate is 80% (line); test quality over coverage percentage. Write
+CI runs ruff, mypy, pytest (property tests included) and the repo gates across Python
+3.11/3.12 x macOS/Ubuntu. The benchmarks in `bench/` are run manually, not in CI. Coverage gate is 80% (line); test quality over coverage percentage. Write
 tests first; add a hermetic CLI smoke test for every new subcommand. Update
 `CHANGELOG.md` under `[Unreleased]`, and write an ADR in `docs/adr/` for any
 ADR-worthy decision. Tests use synthetic data only - never real user thoughts (the
