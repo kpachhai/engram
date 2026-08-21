@@ -182,7 +182,8 @@ def _check_embedding_dimension_recorded(
             CheckStatus.FAIL,
             (
                 f"index dimension {recorded_dim} != configured {storage.embedding_dim}; "
-                "run `engram reindex --full --model <name>`"
+                "align `embedding.model` in the vault config, then run "
+                "`engram reindex --full`"
             ),
         )
         return
@@ -192,7 +193,8 @@ def _check_embedding_dimension_recorded(
             CheckStatus.FAIL,
             (
                 f"index model {recorded_model!r} != configured {expected_model!r}; "
-                f"run `engram reindex --full --model {expected_model}`"
+                f"set `embedding.model` to {expected_model!r} in the vault config, "
+                f"then run `engram reindex --full`"
             ),
         )
         return

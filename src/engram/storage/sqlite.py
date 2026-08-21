@@ -306,8 +306,8 @@ def _record_or_verify_settings(
         elif existing_name != embedding_model_name:
             msg = (
                 f"embedding model mismatch: index recorded {existing_name!r}, "
-                f"requested {embedding_model_name!r}. Run `engram reindex --full --model "
-                f"{embedding_model_name}`."
+                f"requested {embedding_model_name!r}. Set `embedding.model` in the "
+                f"vault config to {embedding_model_name!r}, then run `engram reindex --full`."
             )
             raise EngramIndexError(msg)
 
