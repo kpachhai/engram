@@ -141,6 +141,10 @@ landing.
 | `6071e1e` | CONTRIBUTING CI claim corrected | `grep bench .github/workflows/ci.yml` -> no match |
 | `a56b296` | gate scripts re-vendored and hash-pinned | `verify-gates.sh`; hand-edit a vendored file -> rc=1 |
 | `7b27fd7` | repo gates run in CI at all | planted PII in changed files -> job fails |
+| `2de82f3` | two docs corrected to match shipped behaviour | `engram sync compact --help`; `engram reindex --help` |
+| `8567237` | tests covering the gates | stub a scanner to `exit 0`, re-hash honestly -> test fails |
+| `4aa452f` | CI deselects one network test instead of ignoring 22 | full suite 1608 passed, coverage 83.39% vs an 80% gate |
+| `e483d20` | model-mismatch errors name a flag that exists | `engram reindex --help` lists no `--model` |
 
 The vendored scanner had fallen three fixes behind its source. Measured, stale copy
 versus current:
@@ -156,36 +160,34 @@ versus current:
 
 ## Outstanding, not landed
 
-Ranked. Each was verified against HEAD `7b27fd7` by the audit pass; re-run the check
-before acting, since the tree moved during the audit.
+Ranked. Each was verified against the tree during the audit; re-run the check before
+acting, since the tree moved while the audit ran.
 
-1. **CI drops 21 hermetic tests to skip one network test.** `--ignore=tests/embedding/test_fastembed.py`
-   removes the whole file; only one of its 22 tests carries `@pytest.mark.integration`.
-   Among the casualties are the guards on the pinned embedding-model hash manifest.
-   Replace the ignore with `-m "not integration"` and re-check the 80% coverage gate.
-2. **The consolidation LLM path does not escape the prompt frame.**
+1. **The consolidation LLM path does not escape the prompt frame.**
    `src/engram/consolidate/llm.py` interpolates a raw thought body into a delimiter
-   frame. The MCP path already defends this (`src/engram/mcp/llm_tools.py`, with tests).
-   Consolidation is the worse of the two: on `--apply` the output becomes a real vault
-   thought. Lift the escaping into a shared helper and call it from both.
-3. **Portability is not re-verified at consolidation apply time.** The pin carries no
+   frame. The MCP path already defends this (`src/engram/mcp/llm_tools.py`, with tests
+   in `tests/mcp/test_prompt_delimiter_escaping.py`). Consolidation is the worse of the
+   two: on `--apply` the distiller's output becomes a real vault thought. Lift the
+   escaping into a shared helper and call it from both.
+2. **Portability is not re-verified at consolidation apply time.** The pin carries no
    portability field and the fingerprint is body-only, so a `portable -> block` re-tag
    between report and apply verifies clean and is written with the report-time value.
    This touches pinned invariant 2, which is supposed to be defense-in-depth.
-4. **73 pre-existing PII-gate matches in the tree**, invisible because the gate only ever
-   saw newly staged files. Three classes: the `LICENSE` attribution line (sanctioned),
-   the maintainer's GitHub username in docs and test fixtures (the repo's own rules say
+3. **73 pre-existing PII-gate matches in the tree**, invisible because the gate only ever
+   saw newly staged files, and still invisible in CI because the new job is scoped to
+   changed files. Three classes: the `LICENSE` attribution line (sanctioned), the
+   maintainer's GitHub username in docs and test fixtures (the repo's own rules say
    genericize), and synthetic 40-hex key fixtures in tests (false positives needing
-   markers). Deliberately not rewritten - it touches many fixtures and the username
-   class needs an owner decision.
-5. **Docs contradict shipped behaviour in two places**: a phantom `engram reindex --model`
-   flag named in an ADR and compiled into a runtime error message but never registered,
-   and `docs/MULTI_MACHINE_SETUP.md` stating a subcommand does not exist while
-   `src/engram/cli/sync.py` registers it.
-6. **`engram doctor` reports OK for LLM checks it never measured**, and skips them
-   entirely on a single-vault install.
-7. **`.claude/settings.local.json` pre-approves `Bash(claude mcp *)` by prefix**, which
+   markers). Deliberately not rewritten - it touches many fixtures and the username class
+   needs an owner decision.
+4. **`engram doctor` reports OK for LLM checks it never measured.** The checks are called
+   without a provider or budget, so both take their None branch and emit OK with messages
+   asserting nothing is configured. The block is also gated on having more than one
+   vault, so a single-vault install with an LLM gets no LLM rows at all.
+5. **`.claude/settings.local.json` pre-approves `Bash(claude mcp *)` by prefix**, which
    includes `add` and `remove` and writes to a machine-global file outside this repo.
+   That file is gitignored, so this is a local change rather than a committable one.
+
 ## Implementation plan
 
 One task per finding. Every task names real paths and a mechanical verifier - a command
