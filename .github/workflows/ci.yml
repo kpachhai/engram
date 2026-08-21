@@ -53,6 +53,55 @@ jobs:
           PY_VERSION: ${{ matrix.python-version }}
         run: uv run --python "$PY_VERSION" mypy
 
+  gates:
+    name: Repo gates (vendored-gate integrity, PII, planning vocabulary)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          # Full history so a pull_request base sha is resolvable for the
+          # changed-files diff below.
+          fetch-depth: 0
+
+      # Hash-pin check plus a live detection probe. A hash match proves the
+      # vendored scanner is unmodified; it cannot prove the scanner still
+      # works, so the probe plants input each gate must flag.
+      - name: Verify vendored gates
+        run: ./.githooks/verify-gates.sh
+
+      # Existing findings are frozen in .planning-vocab-baseline; only NEW
+      # planning vocabulary fails. Paying debt down never breaks the build.
+      - name: Planning-vocabulary ratchet
+        run: ./.githooks/planning-vocab-ratchet.sh --check .
+
+      # Scoped to files this ref changes, deliberately. The tree carries
+      # pre-existing matches (synthetic key fixtures in tests, the LICENSE
+      # attribution line), so a scan-everything job would be permanently red
+      # and would be ignored within a week. This blocks NEW PII.
+      - name: PII scan (changed files)
+        env:
+          BASE_SHA: ${{ github.event_name == 'pull_request' && github.event.pull_request.base.sha || github.event.before }}
+        run: |
+          set -uo pipefail
+          base="${BASE_SHA:-}"
+          # The all-zero sha git sends for a new branch fails cat-file too,
+          # so an explicit comparison against that literal is redundant.
+          if [ -z "$base" ] || ! git cat-file -e "${base}^{commit}" 2>/dev/null; then
+            if git rev-parse HEAD~1 >/dev/null 2>&1; then base="HEAD~1"; else base=""; fi
+          fi
+          if [ -n "$base" ]; then
+            FILES=(); while IFS= read -r -d '' f; do FILES+=("$f"); done \
+              < <(git diff -z --name-only --diff-filter=ACMRT "$base" HEAD)
+          else
+            FILES=(); while IFS= read -r -d '' f; do FILES+=("$f"); done \
+              < <(git show -z --name-only --diff-filter=ACMRT --format= HEAD)
+          fi
+          if [ "${#FILES[@]:-0}" -eq 0 ]; then
+            echo "no changed files to scan"; exit 0
+          fi
+          printf 'scanning %s changed file(s)\n' "${#FILES[@]}"
+          ./.githooks/pii-scan.sh "${FILES[@]}" < /dev/null
+
   test:
     name: Test (Python ${{ matrix.python-version }} / ${{ matrix.os }})
     runs-on: ${{ matrix.os }}

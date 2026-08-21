@@ -21,6 +21,12 @@ FAIL=0
 note() { printf 'verify-gates: %s\n' "$*"; }
 bad()  { printf 'verify-gates: FAIL - %s\n' "$*" >&2; FAIL=1; }
 
+# shasum (perl) on macOS, sha256sum (coreutils) on Linux runners.
+sha256_of() {
+  if command -v shasum >/dev/null 2>&1; then shasum -a 256 "$1" | cut -d' ' -f1
+  else sha256sum "$1" | cut -d' ' -f1; fi
+}
+
 [[ -f "$LOCK" ]] || { bad "missing $LOCK"; exit 2; }
 
 entries=0
@@ -31,7 +37,7 @@ while read -r want path _marker; do
   entries=$((entries + 1))
   target="$ROOT/$path"
   if [[ ! -f "$target" ]]; then bad "locked file absent: $path"; continue; fi
-  got="$(shasum -a 256 "$target" | cut -d' ' -f1)"
+  got="$(sha256_of "$target")"
   [[ "$got" == "$want" ]] || bad "hash drift: $path
       locked  $want
       on disk $got
