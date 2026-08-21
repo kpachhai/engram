@@ -47,8 +47,11 @@ repos:
       # specific patterns (real name, emails) load from
       # ~/.config/devkit/identity.json at scan time if present; absent on
       # forker machines, only structural patterns apply.
+      # NOTE: `entry` is a plain YAML scalar, so it must not contain a
+      # colon-followed-by-space anywhere - that ends the scalar early and
+      # makes this whole file unparseable. Keep messages colon-free.
       - id: pii-scan
         name: PII scan
-        entry: bash -c 'SCANNER="$(git rev-parse --show-toplevel)/.githooks/pii-scan.sh"; if [ -x "$SCANNER" ]; then "$SCANNER" --staged; fi'
+        entry: bash -c 'SCANNER="$(git rev-parse --show-toplevel)/.githooks/pii-scan.sh"; if [ ! -x "$SCANNER" ]; then echo "pii-scan gate missing or not executable at $SCANNER - refusing to commit" >&2; exit 2; fi; exec "$SCANNER" --staged'
         language: system
         pass_filenames: false
