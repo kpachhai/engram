@@ -138,15 +138,18 @@ jobs:
       - name: Run pytest with coverage
         env:
           PY_VERSION: ${{ matrix.python-version }}
-        # Excludes the FastEmbed real-network round-trip: it depends on
-        # a HuggingFace model download which is too flaky for CI.
+        # Deselects the one FastEmbed real-network round-trip, which depends
+        # on a HuggingFace model download too flaky for CI. Selecting by
+        # marker rather than ignoring the file keeps the other 21 tests in
+        # that module - including the pinned model-hash manifest guards,
+        # which an --ignore of the whole file silently dropped.
         run: |
           uv run --python "$PY_VERSION" pytest \
             --cov=engram \
             --cov-report=xml \
             --cov-report=term-missing \
             --cov-fail-under=80 \
-            --ignore=tests/embedding/test_fastembed.py
+            -m "not integration"
 
       - name: Upload coverage XML
         if: matrix.os == 'ubuntu-latest' && matrix.python-version == '3.12'
