@@ -36,7 +36,7 @@ jobs:
       - name: Sync dependencies
         env:
           PY_VERSION: ${{ matrix.python-version }}
-        run: uv sync --all-extras --dev --python "$PY_VERSION"
+        run: uv sync --all-extras --dev --locked --python "$PY_VERSION"
 
       - name: Ruff format check
         env:
@@ -84,7 +84,7 @@ jobs:
       - name: Sync dependencies
         env:
           PY_VERSION: ${{ matrix.python-version }}
-        run: uv sync --all-extras --dev --python "$PY_VERSION"
+        run: uv sync --all-extras --dev --locked --python "$PY_VERSION"
 
       - name: Run pytest with coverage
         env:
