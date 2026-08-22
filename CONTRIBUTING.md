@@ -30,7 +30,16 @@ strict mypy, and the hermetic CLI-smoke discipline. Read it before changing code
 ```bash
 uv sync --all-extras --dev && uv run pre-commit install
 uv run ruff format --check . && uv run ruff check . && uv run mypy && uv run pytest
+./.githooks/verify-gates.sh && ./.githooks/planning-vocab-ratchet.sh --check .
 ```
+
+Everything above runs from a fresh clone, with nothing outside the repo beyond what
+`uv sync` and `pre-commit install` fetch for themselves. The PII scan is the one gate
+that behaves differently on the maintainer's machine: it adds name, email and username
+patterns from an optional machine-local file that only they have, so on your clone and
+in CI it runs on structural patterns alone. `verify-gates.sh` prints which of the two
+modes it ran in - a scan reporting "clean" with half its rules unloaded looks exactly
+like a full pass otherwise.
 
 CI runs ruff, mypy, pytest (property tests included) and the repo gates across Python
 3.11/3.12 x macOS/Ubuntu. The benchmarks in `bench/` are run manually, not in CI. Coverage gate is 80% (line); test quality over coverage percentage. Write
@@ -41,9 +50,8 @@ three-repo data-ownership model: this repo is code only, ever).
 
 ## House style and commits
 
-Hyphens or semicolons, never em-dashes. Numbers over adjectives. Secrets stay out
-of the repo - keep them wherever your machine keeps them (the maintainer uses an
-optional `~/.config/devkit/`; nothing here requires it) and see `CLAUDE.md` PII
-discipline. Commits are
-`git commit -S -s` (GPG sign + DCO); no `Co-Authored-By` / AI attribution; never push
-without being asked. By contributing you agree to the Apache-2.0 `LICENSE`.
+Hyphens or semicolons, never em-dashes. Numbers over adjectives. Secrets stay out of
+the repo - keep them wherever your machine keeps them, and read the PII discipline in
+`CLAUDE.md` before adding paths, names or keys to committed content. Commits are
+`git commit -S -s` (GPG sign + DCO); no `Co-Authored-By` / AI attribution. By
+contributing you agree to the Apache-2.0 `LICENSE`.
