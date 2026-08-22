@@ -158,33 +158,37 @@ versus current:
 | unrecognised flag (a typo) | rc=0, scanned nothing | rc=2 |
 | file argument, non-TTY stdin | hangs (rc=124) | rc=1 |
 
+## Closed after the audit
+
+Each was fixed in a later session, one commit per finding, and each fix was watched
+failing before it was trusted: the guard was disabled, the test confirmed red, then
+restored and confirmed green.
+
+| Finding | Mechanical verifier |
+|---|---|
+| The consolidation LLM path did not escape the prompt frame | `tests/consolidate/test_llm.py::TestPromptFraming` + `tests/llm/test_prompt_framing.py`; restore the raw interpolation -> both fail |
+
 ## Outstanding, not landed
 
 Ranked. Each was verified against the tree during the audit; re-run the check before
 acting, since the tree moved while the audit ran.
 
-1. **The consolidation LLM path does not escape the prompt frame.**
-   `src/engram/consolidate/llm.py` interpolates a raw thought body into a delimiter
-   frame. The MCP path already defends this (`src/engram/mcp/llm_tools.py`, with tests
-   in `tests/mcp/test_prompt_delimiter_escaping.py`). Consolidation is the worse of the
-   two: on `--apply` the distiller's output becomes a real vault thought. Lift the
-   escaping into a shared helper and call it from both.
-2. **Portability is not re-verified at consolidation apply time.** The pin carries no
+1. **Portability is not re-verified at consolidation apply time.** The pin carries no
    portability field and the fingerprint is body-only, so a `portable -> block` re-tag
    between report and apply verifies clean and is written with the report-time value.
    This touches pinned invariant 2, which is supposed to be defense-in-depth.
-3. **73 pre-existing PII-gate matches in the tree**, invisible because the gate only ever
+2. **73 pre-existing PII-gate matches in the tree**, invisible because the gate only ever
    saw newly staged files, and still invisible in CI because the new job is scoped to
    changed files. Three classes: the `LICENSE` attribution line (sanctioned), the
    maintainer's GitHub username in docs and test fixtures (the repo's own rules say
    genericize), and synthetic 40-hex key fixtures in tests (false positives needing
    markers). Deliberately not rewritten - it touches many fixtures and the username class
    needs an owner decision.
-4. **`engram doctor` reports OK for LLM checks it never measured.** The checks are called
+3. **`engram doctor` reports OK for LLM checks it never measured.** The checks are called
    without a provider or budget, so both take their None branch and emit OK with messages
    asserting nothing is configured. The block is also gated on having more than one
    vault, so a single-vault install with an LLM gets no LLM rows at all.
-5. **`.claude/settings.local.json` pre-approves `Bash(claude mcp *)` by prefix**, which
+4. **`.claude/settings.local.json` pre-approves `Bash(claude mcp *)` by prefix**, which
    includes `add` and `remove` and writes to a machine-global file outside this repo.
    That file is gitignored, so this is a local change rather than a committable one.
 

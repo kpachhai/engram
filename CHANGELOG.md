@@ -75,6 +75,11 @@ The MCP tool surface is committed-stable for the v1.x lifetime per the API stabi
 - **Thought content and `source` can no longer forge the `<thought>` delimiter**
   used to frame untrusted data for the LLM. A body containing `</thought>` could
   continue outside its own block, defeating the anti-injection framing.
+- **The consolidation LLM path frames its notes with the same escaping.** The
+  judge and distiller prompts interpolated raw thought bodies into a `<note>`
+  frame, so a body carrying `</note>` broke out of its own block - and under
+  `engram consolidate --apply` the distilled output becomes a real vault
+  thought. Both LLM paths now share `engram.llm.prompt_framing`.
 
 ### Added
 

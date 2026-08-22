@@ -14,6 +14,7 @@ from typing import TYPE_CHECKING
 
 from engram.errors import LLMProviderError
 from engram.llm.budget import estimate_tokens
+from engram.llm.prompt_framing import frame_block
 
 if TYPE_CHECKING:
     from engram.config.models import LLMConfig
@@ -30,7 +31,13 @@ _VERDICTS = ("contradiction", "consistent", "unclear")
 
 
 def _wrap(label: str, content: str) -> str:
-    return f"<note id={label!r}>\n{content}\n</note>"
+    """Frame one note as data for the model.
+
+    The body is untrusted stored content and the distilled output is written
+    back as a real vault thought under ``--apply``, so the frame is escaped
+    rather than interpolated raw.
+    """
+    return frame_block(tag="note", body=content, attributes={"id": label})
 
 
 def parse_verdict(text: str) -> tuple[str, str]:
