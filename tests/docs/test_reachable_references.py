@@ -89,3 +89,30 @@ def test_no_tracked_file_points_at_an_unreachable_path() -> None:
 def test_the_unreachable_patterns_discriminate(line: str, expected: bool) -> None:
     """Control for the test above: a matcher that flags everything proves nothing."""
     assert any(pattern.search(line) for pattern in _UNREACHABLE) is expected
+
+
+#: Machine-local files that only the maintainer has. A doc may mention one, but
+#: not while assuming the reader has it.
+_MACHINE_LOCAL = re.compile(r"\.config/devkit")
+
+
+def test_machine_local_files_are_described_as_optional() -> None:
+    """A doc that names one must say so on the same line, with the fallback.
+
+    `~/.config/devkit/identity.json` is a personal convention. engram treats it
+    as a soft dependency and falls back to `$USER`, but the docs described it as
+    a step in a sequence, which reads as a prerequisite to anyone who has never
+    heard of it.
+    """
+    offenders: list[str] = []
+    for rel in _tracked_text_files():
+        if not rel.endswith(".md"):
+            continue
+        text = (REPO_ROOT / rel).read_text(encoding="utf-8", errors="replace")
+        for lineno, line in enumerate(text.splitlines(), 1):
+            if _MACHINE_LOCAL.search(line) and "optional" not in line.lower():
+                offenders.append(f"{rel}:{lineno}: {line.strip()}")
+
+    assert not offenders, "machine-local paths presented as if the reader has them:\n" + "\n".join(
+        offenders
+    )

@@ -91,6 +91,12 @@ The MCP tool surface is committed-stable for the v1.x lifetime per the API stabi
 
 ### Changed
 
+- **Docs no longer read as if every machine has the maintainer's config.**
+  `~/.config/devkit/identity.json` and `references.json` are a personal
+  convention that engram treats as a soft dependency, but the quickstart,
+  architecture doc, migration guide and contributing guide named them as steps
+  rather than as an optional source with a `$USER` fallback. Each mention now
+  says it is optional and what happens without it, enforced by a test.
 - **Docs no longer point readers at files that are not in the repo.** The
   ADRs, `CLAUDE.md`, `docs/ARCHITECTURE.md`, the migration guide and `bench/`
   cited a spec under `docs/superpowers/` (gitignored) and retrospectives under

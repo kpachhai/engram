@@ -86,7 +86,7 @@ This repo is publicly forkable. Follow the global PII rules in `~/.claude/CLAUDE
 - **No employer or company brand names** in source, tests, docs, ADRs, or commit messages. The pinned-invariants list, the spec, and the migration guide should all be readable by any forker without context about who built engram.
 - **No hardcoded `/Users/<name>/` paths.** Examples in docs use `~/.local/share/engram/personal` or similar generic paths; tests use `tmp_path` fixtures.
 - **No companion-repo paths bearing the maintainer's GitHub username.** Cross-references to other repos use generic terms (`your dotfiles`, `your meta-stack repo`, `your persistent-memory MCP`). Do not cite a path in an unpublished repo at all: a reader cannot open it, so it is a dead pointer whether or not it carries a username.
-- **No GPG fingerprints, API keys, MCP URLs with secrets, or test fixtures derived from real keys** in committed content. Test GPG keys are generated in `tmp_path` per-test; OB1 migration secrets live in `~/.config/devkit/references.json` (machine-local, gitignored).
+- **No GPG fingerprints, API keys, MCP URLs with secrets, or test fixtures derived from real keys** in committed content. Test GPG keys are generated in `tmp_path` per-test; OB1 migration secrets live outside the repo, in the maintainer's optional `~/.config/devkit/references.json` (machine-local, gitignored) - no contributor needs that file.
 
 Run the Pre-Write Checklist before writing or editing any file in this repo. If candidate PII slips in, flag it before staging - active guidance over silent rewrites.
 

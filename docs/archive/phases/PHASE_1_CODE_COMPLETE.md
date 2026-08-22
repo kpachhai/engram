@@ -1,7 +1,7 @@
 # Phase 1 Code-Complete Validation
 
 **Date**: 2026-05-05
-**Maintainer**: per `~/.config/devkit/identity.json`
+**Maintainer**: see the `authors` field in `pyproject.toml`
 **Status**: Code-complete; live-deployment criteria pending operator action.
 
 This document walks the Phase 1 exit criteria from

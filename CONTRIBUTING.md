@@ -41,7 +41,9 @@ three-repo data-ownership model: this repo is code only, ever).
 
 ## House style and commits
 
-Hyphens or semicolons, never em-dashes. Numbers over adjectives. Secrets in
-`~/.config/devkit/`, never committed (see `CLAUDE.md` PII discipline). Commits are
+Hyphens or semicolons, never em-dashes. Numbers over adjectives. Secrets stay out
+of the repo - keep them wherever your machine keeps them (the maintainer uses an
+optional `~/.config/devkit/`; nothing here requires it) and see `CLAUDE.md` PII
+discipline. Commits are
 `git commit -S -s` (GPG sign + DCO); no `Co-Authored-By` / AI attribution; never push
 without being asked. By contributing you agree to the Apache-2.0 `LICENSE`.

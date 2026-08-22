@@ -108,7 +108,7 @@ vaults:
 EOF
 ```
 
-Or rely on the devkit identity convention: if `~/.config/devkit/identity.json` exists with a `github_username` field, engram reads it automatically.
+Or rely on the optional devkit identity convention: if `~/.config/devkit/identity.json` exists with a `github_username` field, engram reads it automatically. Nothing needs that file - without it engram falls back to `$USER`.
 
 ## Run the migration
 
@@ -319,7 +319,7 @@ Anywhere you had Open Brain MCP references (Claude Code's user-scope MCP registr
 
 - Revoke the Open Brain MCP access keys (Supabase dashboard → API → Service Role Key rotation).
 - Remove the OpenRouter API key from your `.env` / secrets manager — engram does embeddings locally; you no longer need OpenRouter for memory.
-- Update `~/.config/devkit/references.json` to remove the `open_brain_mcp_url` field (or comment it out).
+- If you kept the endpoint in the optional `~/.config/devkit/references.json`, remove the `open_brain_mcp_url` field there (or comment it out). Skip this step if you passed `--url` instead.
 
 After step 5, Open Brain is decommissioned. The Supabase project itself can stay (no cost on the free tier) or be deleted entirely.
 

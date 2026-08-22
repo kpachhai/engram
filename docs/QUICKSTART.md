@@ -84,7 +84,7 @@ EOF
 
 What each field does:
 
-- `default_user` — stamped as `source` on captures that don't carry an explicit one. Falls back to `~/.config/devkit/identity.json` `github_username` if unset, but explicit-in-the-config is more discoverable. Use your GitHub handle or any identifier you'll recognize later.
+- `default_user` — stamped as `source` on captures that don't carry an explicit one. Use your GitHub handle or any identifier you'll recognize later. If you leave it out, engram reads `github_username` from the optional `~/.config/devkit/identity.json` when that file exists, and otherwise uses `$USER`; setting it here is more discoverable than either.
 - `vaults` — list of vaults this machine has access to. The path can be absolute or `~`-prefixed; `engram` expands it. The `name` is a stable handle used in CLI commands and frontmatter; the `role` is one of `primary` / `read-only` / `team-write`.
 - `log_level` / `log_format` — operational defaults; tweak as needed.
 

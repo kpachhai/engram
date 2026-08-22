@@ -304,7 +304,7 @@ response, show that preview to the user, and only call again with
 
 Three identity surfaces, depending on context:
 
-1. **`default_user`** — for personal vaults, the free-form source attribution string. Resolved from per-user config, falling back to `~/.config/devkit/identity.json`'s `github_username` field, falling back to `$USER`.
+1. **`default_user`** — for personal vaults, the free-form source attribution string. Resolved from per-user config; failing that, from `github_username` in the optional `~/.config/devkit/identity.json` (a machine-local file most installs will not have); failing that, from `$USER`.
 2. **`captured_by`** — for team vaults, the GPG primary fingerprint (40 hex; canonical upper-case). Set by the team-vault capture gate before write.
 3. **`stewards`** — list of GPG fingerprints in `team-policy.yaml` with disaster-recovery + policy-mutation + member-mutation + redaction permission.
 
