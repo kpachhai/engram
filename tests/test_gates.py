@@ -154,3 +154,34 @@ def test_the_whole_tracked_tree_passes_the_pii_scan() -> None:
     assert result.returncode == 0, (
         "tracked files carry PII the changed-files CI scan cannot see:\n" + result.stdout
     )
+
+
+def test_verify_gates_announces_degraded_identity_mode(tmp_path: Path) -> None:
+    """A fork runs the PII gate with half its patterns; say so rather than imply a full scan."""
+    result = _run(_sandbox(tmp_path))
+    assert result.returncode == 0, result.stdout + result.stderr
+    assert "DEGRADED" in result.stdout, (
+        f"no degraded-mode notice with no identity file:\n{result.stdout}"
+    )
+
+
+def test_verify_gates_is_quiet_when_identity_patterns_load(tmp_path: Path) -> None:
+    """Control for the case above: with an identity file there is nothing to warn about."""
+    root = _sandbox(tmp_path)
+    identity = root / "identity.json"
+    identity.write_text('{"github_username": "someone"}\n', encoding="utf-8")
+
+    result = subprocess.run(  # noqa: S603 - test-only, controlled args
+        [BASH, str(root / ".githooks" / "verify-gates.sh")],
+        capture_output=True,
+        text=True,
+        timeout=300,
+        stdin=subprocess.DEVNULL,
+        env={
+            "PATH": "/usr/local/bin:/usr/bin:/bin",
+            "HOME": str(root),
+            "PII_IDENTITY_FILE": str(identity),
+        },
+    )
+    assert result.returncode == 0, result.stdout + result.stderr
+    assert "DEGRADED" not in result.stdout

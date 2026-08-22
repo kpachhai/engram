@@ -91,6 +91,11 @@ The MCP tool surface is committed-stable for the v1.x lifetime per the API stabi
 
 ### Changed
 
+- **`verify-gates.sh` says when the PII gate is running degraded.** Identity
+  patterns (name, emails, username) load from a machine-local file that exists
+  only on the maintainer's machine; everywhere else - a fork, a CI runner - the
+  scan ran on structural patterns alone and reported "clean" exactly as a full
+  scan would. It now prints which mode it is in.
 - **The repo no longer bakes the maintainer's identity into tests and docs.**
   Test fixtures used the maintainer's GitHub username as `default_user` /
   `source` values, a real first name as a git identity fixture, and

@@ -50,6 +50,17 @@ done < <(cat "$LOCK"; echo)
 [[ "$entries" -gt 0 ]] || bad "vendor.lock pins zero entries - verification would be a no-op"
 note "integrity: checked $entries locked entries"
 
+# The PII gate loads identity-specific patterns (name, emails, username) from a
+# machine-local file that exists only on the maintainer's machine. Everywhere
+# else - a fork, a CI runner - the scan silently runs on structural patterns
+# alone. Silently is the problem: a gate reporting "clean" while half its rules
+# never loaded reads exactly like a full pass.
+if [[ -f "${PII_IDENTITY_FILE:-$HOME/.config/devkit/identity.json}" ]]; then
+  note "pii-scan: identity patterns available (name, email and username checks active)"
+else
+  note "pii-scan: DEGRADED - no identity file, so structural patterns only; names, emails and usernames are NOT checked. Expected on a fork and in CI."
+fi
+
 probe="$(mktemp -d)"; trap 'rm -rf "$probe"' EXIT
 
 # --- PII gate must flag a planted path and pass clean content ---
