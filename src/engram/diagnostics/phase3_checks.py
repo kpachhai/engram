@@ -236,9 +236,26 @@ def check_aggregator_mode(
 def check_llm_provider_reachable(
     report: DoctorReport,
     provider: LLMProvider | None,
+    *,
+    configured: bool = False,
+    unmeasured_reason: str | None = None,
 ) -> None:
-    """WARN if a provider is configured but ``health_check`` returns False."""
+    """WARN if a provider is configured but ``health_check`` returns False.
+
+    ``configured`` separates the two reasons ``provider`` can be ``None``:
+    no LLM in the config at all (OK, the feature is off) versus an LLM the
+    caller could not build a provider for (WARN - the row would otherwise
+    claim a clean result for something never measured).
+    """
     if provider is None:
+        if configured:
+            report.add(
+                LLM_PROVIDER_REACHABLE,
+                CheckStatus.WARN,
+                "LLM is configured but no provider was resolved; reachability not measured",
+                detail=unmeasured_reason,
+            )
+            return
         report.add(
             LLM_PROVIDER_REACHABLE,
             CheckStatus.OK,
@@ -277,12 +294,23 @@ def check_llm_daily_cost_cap_approached(
     budget: LLMBudget | None,
     cap: float,
 ) -> None:
-    """WARN at >= 80% of the daily cap; INFO under that threshold."""
-    if budget is None or cap <= 0:
+    """WARN at >= 80% of the daily cap; INFO under that threshold.
+
+    A configured cap with no budget tracker is a WARN rather than an OK:
+    nothing was measured, so the row cannot honestly report headroom.
+    """
+    if cap <= 0:
         report.add(
             LLM_DAILY_COST_CAP_APPROACHED,
             CheckStatus.OK,
-            "daily cost cap disabled or budget tracker not configured",
+            "daily cost cap disabled (llm.daily_cost_cap_usd = 0)",
+        )
+        return
+    if budget is None:
+        report.add(
+            LLM_DAILY_COST_CAP_APPROACHED,
+            CheckStatus.WARN,
+            f"daily cap {cap:.2f} USD is configured but today's usage was not measured",
         )
         return
     used = budget.today_cost_usd()
@@ -381,29 +409,50 @@ def check_friend_vault_block_thought_present(
     )
 
 
+def run_llm_checks(
+    report: DoctorReport,
+    *,
+    provider: LLMProvider | None,
+    budget: LLMBudget | None,
+    daily_cost_cap_usd: float,
+    configured: bool,
+    unmeasured_reason: str | None = None,
+) -> None:
+    """Run the LLM rows.
+
+    Kept out of :func:`run_phase3_checks` because neither row is a
+    cross-vault property: an LLM configured on a single-vault install is
+    exactly as worth checking, and gating them behind a second vault left
+    that install with no LLM rows at all.
+    """
+    check_llm_provider_reachable(
+        report,
+        provider,
+        configured=configured,
+        unmeasured_reason=unmeasured_reason,
+    )
+    check_llm_daily_cost_cap_approached(report, budget=budget, cap=daily_cost_cap_usd)
+
+
 def run_phase3_checks(
     report: DoctorReport,
     *,
     user_config: UserConfig,
     registry: VaultRegistry,
-    provider: LLMProvider | None = None,
-    budget: LLMBudget | None = None,
-    daily_cost_cap_usd: float = 0.0,
     per_vault_llm: dict[str, LLMConfig | None] | None = None,
     force_sequential: bool = False,
 ) -> None:
-    """Run all nine multi-vault checks against ``registry``.
+    """Run the multi-vault checks against ``registry``.
 
     Convenience for the doctor CLI command; tests typically call
-    individual check functions to assert specific scenarios.
+    individual check functions to assert specific scenarios. The LLM rows
+    live in :func:`run_llm_checks`, which the CLI runs for every install.
     """
     check_user_config_vault_name_mismatch(report, user_config)
     check_multiple_primary_vaults(report, user_config)
     check_vault_path_collision(report, registry)
     check_embedding_model_mismatch_across_vaults(report, registry)
     check_aggregator_mode(report, registry, force_sequential=force_sequential)
-    check_llm_provider_reachable(report, provider)
-    check_llm_daily_cost_cap_approached(report, budget=budget, cap=daily_cost_cap_usd)
     check_read_only_vault_declares_llm(
         report,
         user_config=user_config,
@@ -422,5 +471,6 @@ __all__ = [
     "check_read_only_vault_declares_llm",
     "check_user_config_vault_name_mismatch",
     "check_vault_path_collision",
+    "run_llm_checks",
     "run_phase3_checks",
 ]

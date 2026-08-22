@@ -168,6 +168,7 @@ restored and confirmed green.
 |---|---|
 | The consolidation LLM path did not escape the prompt frame | `tests/consolidate/test_llm.py::TestPromptFraming` + `tests/llm/test_prompt_framing.py`; restore the raw interpolation -> both fail |
 | Portability was not re-verified at consolidation apply time | `tests/consolidate/test_apply.py::TestSafetyGuards::test_portability_retag_skips_proposal`; disable the comparison -> fails |
+| `engram doctor` reported OK for LLM checks it never measured | `tests/test_doctor_cli_smoke.py` against the installed binary; drop the wiring call -> both tests fail |
 
 ## Outstanding, not landed
 
@@ -181,11 +182,7 @@ acting, since the tree moved while the audit ran.
    genericize), and synthetic 40-hex key fixtures in tests (false positives needing
    markers). Deliberately not rewritten - it touches many fixtures and the username class
    needs an owner decision.
-2. **`engram doctor` reports OK for LLM checks it never measured.** The checks are called
-   without a provider or budget, so both take their None branch and emit OK with messages
-   asserting nothing is configured. The block is also gated on having more than one
-   vault, so a single-vault install with an LLM gets no LLM rows at all.
-3. **`.claude/settings.local.json` pre-approves `Bash(claude mcp *)` by prefix**, which
+2. **`.claude/settings.local.json` pre-approves `Bash(claude mcp *)` by prefix**, which
    includes `add` and `remove` and writes to a machine-global file outside this repo.
    That file is gitignored, so this is a local change rather than a committable one.
 

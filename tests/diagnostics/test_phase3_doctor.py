@@ -27,6 +27,7 @@ from engram.diagnostics.phase3_checks import (
     check_read_only_vault_declares_llm,
     check_user_config_vault_name_mismatch,
     check_vault_path_collision,
+    run_llm_checks,
     run_phase3_checks,
 )
 from engram.llm.budget import LLMBudget
@@ -201,6 +202,18 @@ def test_llm_provider_reachable_no_provider() -> None:
     assert _find_check(report, LLM_PROVIDER_REACHABLE) == CheckStatus.OK.value
 
 
+def test_llm_provider_reachable_configured_but_unresolved_warns() -> None:
+    """An LLM in the config with no provider built was never measured."""
+    report = DoctorReport()
+    check_llm_provider_reachable(
+        report,
+        None,
+        configured=True,
+        unmeasured_reason="LLMProviderError: base_url not trusted",
+    )
+    assert _find_check(report, LLM_PROVIDER_REACHABLE) == CheckStatus.WARN.value
+
+
 # === llm_daily_cost_cap_approached ===
 
 
@@ -218,6 +231,33 @@ def test_cap_approached_ok_under_threshold(tmp_path: Path) -> None:
     report = DoctorReport()
     check_llm_daily_cost_cap_approached(report, budget=budget, cap=10.0)
     assert _find_check(report, LLM_DAILY_COST_CAP_APPROACHED) == CheckStatus.OK.value
+
+
+def test_cap_configured_without_budget_warns() -> None:
+    """A configured cap and no tracker means no measurement, not headroom."""
+    report = DoctorReport()
+    check_llm_daily_cost_cap_approached(report, budget=None, cap=5.0)
+    assert _find_check(report, LLM_DAILY_COST_CAP_APPROACHED) == CheckStatus.WARN.value
+
+
+def test_cap_disabled_is_ok() -> None:
+    report = DoctorReport()
+    check_llm_daily_cost_cap_approached(report, budget=None, cap=0.0)
+    assert _find_check(report, LLM_DAILY_COST_CAP_APPROACHED) == CheckStatus.OK.value
+
+
+def test_run_llm_checks_emits_both_rows(tmp_path: Path) -> None:
+    budget = LLMBudget(state_path=tmp_path / "u.json", daily_cost_cap_usd=10.0)
+    report = DoctorReport()
+    run_llm_checks(
+        report,
+        provider=MockProvider(),
+        budget=budget,
+        daily_cost_cap_usd=10.0,
+        configured=True,
+    )
+    codes = {c.name for c in report.checks}
+    assert {LLM_PROVIDER_REACHABLE, LLM_DAILY_COST_CAP_APPROACHED}.issubset(codes)
 
 
 # === read_only_vault_declares_llm ===
@@ -288,7 +328,7 @@ def test_friend_vault_block_present_fail(tmp_path: Path) -> None:
 # === run_phase3_checks orchestration ===
 
 
-def test_run_phase3_checks_emits_eight_rows(tmp_path: Path) -> None:
+def test_run_phase3_checks_emits_the_cross_vault_rows(tmp_path: Path) -> None:
     primary = _vault_storage(tmp_path, "primary")
     registry = VaultRegistry()
     registry.mount(name="primary", storage=primary, role="primary")
@@ -307,9 +347,11 @@ def test_run_phase3_checks_emits_eight_rows(tmp_path: Path) -> None:
         VAULT_PATH_COLLISION,
         EMBEDDING_MODEL_MISMATCH_ACROSS_VAULTS,
         AGGREGATOR_MODE,
-        LLM_PROVIDER_REACHABLE,
-        LLM_DAILY_COST_CAP_APPROACHED,
         READ_ONLY_VAULT_DECLARES_LLM,
         FRIEND_VAULT_BLOCK_THOUGHT_PRESENT,
     }
     assert expected.issubset(codes)
+    # The LLM rows are not cross-vault properties; run_llm_checks owns them
+    # so a single-vault install gets them too.
+    assert LLM_PROVIDER_REACHABLE not in codes
+    assert LLM_DAILY_COST_CAP_APPROACHED not in codes

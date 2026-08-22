@@ -110,6 +110,14 @@ The MCP tool surface is committed-stable for the v1.x lifetime per the API stabi
 
 ### Fixed
 
+- **`engram doctor` no longer reports OK for LLM checks it never ran.** Both LLM
+  rows were called with no provider and no budget, so each took its "nothing
+  configured" branch and printed OK while asserting nothing was configured - on
+  installs that had an LLM configured. The rows were also gated behind having
+  more than one vault, so a single-vault install with an LLM got no LLM rows at
+  all. Doctor now resolves the configured provider and budget, runs the rows for
+  every install, and WARNs when something is configured but could not be
+  measured.
 - **Model-mismatch errors named a flag that does not exist.** Three runtime
   messages told operators to run `engram reindex --full --model <name>`; no such
   option is registered. They now name the real path: set `embedding.model` in the

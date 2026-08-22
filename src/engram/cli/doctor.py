@@ -1,10 +1,11 @@
 """``engram doctor`` CLI command - thin wrapper over engram.diagnostics.run_diagnostics.
 
-When the per-user config lists more than one vault (the multi-vault
-case), the CLI ALSO runs the multi-vault checks via
+The LLM rows (provider reachability, daily cost cap) run for every
+install via :func:`engram.diagnostics.phase3_checks.run_llm_checks`.
+When the per-user config lists more than one vault, the CLI ALSO runs
+the cross-vault checks via
 :func:`engram.diagnostics.phase3_checks.run_phase3_checks`. The
-single-vault rows still surface for the targeted vault; the multi-vault
-rows surface eight cross-vault invariants on top.
+single-vault rows still surface for the targeted vault.
 """
 
 from __future__ import annotations
@@ -87,8 +88,12 @@ def register(app: typer.Typer) -> None:
             remove_orphans=remove_orphans,
         )
 
+        # LLM rows: measured against the configured provider and budget,
+        # for every install rather than only multi-vault ones.
+        _append_llm_rows(report=report, config=config)
+
         # Multi-vault checks: when the per-user config has >1
-        # vault entry, surface the eight cross-vault rows on top. The
+        # vault entry, surface the cross-vault rows on top. The
         # registry built here is for read-only inspection; we close it
         # before exiting.
         user_config = _load_user_config_if_present()
@@ -133,6 +138,50 @@ def register(app: typer.Typer) -> None:
             typer.secho("engram doctor: failures detected", fg=typer.colors.RED)
 
         raise typer.Exit(report.exit_code)
+
+
+def _append_llm_rows(*, report: DoctorReport, config: object) -> None:
+    """Measure the LLM rows against the configured provider and budget.
+
+    Doctor previously called both checks with no provider and no budget, so
+    each took its "nothing configured" branch and reported OK for something
+    it had never looked at.
+    """
+    from engram.diagnostics.phase3_checks import run_llm_checks
+    from engram.llm.budget import LLMBudget, usage_state_path_for
+    from engram.llm.protocol import LLMProvider
+    from engram.llm.resolver import resolve_provider
+
+    llm_config = getattr(config, "llm", None)
+    configured = llm_config is not None and llm_config.provider is not None
+    cap = float(getattr(llm_config, "daily_cost_cap_usd", 0.0) or 0.0)
+
+    provider: LLMProvider | None = None
+    unmeasured_reason: str | None = None
+    if configured:
+        try:
+            # No thoughts: this resolves the provider only, so the
+            # portability gates have nothing to refuse.
+            provider = resolve_provider([], config)  # type: ignore[arg-type]
+        except Exception as exc:
+            unmeasured_reason = f"{type(exc).__name__}: {exc}"
+
+    budget: LLMBudget | None = None
+    index_dir = getattr(config, "index_dir", None)
+    if configured and cap > 0 and index_dir is not None:
+        budget = LLMBudget.load_or_init(
+            state_path=usage_state_path_for(primary_vault_index_dir=index_dir),
+            daily_cost_cap_usd=cap,
+        )
+
+    run_llm_checks(
+        report,
+        provider=provider,
+        budget=budget,
+        daily_cost_cap_usd=cap if configured else 0.0,
+        configured=configured,
+        unmeasured_reason=unmeasured_reason,
+    )
 
 
 def _append_phase3_rows(*, report: DoctorReport, user_config: object) -> None:
