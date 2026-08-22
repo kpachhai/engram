@@ -196,6 +196,18 @@ End-to-end check: a fresh `git clone` installed with `uv sync --locked` under an
 `HOME` runs the suite and both gate scripts green, and `verify-gates.sh` reports the
 degraded PII mode a contributor actually gets.
 
+## What only CI could tell us
+
+The local checks above were all green while the repo's own CI was red, and had been
+since the gates job landed. Both causes were the same shape as the findings that
+produced this document - a gate that looks like it is working from the one machine it
+was written on.
+
+| Finding | Mechanical verifier |
+|---|---|
+| The gates job's PII step died on `${#FILES[@]:-0}`, a bad substitution under the runner's bash 5 that bash 3.2 accepts, so the scan never ran | `tests/test_gates.py::test_ci_pii_step_flags_pii_a_ref_introduces` + `::test_ci_pii_step_passes_a_clean_ref` run the workflow's own step against a scratch repo; both fail under bash 5 with the old form, and `bash -n` cannot see it at all |
+| `verify-gates.sh` called GNU `timeout`, absent on stock macOS, so every gate returned rc=127 and the verifier reported the gates broken | `tests/test_gates.py::test_verify_gates_survives_a_machine_without_timeout` runs it with a PATH carrying no coreutils |
+
 ## Outstanding, not landed
 
 Nothing. Every finding above is closed.

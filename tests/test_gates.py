@@ -23,6 +23,7 @@ import subprocess
 from pathlib import Path
 
 import pytest
+from ruamel.yaml import YAML
 
 BASH = shutil.which("bash") or "bash"
 GIT = shutil.which("git") or "git"
@@ -252,3 +253,123 @@ def test_githooks_readme_instructions_are_followable_by_anyone() -> None:
 
     assert "~/.claude" not in readme, "README instructs a copy from a machine-only path"
     assert "revendor.sh" in readme, "README does not name the re-vendor entry point"
+
+
+def test_verify_gates_survives_a_machine_without_timeout(tmp_path: Path) -> None:
+    """Stock macOS has no GNU ``timeout``; calling it anyway returned rc=127.
+
+    Every gate call then looked like a broken gate, so the verifier reported
+    FAIL four times over on a machine whose gates were fine - the exact false
+    alarm the timeout wrapper exists to prevent.
+    """
+    root = _sandbox(tmp_path)
+    result = subprocess.run(  # noqa: S603 - test-only, controlled args
+        [BASH, str(root / ".githooks" / "verify-gates.sh")],
+        capture_output=True,
+        text=True,
+        timeout=300,
+        stdin=subprocess.DEVNULL,
+        env={
+            "PATH": "/usr/bin:/bin",  # no coreutils, as on a GitHub macOS runner
+            "HOME": str(root),
+            "PII_IDENTITY_FILE": str(root / "no-such-identity.json"),
+        },
+    )
+
+    assert result.returncode == 0, result.stdout + result.stderr
+    assert "no timeout(1) on PATH" in result.stdout, (
+        f"ran without a hang guard and did not say so:\n{result.stdout}"
+    )
+
+
+def _gates_pii_step() -> str:
+    """The gates job's PII step, as CI runs it."""
+    workflow = YAML(typ="safe").load(REPO_ROOT / ".github" / "workflows" / "ci.yml")
+    for step in workflow["jobs"]["gates"]["steps"]:
+        if "PII scan" in str(step.get("name", "")):
+            script: str = step["run"]
+            return script
+    pytest.fail("the gates job has no PII scan step")
+
+
+def _scratch_repo(root: Path) -> Path:
+    repo = root / "repo"
+    (repo / ".githooks").mkdir(parents=True)
+    for name in ("pii-scan.sh", "pii-patterns.conf"):
+        shutil.copy(GITHOOKS / name, repo / ".githooks" / name)
+    subprocess.run([GIT, "init", "-q", "--initial-branch=main", "."], cwd=repo, check=True)  # noqa: S603
+    for key, value in (
+        ("user.email", "engram-test@example.com"),
+        ("user.name", "engram-test"),
+        ("commit.gpgsign", "false"),
+    ):
+        subprocess.run([GIT, "config", key, value], cwd=repo, check=True)  # noqa: S603
+    return repo
+
+
+def _commit(repo: Path, name: str, body: str) -> None:
+    (repo / name).write_text(body, encoding="utf-8")
+    subprocess.run([GIT, "add", "-A"], cwd=repo, check=True)  # noqa: S603
+    subprocess.run(  # noqa: S603
+        [GIT, "commit", "-q", "--no-verify", "-m", f"add {name}"], cwd=repo, check=True
+    )
+
+
+def _run_gates_step(repo: Path, base: str) -> subprocess.CompletedProcess[str]:
+    return subprocess.run(  # noqa: S603 - test-only, controlled args
+        [BASH, "-e", "-c", _gates_pii_step()],
+        cwd=repo,
+        capture_output=True,
+        text=True,
+        timeout=300,
+        stdin=subprocess.DEVNULL,
+        env={
+            "PATH": "/usr/local/bin:/usr/bin:/bin",
+            "HOME": str(repo),
+            "BASE_SHA": base,
+            "PII_IDENTITY_FILE": str(repo / "no-such-identity.json"),
+        },
+    )
+
+
+def test_ci_pii_step_flags_pii_a_ref_introduces(tmp_path: Path) -> None:
+    """Runs the workflow's own step, because nothing else executes that shell.
+
+    It carried ``${#FILES[@]:-0}`` for its whole life: bash 3.2 accepts that,
+    bash 5 calls it a bad substitution, so every local run looked clean while
+    the step died on the runner before scanning anything. ``bash -n`` cannot
+    see it either - the expansion has to actually run.
+
+    Reach: this fails only where the default ``bash`` is 4+. On macOS (bash
+    3.2) it passes either way, which is exactly how the bug survived; the
+    Linux CI job is where it has teeth.
+    """
+    repo = _scratch_repo(tmp_path)
+    _commit(repo, "clean.md", "nothing sensitive here\n")
+    base = subprocess.run(  # noqa: S603
+        [GIT, "rev-parse", "HEAD"], cwd=repo, capture_output=True, text=True, check=True
+    ).stdout.strip()
+    planted = "see /Users/someone/secret for details\n"  # pii-allow: planted probe fixture
+    _commit(repo, "leaked.md", planted)
+
+    result = _run_gates_step(repo, base)
+
+    assert result.returncode == 1, (
+        f"planted PII walked past the CI step:\n{result.stdout}\n{result.stderr}"
+    )
+    assert "leaked.md" in result.stdout
+
+
+def test_ci_pii_step_passes_a_clean_ref(tmp_path: Path) -> None:
+    """The control: the step must not fail a ref that introduces nothing bad."""
+    repo = _scratch_repo(tmp_path)
+    _commit(repo, "clean.md", "nothing sensitive here\n")
+    base = subprocess.run(  # noqa: S603
+        [GIT, "rev-parse", "HEAD"], cwd=repo, capture_output=True, text=True, check=True
+    ).stdout.strip()
+    _commit(repo, "also-clean.md", "still nothing sensitive\n")
+
+    result = _run_gates_step(repo, base)
+
+    assert result.returncode == 0, result.stdout + result.stderr
+    assert "scanning 1 changed file(s)" in result.stdout

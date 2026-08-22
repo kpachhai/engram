@@ -9,6 +9,20 @@ The MCP tool surface is committed-stable for the v1.x lifetime per the API stabi
 
 ## [Unreleased]
 
+### Fixed - CI
+
+- **The repo-gates job's PII scan had never run.** Its step carried
+  `${#FILES[@]:-0}`, which bash 3.2 accepts and bash 5 - the runner's shell -
+  rejects as a bad substitution, so the step died before scanning anything and
+  the job had been red on every push since it landed. `bash -n` cannot see it
+  either; the expansion has to run. Two tests now execute the workflow's own
+  step against a scratch repo, one with planted PII and one clean.
+- **`verify-gates.sh` no longer reports working gates as broken on macOS.** It
+  wrapped every gate call in GNU `timeout`, which a stock macOS does not have,
+  so each call returned rc=127 and the verifier printed four FAILs - on the CI
+  macOS runners and on any contributor's Mac without coreutils. It now falls
+  back to `gtimeout`, then to running without a hang guard, and says which.
+
 ### Security
 
 - **The bundled PII scanner had fallen three fixes behind its upstream.** The

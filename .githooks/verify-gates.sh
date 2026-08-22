@@ -61,28 +61,44 @@ else
   note "pii-scan: DEGRADED - no identity file, so structural patterns only; names, emails and usernames are NOT checked. Expected on a fork and in CI."
 fi
 
+# A gate that hangs is failing, and should be reported as HUNG rather than
+# dying at the CI job limit where it reads as an infrastructure flake. GNU
+# `timeout` is not on a stock macOS, though, and calling it anyway returned
+# rc=127 from every gate - so the verifier reported the gates as broken on any
+# machine without coreutils, which is the false alarm the timeout exists to
+# prevent. Prefer timeout, then coreutils' gtimeout, else run without a hang
+# guard and say so.
+if command -v timeout >/dev/null 2>&1; then
+  run_gate() { timeout 60 "$@"; }
+elif command -v gtimeout >/dev/null 2>&1; then
+  run_gate() { gtimeout 60 "$@"; }
+else
+  note "no timeout(1) on PATH - gates run without a hang guard (install coreutils to restore it)"
+  run_gate() { "$@"; }
+fi
+
 probe="$(mktemp -d)"; trap 'rm -rf "$probe"' EXIT
 
 # --- PII gate must flag a planted path and pass clean content ---
 printf 'ordinary line\nsee /Users/someone/secret for details\n' >"$probe/planted.md"  # pii-allow: planted probe fixture
 printf 'nothing sensitive here\n' >"$probe/clean.md"
-out="$(timeout 60 bash "$ROOT/.githooks/pii-scan.sh" "$probe/planted.md" </dev/null 2>/dev/null)"; rc=$?
+out="$(run_gate bash "$ROOT/.githooks/pii-scan.sh" "$probe/planted.md" </dev/null 2>/dev/null)"; rc=$?
 [[ "$rc" -eq 124 ]] && bad "pii-scan HUNG on planted input (60s timeout)"
 hits="$(printf '%s' "$out" | grep -c .)"
 if [[ "$rc" -ne 1 || "$hits" -lt 1 ]]; then
   bad "pii-scan did NOT flag planted PII (rc=$rc hits=$hits) - the gate is not working"
 else note "pii-scan: planted PII flagged ($hits hit)"; fi
-timeout 60 bash "$ROOT/.githooks/pii-scan.sh" "$probe/clean.md" </dev/null >/dev/null 2>&1; rc=$?
+run_gate bash "$ROOT/.githooks/pii-scan.sh" "$probe/clean.md" </dev/null >/dev/null 2>&1; rc=$?
 [[ "$rc" -eq 124 ]] && bad "pii-scan HUNG on clean input (60s timeout)"
 [[ "$rc" -eq 0 ]] || bad "pii-scan flagged clean content (rc=$rc) - gate is over-firing"
 
 # --- vocab gate must flag planted planning vocabulary ---
 printf '# Phase 3: planted planning vocabulary\nx = 1\n' >"$probe/planted.py"
 printf '# an ordinary comment\ny = 2\n' >"$probe/clean.py"
-timeout 60 bash "$ROOT/.githooks/planning-vocab-scan.sh" "$probe/planted.py" </dev/null >/dev/null 2>&1; rc=$?
+run_gate bash "$ROOT/.githooks/planning-vocab-scan.sh" "$probe/planted.py" </dev/null >/dev/null 2>&1; rc=$?
 [[ "$rc" -eq 124 ]] && bad "planning-vocab-scan HUNG on planted input (60s timeout)"
 [[ "$rc" -eq 1 ]] || bad "planning-vocab-scan did NOT flag planted vocabulary (rc=$rc)"
-timeout 60 bash "$ROOT/.githooks/planning-vocab-scan.sh" "$probe/clean.py" </dev/null >/dev/null 2>&1; rc=$?
+run_gate bash "$ROOT/.githooks/planning-vocab-scan.sh" "$probe/clean.py" </dev/null >/dev/null 2>&1; rc=$?
 [[ "$rc" -eq 124 ]] && bad "planning-vocab-scan HUNG on clean input (60s timeout)"
 [[ "$rc" -eq 0 ]] || bad "planning-vocab-scan flagged clean content (rc=$rc)"
 note "planning-vocab: planted vocabulary flagged, clean content passes"

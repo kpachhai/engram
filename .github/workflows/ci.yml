@@ -96,7 +96,10 @@ jobs:
             FILES=(); while IFS= read -r -d '' f; do FILES+=("$f"); done \
               < <(git show -z --name-only --diff-filter=ACMRT --format= HEAD)
           fi
-          if [ "${#FILES[@]:-0}" -eq 0 ]; then
+          # Plain ${#FILES[@]}: the :-0 default form is a syntax error under
+          # bash 5 (the runner's shell) while bash 3.2 accepts it, so the
+          # guard meant to make an empty array safe killed the step instead.
+          if [ "${#FILES[@]}" -eq 0 ]; then
             echo "no changed files to scan"; exit 0
           fi
           printf 'scanning %s changed file(s)\n' "${#FILES[@]}"
