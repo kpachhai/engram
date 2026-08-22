@@ -256,13 +256,22 @@ def test_githooks_readme_instructions_are_followable_by_anyone() -> None:
 
 
 def test_verify_gates_survives_a_machine_without_timeout(tmp_path: Path) -> None:
-    """Stock macOS has no GNU ``timeout``; calling it anyway returned rc=127.
+    """The verifier must exit 0 whether or not GNU ``timeout`` exists.
 
-    Every gate call then looked like a broken gate, so the verifier reported
-    FAIL four times over on a machine whose gates were fine - the exact false
-    alarm the timeout wrapper exists to prevent.
+    It wrapped every gate call in ``timeout``, which a stock macOS does not
+    have, so each call returned rc=127 and the verifier reported four broken
+    gates on a machine whose gates were fine - the exact false alarm the
+    wrapper exists to prevent.
+
+    ``/usr/bin:/bin`` is the split: on macOS neither ``timeout`` nor
+    ``gtimeout`` is there (coreutils installs elsewhere) and the fallback
+    branch runs; on Linux ``timeout`` is in ``/usr/bin`` and the wrapper is
+    used. Both are asserted, so whichever platform runs this checks something.
     """
+    bare_path = "/usr/bin:/bin"
+    has_timeout = any(shutil.which(name, path=bare_path) for name in ("timeout", "gtimeout"))
     root = _sandbox(tmp_path)
+
     result = subprocess.run(  # noqa: S603 - test-only, controlled args
         [BASH, str(root / ".githooks" / "verify-gates.sh")],
         capture_output=True,
@@ -270,15 +279,17 @@ def test_verify_gates_survives_a_machine_without_timeout(tmp_path: Path) -> None
         timeout=300,
         stdin=subprocess.DEVNULL,
         env={
-            "PATH": "/usr/bin:/bin",  # no coreutils, as on a GitHub macOS runner
+            "PATH": bare_path,
             "HOME": str(root),
             "PII_IDENTITY_FILE": str(root / "no-such-identity.json"),
         },
     )
 
     assert result.returncode == 0, result.stdout + result.stderr
-    assert "no timeout(1) on PATH" in result.stdout, (
-        f"ran without a hang guard and did not say so:\n{result.stdout}"
+    announced = "no timeout(1) on PATH" in result.stdout
+    assert announced is not has_timeout, (
+        f"timeout on {bare_path}: {has_timeout}; hang-guard notice printed: {announced}\n"
+        f"{result.stdout}"
     )
 
 
