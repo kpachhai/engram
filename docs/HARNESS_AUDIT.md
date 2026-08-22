@@ -169,22 +169,36 @@ restored and confirmed green.
 | The consolidation LLM path did not escape the prompt frame | `tests/consolidate/test_llm.py::TestPromptFraming` + `tests/llm/test_prompt_framing.py`; restore the raw interpolation -> both fail |
 | Portability was not re-verified at consolidation apply time | `tests/consolidate/test_apply.py::TestSafetyGuards::test_portability_retag_skips_proposal`; disable the comparison -> fails |
 | `engram doctor` reported OK for LLM checks it never measured | `tests/test_doctor_cli_smoke.py` against the installed binary; drop the wiring call -> both tests fail |
+| The tree carried PII-gate matches the changed-files CI scan cannot see | `tests/test_gates.py::test_the_whole_tracked_tree_passes_the_pii_scan`; plant a path in any tracked file -> fails |
+| `.claude/settings.local.json` pre-approved `Bash(claude mcp *)` by prefix | narrowed to `list` + `get *`; that file is gitignored, so this was a local edit, not a commit |
+
+The username class needed an owner decision and got one: genericize everywhere,
+`docs/archive/` included. Test fixtures carry neutral values, docs carry
+`your-username`, and the synthetic 40-hex fixtures that trip the GPG-fingerprint
+pattern carry `pii-allow` markers rather than being rewritten. `LICENSE` keeps the
+attribution line - it is the sanctioned exception - and is the one file the whole-tree
+scan skips.
+
+## What else the same finding turned up
+
+The PII backlog was a symptom of a wider one: several things in the repo only worked on
+the machine that wrote them. Each is now closed with a test that fails when the property
+is broken.
+
+| Finding | Mechanical verifier |
+|---|---|
+| `.githooks/README.md` told contributors to re-vendor by copying out of the maintainer's home directory | `tests/test_gates.py::test_githooks_readme_instructions_are_followable_by_anyone`; `.githooks/revendor.sh` takes a `--source` directory and refuses rather than half-applying |
+| The PII gate silently ran without its identity patterns on any machine but one | `tests/test_gates.py::test_verify_gates_announces_degraded_identity_mode`, with the identity-present case as its control |
+| Docs cited a gitignored spec directory and paths under the maintainer's home | `tests/docs/test_reachable_references.py`; `docs/archive/` and `CHANGELOG.md` are exempt as records |
+| Docs named optional machine-local config as though every reader had it | `tests/docs/test_reachable_references.py::test_machine_local_files_are_described_as_optional` |
+
+End-to-end check: a fresh `git clone` installed with `uv sync --locked` under an empty
+`HOME` runs the suite and both gate scripts green, and `verify-gates.sh` reports the
+degraded PII mode a contributor actually gets.
 
 ## Outstanding, not landed
 
-Ranked. Each was verified against the tree during the audit; re-run the check before
-acting, since the tree moved while the audit ran.
-
-1. **73 pre-existing PII-gate matches in the tree**, invisible because the gate only ever
-   saw newly staged files, and still invisible in CI because the new job is scoped to
-   changed files. Three classes: the `LICENSE` attribution line (sanctioned), the
-   maintainer's GitHub username in docs and test fixtures (the repo's own rules say
-   genericize), and synthetic 40-hex key fixtures in tests (false positives needing
-   markers). Deliberately not rewritten - it touches many fixtures and the username class
-   needs an owner decision.
-2. **`.claude/settings.local.json` pre-approves `Bash(claude mcp *)` by prefix**, which
-   includes `add` and `remove` and writes to a machine-global file outside this repo.
-   That file is gitignored, so this is a local change rather than a committable one.
+Nothing. Every finding above is closed.
 
 ## Implementation plan
 

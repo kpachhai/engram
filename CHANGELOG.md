@@ -89,8 +89,24 @@ The MCP tool surface is committed-stable for the v1.x lifetime per the API stabi
   Reports written before this change are refused as invalid; re-run
   `engram consolidate`.
 
+### Added
+
+- `.githooks/verify-gates.sh` and `tests/test_gates.py`. The gates had no tests.
+  Integrity and detection are asserted separately, because neither implies the
+  other: a scanner replaced by `exit 0` and re-hashed honestly passes a lockfile
+  check and is caught only by planting input it must flag.
+- `.planning-vocab-baseline`, ratcheting planning vocabulary so existing debt is
+  frozen and new labels fail. Written after the source fixes, so no `src/` entry
+  was frozen as accepted debt.
+- `docs/HARNESS_AUDIT.md`, the audit record behind these changes.
+
 ### Changed
 
+- CI asserts `uv sync --locked`, so a stale `uv.lock` fails the build instead of
+  being silently re-resolved.
+- CI deselects the one network test by marker instead of `--ignore`-ing the whole
+  FastEmbed module, which had been dropping 21 hermetic tests including the
+  pinned model-hash manifest guards.
 - **Docs no longer read as if every machine has the maintainer's config.**
   `~/.config/devkit/identity.json` and `references.json` are a personal
   convention that engram treats as a soft dependency, but the quickstart,
@@ -127,25 +143,6 @@ The MCP tool surface is committed-stable for the v1.x lifetime per the API stabi
   GPG-fingerprint pattern carry `pii-allow` markers instead of being rewritten.
   A new test scans every tracked file, which the changed-files CI gate cannot
   do; `LICENSE` is excluded as the sanctioned attribution exception.
-
-### Added
-
-- `.githooks/verify-gates.sh` and `tests/test_gates.py`. The gates had no tests.
-  Integrity and detection are asserted separately, because neither implies the
-  other: a scanner replaced by `exit 0` and re-hashed honestly passes a lockfile
-  check and is caught only by planting input it must flag.
-- `.planning-vocab-baseline`, ratcheting planning vocabulary so existing debt is
-  frozen and new labels fail. Written after the source fixes, so no `src/` entry
-  was frozen as accepted debt.
-- `docs/HARNESS_AUDIT.md`, the audit record behind these changes.
-
-### Changed
-
-- CI asserts `uv sync --locked`, so a stale `uv.lock` fails the build instead of
-  being silently re-resolved.
-- CI deselects the one network test by marker instead of `--ignore`-ing the whole
-  FastEmbed module, which had been dropping 21 hermetic tests including the
-  pinned model-hash manifest guards.
 
 ### Fixed
 
