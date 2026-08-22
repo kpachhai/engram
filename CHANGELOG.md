@@ -91,6 +91,14 @@ The MCP tool surface is committed-stable for the v1.x lifetime per the API stabi
 
 ### Changed
 
+- **The vendored gate scripts have a re-vendor path anyone can run.**
+  `.githooks/README.md` told the reader to copy the files out of the
+  maintainer's home directory, which no contributor has, so the documented way
+  to take an upstream change was unfollowable. `.githooks/revendor.sh` takes a
+  `--source` directory (or `ENGRAM_GATE_SOURCE_DIR`), re-pins `vendor.lock`, and
+  refuses rather than half-applying; the README now says what the vendored files
+  are, that contributors need neither the upstream nor this script, and how to
+  propose a gate change instead.
 - **`verify-gates.sh` says when the PII gate is running degraded.** Identity
   patterns (name, emails, username) load from a machine-local file that exists
   only on the maintainer's machine; everywhere else - a fork, a CI runner - the

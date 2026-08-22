@@ -185,3 +185,70 @@ def test_verify_gates_is_quiet_when_identity_patterns_load(tmp_path: Path) -> No
     )
     assert result.returncode == 0, result.stdout + result.stderr
     assert "DEGRADED" not in result.stdout
+
+
+def _run_script(root: Path, script: str, *args: str) -> subprocess.CompletedProcess[str]:
+    return subprocess.run(  # noqa: S603 - test-only, controlled args
+        [BASH, str(root / ".githooks" / script), *args],
+        capture_output=True,
+        text=True,
+        timeout=300,
+        stdin=subprocess.DEVNULL,
+        env={
+            "PATH": "/usr/local/bin:/usr/bin:/bin",
+            "HOME": str(root),
+            "PII_IDENTITY_FILE": str(root / "no-such-identity.json"),
+        },
+    )
+
+
+def test_revendor_reproduces_the_committed_lockfile(tmp_path: Path) -> None:
+    """The committed vendor.lock is what the tool produces, not a hand-written file.
+
+    Re-vendoring from the current vendored copies is a no-op by construction, so
+    any difference means the lockfile and the tool disagree about the vendored
+    set or the line format.
+    """
+    root = _sandbox(tmp_path)
+    (root / ".githooks" / "vendor.lock").write_text("# emptied\n", encoding="utf-8")
+
+    result = _run_script(root, "revendor.sh", "--source", str(GITHOOKS))
+
+    assert result.returncode == 0, result.stdout + result.stderr
+    assert (root / ".githooks" / "vendor.lock").read_text() == (
+        GITHOOKS / "vendor.lock"
+    ).read_text()
+
+
+def test_revendor_refuses_an_incomplete_source(tmp_path: Path) -> None:
+    """Half a re-vendor leaves a tree whose hash check fails for no obvious reason."""
+    root = _sandbox(tmp_path)
+    partial = tmp_path / "partial"
+    partial.mkdir()
+    shutil.copy(GITHOOKS / "pii-scan.sh", partial / "pii-scan.sh")
+    before = (root / ".githooks" / "pii-patterns.conf").read_text()
+
+    result = _run_script(root, "revendor.sh", "--source", str(partial))
+
+    assert result.returncode == 2
+    assert "source is missing" in result.stderr
+    assert (root / ".githooks" / "pii-patterns.conf").read_text() == before
+
+
+def test_revendor_refuses_a_source_that_does_not_exist(tmp_path: Path) -> None:
+    result = _run_script(_sandbox(tmp_path), "revendor.sh", "--source", str(tmp_path / "nope"))
+
+    assert result.returncode == 2
+    assert "does not exist" in result.stderr
+
+
+def test_githooks_readme_instructions_are_followable_by_anyone() -> None:
+    """The re-vendor instructions used to be `cp ~/.claude/scripts/...`.
+
+    No contributor has that directory, so the documented way to take an upstream
+    change was a command only one machine could run.
+    """
+    readme = (GITHOOKS / "README.md").read_text(encoding="utf-8")
+
+    assert "~/.claude" not in readme, "README instructs a copy from a machine-only path"
+    assert "revendor.sh" in readme, "README does not name the re-vendor entry point"

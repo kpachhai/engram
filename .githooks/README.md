@@ -1,9 +1,23 @@
 # `.githooks/`
 
-Gate scripts for this repo. Everything here except `verify-gates.sh`, `README.md`
-and `vendor.lock` is **vendored** from the maintainer's dotfiles
-(`~/.claude/scripts/`) so that a fresh clone has working gates with no external
-dependency.
+Gate scripts for this repo.
+
+`verify-gates.sh`, `revendor.sh`, `README.md` and `vendor.lock` are first-party:
+written for this repo, changed here. Everything else is **vendored** - copied in
+from the maintainer's personal developer-tooling scripts, which live outside this
+repo and are not a dependency you install. They are committed here so that a
+fresh clone has working gates with nothing to fetch and nothing to configure.
+
+## What this means if you are contributing
+
+You do not need the upstream, and you do not need to re-vendor anything. The
+copies in this directory are what runs, `./.githooks/verify-gates.sh` checks
+them, and CI runs the same check on every push.
+
+If a gate is wrong - a false positive you cannot mark, a pattern that should
+exist, a bug in a scanner - open an issue describing the behaviour rather than
+editing the file. A vendored file changed here is a file that diverges from its
+source, and neither side finds out.
 
 ## Do not edit the vendored files in place
 
@@ -14,19 +28,18 @@ source, and the stale copy let `git mv` move PII past the gate, treated an
 invalid regex in the pattern file as "nothing matched", and read the working
 tree instead of the index.
 
-To take an upstream change:
+## Taking an upstream change
+
+Point `revendor.sh` at a directory holding the current gate scripts. It copies
+the vendored set, re-pins `vendor.lock`, and runs the verifier:
 
 ```sh
-cp ~/.claude/scripts/pii-scan.sh ~/.claude/scripts/pii-patterns.conf \
-   ~/.claude/scripts/planning-vocab-scan.sh \
-   ~/.claude/scripts/planning-vocab-patterns.conf \
-   ~/.claude/scripts/planning-vocab-ratchet.sh .githooks/
-chmod +x .githooks/*.sh
-shasum -a 256 .githooks/pii-scan.sh .githooks/pii-patterns.conf \
-  .githooks/planning-vocab-scan.sh .githooks/planning-vocab-patterns.conf \
-  .githooks/planning-vocab-ratchet.sh | awk '{print $1"  "$2}' > .githooks/vendor.lock
-./.githooks/verify-gates.sh
+./.githooks/revendor.sh --source /path/to/gate/scripts
+# or: ENGRAM_GATE_SOURCE_DIR=/path/to/gate/scripts ./.githooks/revendor.sh
 ```
+
+It refuses rather than half-applying: a source directory that does not exist, or
+that is missing any file in the vendored set, exits 2 having copied nothing.
 
 ## `vendor.lock`
 
@@ -51,3 +64,9 @@ Two independent checks, because neither alone is sufficient:
 Every gate call is wrapped in `timeout` and passes `</dev/null`. A gate that
 hangs is failing, and is reported as `HUNG` rather than dying at the CI job
 limit where it reads as an infrastructure flake.
+
+It also reports whether the PII scan is running with its identity patterns
+loaded. Those come from a machine-local file (`~/.config/devkit/identity.json`)
+that only the maintainer has; on a fork and in CI the scan runs on structural
+patterns alone - paths, keys, emails by shape - and says so rather than
+reporting a full pass.
