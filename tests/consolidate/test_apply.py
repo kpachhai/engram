@@ -202,6 +202,27 @@ class TestSafetyGuards:
         result = _run_apply(storage, report)
         assert (result.applied, result.skipped) == (0, 1)
 
+    def test_portability_retag_skips_proposal(self, storage: VaultStorage):
+        """A ``portable -> block`` re-tag is invisible to the other two gates.
+
+        The fingerprint covers the body only, and a metadata-only re-tag need
+        not move ``updated_at`` - so without a portability pin the merged
+        thought would be written at the report-time tier, against pinned
+        invariant 2.
+        """
+        first, second = _near_dup_pair(storage)
+        report = _make_report(storage)
+        assert storage.update_metadata(first.id, portability="block")
+        before = storage.get_by_id(first.id)
+        assert before is not None
+        assert before.updated_at < report.snapshot_at, "re-tag moved updated_at"
+
+        result = _run_apply(storage, report)
+
+        assert (result.applied, result.skipped) == (0, 1)
+        assert storage.get_by_id(first.id) is not None
+        assert storage.get_by_id(second.id) is not None
+
     def test_manual_review_proposals_never_touched(self, storage: VaultStorage):
         first, second = _near_dup_pair(storage)
         report = _make_report(storage, distill=False)  # degrades to manual-review

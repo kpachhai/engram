@@ -104,7 +104,11 @@ def _row_dt_optional(row: dict[str, Any], key: str) -> datetime | None:
 
 
 def _pin(row: dict[str, Any]) -> PinnedThought:
-    return PinnedThought(thought_id=UUID(str(row["id"])), fingerprint=str(row["fingerprint"]))
+    return PinnedThought(
+        thought_id=UUID(str(row["id"])),
+        fingerprint=str(row["fingerprint"]),
+        portability=str(row["portability"]),  # type: ignore[arg-type]
+    )
 
 
 def generate_report(

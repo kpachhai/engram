@@ -167,28 +167,25 @@ restored and confirmed green.
 | Finding | Mechanical verifier |
 |---|---|
 | The consolidation LLM path did not escape the prompt frame | `tests/consolidate/test_llm.py::TestPromptFraming` + `tests/llm/test_prompt_framing.py`; restore the raw interpolation -> both fail |
+| Portability was not re-verified at consolidation apply time | `tests/consolidate/test_apply.py::TestSafetyGuards::test_portability_retag_skips_proposal`; disable the comparison -> fails |
 
 ## Outstanding, not landed
 
 Ranked. Each was verified against the tree during the audit; re-run the check before
 acting, since the tree moved while the audit ran.
 
-1. **Portability is not re-verified at consolidation apply time.** The pin carries no
-   portability field and the fingerprint is body-only, so a `portable -> block` re-tag
-   between report and apply verifies clean and is written with the report-time value.
-   This touches pinned invariant 2, which is supposed to be defense-in-depth.
-2. **73 pre-existing PII-gate matches in the tree**, invisible because the gate only ever
+1. **73 pre-existing PII-gate matches in the tree**, invisible because the gate only ever
    saw newly staged files, and still invisible in CI because the new job is scoped to
    changed files. Three classes: the `LICENSE` attribution line (sanctioned), the
    maintainer's GitHub username in docs and test fixtures (the repo's own rules say
    genericize), and synthetic 40-hex key fixtures in tests (false positives needing
    markers). Deliberately not rewritten - it touches many fixtures and the username class
    needs an owner decision.
-3. **`engram doctor` reports OK for LLM checks it never measured.** The checks are called
+2. **`engram doctor` reports OK for LLM checks it never measured.** The checks are called
    without a provider or budget, so both take their None branch and emit OK with messages
    asserting nothing is configured. The block is also gated on having more than one
    vault, so a single-vault install with an LLM gets no LLM rows at all.
-4. **`.claude/settings.local.json` pre-approves `Bash(claude mcp *)` by prefix**, which
+3. **`.claude/settings.local.json` pre-approves `Bash(claude mcp *)` by prefix**, which
    includes `add` and `remove` and writes to a machine-global file outside this repo.
    That file is gitignored, so this is a local change rather than a committable one.
 

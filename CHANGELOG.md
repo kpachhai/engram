@@ -80,6 +80,14 @@ The MCP tool surface is committed-stable for the v1.x lifetime per the API stabi
   frame, so a body carrying `</note>` broke out of its own block - and under
   `engram consolidate --apply` the distilled output becomes a real vault
   thought. Both LLM paths now share `engram.llm.prompt_framing`.
+- **Consolidation re-verifies portability at apply time.** Apply re-checked each
+  pinned member by fingerprint and `updated_at`, but the fingerprint covers the
+  body only and a metadata-only re-tag need not move `updated_at` - so a
+  `portable -> block` re-tag between report and apply verified clean and the
+  merged thought was written at the report-time tier, against pinned invariant 2.
+  `PinnedThought` now carries `portability` and any difference skips the cluster.
+  Reports written before this change are refused as invalid; re-run
+  `engram consolidate`.
 
 ### Added
 

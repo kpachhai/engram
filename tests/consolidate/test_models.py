@@ -30,8 +30,12 @@ _FP = "a" * 64
 _NOW = datetime(2026, 6, 9, 12, 0, 0, tzinfo=UTC)
 
 
-def _pinned() -> PinnedThought:
-    return PinnedThought(thought_id=uuid4(), fingerprint=_FP)
+def _pinned(portability: str = "portable") -> PinnedThought:
+    return PinnedThought(
+        thought_id=uuid4(),
+        fingerprint=_FP,
+        portability=portability,  # type: ignore[arg-type]
+    )
 
 
 def _cluster(
@@ -104,12 +108,17 @@ class TestPassStatus:
 class TestPinnedThought:
     def test_fingerprint_must_be_64_hex(self):
         with pytest.raises(ValidationError, match="fingerprint"):
-            PinnedThought(thought_id=uuid4(), fingerprint="not-hex")
+            PinnedThought(thought_id=uuid4(), fingerprint="not-hex", portability="portable")
 
     def test_unknown_field_rejected(self):
         with pytest.raises(ValidationError):
             PinnedThought.model_validate(
-                {"thought_id": str(uuid4()), "fingerprint": _FP, "extra_field": "x"}
+                {
+                    "thought_id": str(uuid4()),
+                    "fingerprint": _FP,
+                    "portability": "portable",
+                    "extra_field": "x",
+                }
             )
 
 

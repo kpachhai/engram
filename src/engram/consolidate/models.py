@@ -53,12 +53,18 @@ class PassStatus(BaseModel):
 
 
 class PinnedThought(BaseModel):
-    """A thought reference pinned to its content fingerprint at report time."""
+    """A thought reference pinned to its content and portability at report time.
+
+    The fingerprint covers the body only, so a portability re-tag between
+    report and apply leaves it unchanged; portability is pinned separately
+    because apply writes the merged thought at the report-time tier.
+    """
 
     model_config = ConfigDict(extra="forbid")
 
     thought_id: UUID
     fingerprint: str
+    portability: Portability
 
     @field_validator("fingerprint")
     @classmethod

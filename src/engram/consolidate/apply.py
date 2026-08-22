@@ -93,7 +93,13 @@ def _verify_members(
 
     Returns ``(ok, skip_reason, missing_count)``. Missing rows are not an
     automatic skip - a resumed run may already have archived some members.
-    Changed (fingerprint) or post-snapshot-modified members always skip.
+    Changed (fingerprint), re-tagged (portability), or post-snapshot-modified
+    members always skip.
+
+    Portability is checked on its own because the fingerprint covers the body
+    only and a re-tag need not move ``updated_at``: without this, a
+    ``portable -> block`` re-tag between report and apply would be written into
+    the merged thought at the report-time tier.
     """
     from engram.consolidate.passes import _row_dt  # shared datetime coercion
 
@@ -105,6 +111,13 @@ def _verify_members(
             continue
         if str(row["fingerprint"]) != member.fingerprint:
             return False, f"thought {member.thought_id} changed since the report", missing
+        if str(row["portability"]).lower() != member.portability:
+            return (
+                False,
+                f"thought {member.thought_id} was re-tagged "
+                f"{member.portability} -> {row['portability']} since the report",
+                missing,
+            )
         if _row_dt(row, "updated_at") >= snapshot_at:
             return (
                 False,
