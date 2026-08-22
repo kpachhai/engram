@@ -11,6 +11,23 @@ The MCP tool surface is committed-stable for the v1.x lifetime per the API stabi
 
 ### Security
 
+- **The bundled PII scanner had fallen three fixes behind its upstream.** The
+  stale copy let `git mv` renames carry content past the gate (`--diff-filter=AM`
+  excludes renames), treated an invalid regex in the pattern file as "nothing
+  matched" because `grep`'s rc=2 was swallowed by `2>/dev/null || true`, and
+  scanned the working tree rather than the index - so staging a file with PII and
+  then cleaning the working copy committed it through. `.githooks/` is now pinned
+  by sha256 in `vendor.lock` and checked by `.githooks/verify-gates.sh`.
+- **The pre-commit PII hook no longer skips silently when it cannot run.** The
+  wrapper was `if [ -x "$SCANNER" ]; then ...; fi`, so a missing or non-executable
+  scanner exited 0 and the gate was disabled without a message. It now exits 2.
+- **The repo gates now run in CI, where they previously never ran at all.** The
+  PII scan was local-only and depended on each contributor running
+  `pre-commit install`. The new `gates` job checks the vendored scripts by hash,
+  runs a live detection probe against planted input, ratchets planning
+  vocabulary, and scans the files a ref changes.
+
+
 - **Team-vault pre-receive hook: policy and membership are now read from the
   repository's canonical state (`HEAD`), never from the tree being pushed.**
   `old_sha` is all zeros for *any* newly created ref, not just a repository's
@@ -59,7 +76,37 @@ The MCP tool surface is committed-stable for the v1.x lifetime per the API stabi
   used to frame untrusted data for the LLM. A body containing `</thought>` could
   continue outside its own block, defeating the anti-injection framing.
 
+### Added
+
+- `.githooks/verify-gates.sh` and `tests/test_gates.py`. The gates had no tests.
+  Integrity and detection are asserted separately, because neither implies the
+  other: a scanner replaced by `exit 0` and re-hashed honestly passes a lockfile
+  check and is caught only by planting input it must flag.
+- `.planning-vocab-baseline`, ratcheting planning vocabulary so existing debt is
+  frozen and new labels fail. Written after the source fixes, so no `src/` entry
+  was frozen as accepted debt.
+- `docs/HARNESS_AUDIT.md`, the audit record behind these changes.
+
+### Changed
+
+- CI asserts `uv sync --locked`, so a stale `uv.lock` fails the build instead of
+  being silently re-resolved.
+- CI deselects the one network test by marker instead of `--ignore`-ing the whole
+  FastEmbed module, which had been dropping 21 hermetic tests including the
+  pinned model-hash manifest guards.
+
 ### Fixed
+
+- **Model-mismatch errors named a flag that does not exist.** Three runtime
+  messages told operators to run `engram reindex --full --model <name>`; no such
+  option is registered. They now name the real path: set `embedding.model` in the
+  vault config, then `engram reindex --full`.
+- **Two docs contradicted shipped behaviour.** `docs/MULTI_MACHINE_SETUP.md`
+  stated there is no `engram sync compact` subcommand while the command is
+  registered and the doc's own next paragraph described it; `CONTRIBUTING.md`
+  claimed CI runs benchmarks and "the same gates" as pre-commit, and it ran
+  neither.
+
 
 - **`--force-with-lease` now pins the expected remote SHA.** The bare form leases
   against whatever the remote-tracking ref says at push time, so any concurrent
