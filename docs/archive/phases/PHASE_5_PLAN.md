@@ -177,18 +177,18 @@ The daemon's per-connection `asyncio.StreamReader` is constructed with `limit=Da
 When no daemon is running for the target vault, `engram daemon status` exits 0 (not 1 — not-running is normal state) and prints:
 
 ```
-vault     : memex (~/.local/share/engram/memex)
+vault     : personal (~/.local/share/engram/personal)
 daemon    : not running
 socket    : not present at <path>
 state file: not present at <path>
-hint      : run `engram serve` (auto-spawn) or `engram daemon start --vault memex`
+hint      : run `engram serve` (auto-spawn) or `engram daemon start --vault personal`
 ```
 
 JSON form:
 
 ```json
 {
-  "vault": {"name": "memex", "path": "..."},
+  "vault": {"name": "personal", "path": "..."},
   "daemon": {"running": false, "pid": null, "started_at": null, "uptime_seconds": null, "rss_bytes": null},
   "socket": {"present": false, "path": "..."},
   "state_file": {"present": false, "path": "..."},
@@ -253,7 +253,7 @@ Per engram CLAUDE.md "Code Project Completion Gate":
 - Comprehension gate Step 5 — 4-question artifact authored by maintainer.
 
 **Operational criterion** (deferred to live deployment):
-- **Phase 5 Op #1:** Maintainer runs 2 concurrent Claude Code sessions against memex personal vault for ≥7 consecutive days. `engram daemon status` checked daily for proxy count + uptime + error counter. Laptop sleep/wake cycles survived without orphaned sockets. No fallback to `--no-daemon` or per-session vaults.
+- **Phase 5 Op #1:** Maintainer runs 2 concurrent Claude Code sessions against the personal vault for ≥7 consecutive days. `engram daemon status` checked daily for proxy count + uptime + error counter. Laptop sleep/wake cycles survived without orphaned sockets. No fallback to `--no-daemon` or per-session vaults.
 
 Added to `<your-meta-stack-repo>/workspace/engram/PENDING_TASKS.md` in Layer H.
 
@@ -687,7 +687,7 @@ from engram.errors import DaemonError
 
 
 def test_resolve_paths_returns_co_located(tmp_path: Path):
-    vault = tmp_path / "memex"
+    vault = tmp_path / "personal"
     (vault / ".indexes").mkdir(parents=True)
     paths = resolve_paths(vault)
     assert isinstance(paths, SocketPaths)
@@ -698,7 +698,7 @@ def test_resolve_paths_returns_co_located(tmp_path: Path):
 
 
 def test_resolve_paths_creates_indexes_dir_if_missing(tmp_path: Path):
-    vault = tmp_path / "memex"
+    vault = tmp_path / "personal"
     vault.mkdir()
     # No .indexes/ yet
     paths = resolve_paths(vault)
@@ -708,7 +708,7 @@ def test_resolve_paths_creates_indexes_dir_if_missing(tmp_path: Path):
 
 def test_resolve_paths_rejects_long_uds_path(tmp_path: Path):
     long_name = "x" * 120
-    vault = tmp_path / long_name / "memex"
+    vault = tmp_path / long_name / "personal"
     vault.mkdir(parents=True)
     with pytest.raises(DaemonError) as exc_info:
         resolve_paths(vault)
@@ -1781,7 +1781,7 @@ def test_write_then_read_roundtrip(tmp_path: Path):
     state = DaemonState(
         pid=os.getpid(),
         started_at="2026-05-12T14:20:04Z",
-        vault_name="memex",
+        vault_name="personal",
         vault_path=str(paths.vault),
         hostname=socket.gethostname(),
         config_snapshot={"idle_shutdown_seconds": 3600},
@@ -1811,7 +1811,7 @@ def test_state_file_mode_0600(tmp_path: Path):
     vault.mkdir()
     paths = resolve_paths(vault)
     state = DaemonState(
-        pid=1234, started_at="2026-05-12T14:20:04Z", vault_name="memex",
+        pid=1234, started_at="2026-05-12T14:20:04Z", vault_name="personal",
         vault_path=str(paths.vault), hostname="testhost", config_snapshot={},
     )
     write_state(paths.state_file, state)
@@ -3055,7 +3055,7 @@ def test_daemon_uptime_excessive_info_after_7d(tmp_path: Path):
         DaemonState(
             pid=os.getpid(),
             started_at="2020-01-01T00:00:00+00:00",  # 6 years ago
-            vault_name="memex",
+            vault_name="personal",
             vault_path=str(vault),
             hostname=socket.gethostname(),
             config_snapshot={},
@@ -4008,7 +4008,7 @@ Add Phase 5 operational dogfood criterion:
 ```markdown
 ### Phase 5 — Daemon mode operational dogfood
 
-- [ ] Maintainer runs 2 concurrent Claude Code sessions against memex personal vault for ≥7 consecutive days. Daily checks:
+- [ ] Maintainer runs 2 concurrent Claude Code sessions against the personal vault for ≥7 consecutive days. Daily checks:
   - `engram daemon status` reports expected proxy count + uptime + error counter
   - No orphaned sockets after laptop sleep/wake cycles
   - No fallback to `--no-daemon` or per-session vaults required
@@ -4085,7 +4085,7 @@ printf '%s | [Resolution] | %s | supersedes: %s\n' \
 
 ```python
 # Run from a Claude session or via the engram CLI
-mcp__open-brain__capture_thought(content="[Resolution] engram v0.5.0 daemon mode shipped 2026-05-XX. Multiple Claude Code sessions now attach to the same engram vault via per-vault UDS daemon. Closes the 2026-05-12 [Friction]. Implementation: 8 layers (A-H), ~1100-1300 LOC, ~80-100 new tests. PHASE_5_PLAN.md in the engram repo documents the full design. Operational dogfood: 7-day two-session window in memex vault.")
+mcp__open-brain__capture_thought(content="[Resolution] engram v0.5.0 daemon mode shipped 2026-05-XX. Multiple Claude Code sessions now attach to the same engram vault via per-vault UDS daemon. Closes the 2026-05-12 [Friction]. Implementation: 8 layers (A-H), ~1100-1300 LOC, ~80-100 new tests. PHASE_5_PLAN.md in the engram repo documents the full design. Operational dogfood: 7-day two-session window in the personal vault.")
 mcp__engram__capture_thought(content="<same content>")
 ```
 
@@ -4192,7 +4192,7 @@ Committed alongside the Phase 5 retrospective in `<your-meta-stack-repo>/workspa
 
 ### 4. Operational criterion (deferred)
 
-- [ ] **Phase 5 Op #1**: Maintainer runs 2 concurrent Claude Code sessions against memex for ≥7 days. Logged in `workspace/engram/PENDING_TASKS.md`.
+- [ ] **Phase 5 Op #1**: Maintainer runs 2 concurrent Claude Code sessions against the personal vault for ≥7 days. Logged in `workspace/engram/PENDING_TASKS.md`.
 
 ---
 

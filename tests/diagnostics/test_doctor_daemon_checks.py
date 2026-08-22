@@ -66,7 +66,7 @@ def test_daemon_running_reports_running_when_state_and_listener_present(
             DaemonState(
                 pid=os.getpid(),
                 started_at="2026-05-12T14:20:04+00:00",
-                vault_name="memex",
+                vault_name="personal",
                 vault_path=str(paths.vault),
                 hostname="test-host",
                 config_snapshot={},
@@ -140,7 +140,7 @@ def test_daemon_uptime_info_after_7d(short_vault: Path) -> None:
         DaemonState(
             pid=os.getpid(),
             started_at="2020-01-01T00:00:00+00:00",
-            vault_name="memex",
+            vault_name="personal",
             vault_path=str(paths.vault),
             hostname=socket_module.gethostname(),
             config_snapshot={},

@@ -14,7 +14,7 @@ Engram ships an `engram migrate-from-open-brain` CLI that paginates through OB1'
 
 The "What the migration does" section below is preserved as the long-term design intent. The "Run the migration" section uses the direct-Postgres path until OB1 grows a structured-data tool (or engram grows a `--postgres-url` mode natively).
 
-A reference Postgres-direct migration script lives at `<your-memex-or-companion-repo>/scripts/migrate_thoughts_to_engram.py` (the maintainer's; copy and adapt to your setup). The script imports engram as a library, opens your target vault via the per-user `~/.config/engram/config.yaml`, iterates `SELECT * FROM thoughts ORDER BY created_at`, and feeds each row through engram's `_migrate_one` exactly as the MCP path would have. Idempotency, prefix parsing, fingerprinting, atomic writes, and embedding generation all reuse engram's existing code.
+A reference Postgres-direct migration script lives at `<your-vault-repo>/scripts/migrate_thoughts_to_engram.py` (the maintainer's; copy and adapt to your setup). The script imports engram as a library, opens your target vault via the per-user `~/.config/engram/config.yaml`, iterates `SELECT * FROM thoughts ORDER BY created_at`, and feeds each row through engram's `_migrate_one` exactly as the MCP path would have. Idempotency, prefix parsing, fingerprinting, atomic writes, and embedding generation all reuse engram's existing code.
 
 ## What the migration does
 
@@ -37,7 +37,7 @@ In the Supabase dashboard for your Open Brain project:
 
 * **Pro tier:** Database → Backups → "Create backup" (or use the project's automatic-backup retention if it covers the migration window).
 * **Free tier (Backups dashboard not available):** three good alternatives:
-  * **Dashboard CSV export** (easiest, two minutes, zero CLI): Table Editor → `thoughts` table → "Export" button → download CSV. Captures the data; not the schema, but the schema lives in your `<memex-or-OB1-repo>/open-brain/schema.sql`.
+  * **Dashboard CSV export** (easiest, two minutes, zero CLI): Table Editor → `thoughts` table → "Export" button → download CSV. Captures the data; not the schema, but the schema lives in your `<your-OB1-repo>/open-brain/schema.sql`.
   * **`pg_dump` to a local file** (most thorough): Project Settings → Database → Connection string → copy. Then locally: `pg_dump --no-owner --no-acl "$OB1_POSTGRES_URL" | gzip > openbrain-backup-$(date +%F).sql.gz`. Full schema + data; restorable via `psql` to any Postgres.
   * **Skip if you're running dual-stack**: if you plan to keep OB1 alive alongside engram (the dual-stack pattern documented elsewhere), the migration is read-only against OB1, OB1 stays as the canonical source, and the backup risk is low. A best-effort CSV export from the Dashboard satisfies the `--confirm-supabase-snapshot-taken` requirement honestly.
 
@@ -136,7 +136,7 @@ postgresql://postgres.<project-ref>:<DB-password>@aws-X-<region>.pooler.supabase
 Where to find each piece if you can't reach the Dashboard:
 
 * `<project-ref>` — the subdomain of your `OB1_SUPABASE_URL` (e.g. `https://abc123.supabase.co` → ref is `abc123`).
-* `<DB-password>` — your Supabase database password. The maintainer keeps this in `memex/.env` as `OB1_SUPABASE_DB_PASS`. URL-encode it if it has any of `@:#/?` characters (use `python3 -c 'import urllib.parse, os; print(urllib.parse.quote(os.environ["OB1_SUPABASE_DB_PASS"], safe=""))'`).
+* `<DB-password>` — your Supabase database password. Keep it out of this repo; an `.env` file in your own vault repo, read as `OB1_SUPABASE_DB_PASS`, is one way. URL-encode it if it has any of `@:#/?` characters (use `python3 -c 'import urllib.parse, os; print(urllib.parse.quote(os.environ["OB1_SUPABASE_DB_PASS"], safe=""))'`).
 * `<region>` — the AWS region your project lives in. Visible only via the Dashboard's "Connect" modal. If you genuinely can't reach the Dashboard, brute-force the common ones: `us-east-1`, `us-east-2`, `us-west-1`, `eu-central-1`, `ap-southeast-1`. There are only ~6.
 
 **You may also be able to use the direct-connection endpoint** at `db.<project-ref>.supabase.co:5432` — this is simpler (no region needed) but disabled by default for newer Supabase projects (post-mid-2024). Try direct first; if DNS fails to resolve `db.<ref>.supabase.co`, fall back to the pooler.
@@ -217,7 +217,7 @@ Errors observed in real migrations + their fixes:
 |---|---|
 | `--dry-run` | Always; run before the real migration. |
 | `--limit <N>` | Test the pipeline on the first N thoughts. |
-| `--vault <NAME>` | Target vault from `~/.config/engram/config.yaml` `vaults:` list. Default: `memex`. |
+| `--vault <NAME>` | Target vault from `~/.config/engram/config.yaml` `vaults:` list. Omit it to use the primary vault that config resolves. |
 | `--report-path <path>` | Write the report to a non-default location. Default: `<vault>/migration-report.json`. |
 | `--default-user <handle>` | Override the engram-side `default_user` for thoughts that lack a `metadata.source` field. |
 

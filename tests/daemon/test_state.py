@@ -28,7 +28,7 @@ def test_write_then_read_roundtrip(short_vault: Path) -> None:
     state = DaemonState(
         pid=os.getpid(),
         started_at="2026-05-12T14:20:04Z",
-        vault_name="memex",
+        vault_name="personal",
         vault_path=str(paths.vault),
         hostname=socket.gethostname(),
         config_snapshot={"idle_shutdown_seconds": 30},
@@ -55,7 +55,7 @@ def test_state_file_mode_0600(short_vault: Path) -> None:
     state = DaemonState(
         pid=1234,
         started_at="2026-05-12T14:20:04Z",
-        vault_name="memex",
+        vault_name="personal",
         vault_path=str(paths.vault),
         hostname="testhost",
         config_snapshot={},

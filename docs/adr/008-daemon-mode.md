@@ -14,7 +14,7 @@ team-shared memory backend exposed to MCP clients through a single
 MCP server holding the vault's ``fcntl.flock`` advisory lock for its
 lifetime. This is correct for one Claude Code session per vault. It
 is wrong for the increasingly common case where a single user opens
-two or more Claude Code sessions against the same memex personal
+two or more Claude Code sessions against the same personal
 vault: the second session's ``engram serve`` invocation fails with
 ``LockError`` and the user is forced into ugly workarounds (per-session
 vaults, ``--force`` lock takeover that drops the first session, or

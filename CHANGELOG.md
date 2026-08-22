@@ -143,6 +143,11 @@ The MCP tool surface is committed-stable for the v1.x lifetime per the API stabi
   GPG-fingerprint pattern carry `pii-allow` markers instead of being rewritten.
   A new test scans every tracked file, which the changed-files CI gate cannot
   do; `LICENSE` is excluded as the sanctioned attribution exception.
+- **Examples name a vault role, not the maintainer's own repo.** Sample
+  `engram daemon status` output, the deployment and daemon docs, the migration
+  guide and several test fixtures used the maintainer's private vault repo name
+  as the example vault; they now use `personal`, which reads as any install's.
+  A test keeps it out, `docs/archive/` included.
 
 ### Fixed
 

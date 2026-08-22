@@ -12,17 +12,23 @@ Two exemptions, both about not rewriting a record after the fact:
 
 Placeholder paths (`<your-username>`, `<your-meta-stack-repo>`) are fine: they
 are visibly a blank for the reader to fill, not a claim that a file is there.
+
+The last test here is the same idea applied to names rather than paths: an
+example that names the maintainer's own private repo reads as theirs, not as
+the reader's.
 """
 
 from __future__ import annotations
 
 import re
+import shutil
 import subprocess
 from pathlib import Path
 
 import pytest
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
+GIT = shutil.which("git") or "git"
 _SELF = str(Path(__file__).resolve().relative_to(REPO_ROOT))
 
 #: Records of the past, not directions to a reader.
@@ -116,3 +122,37 @@ def test_machine_local_files_are_described_as_optional() -> None:
     assert not offenders, "machine-local paths presented as if the reader has them:\n" + "\n".join(
         offenders
     )
+
+
+#: The maintainer's private vault repo. Examples name a role (`personal`), never
+#: one person's repo - the PII scanner has no pattern for it, so this is the only
+#: mechanical check.
+_PRIVATE_REPO_NAMES = (re.compile(r"memex", re.IGNORECASE),)
+
+
+def test_examples_do_not_name_a_private_repo() -> None:
+    """Including `docs/archive/`, which was cleaned rather than left as a record.
+
+    A vault called `personal` reads as any install's; one named after the
+    maintainer's own repo tells a reader they are looking at someone else's
+    setup, and it spread to sample CLI output and test fixtures.
+    """
+    offenders: list[str] = []
+    tracked = subprocess.run(  # noqa: S603 - test-only, controlled args
+        [GIT, "ls-files"],
+        cwd=REPO_ROOT,
+        capture_output=True,
+        text=True,
+        check=True,
+    ).stdout.split()
+    assert tracked, "git ls-files returned nothing; this test would prove nothing"
+
+    for rel in tracked:
+        if rel == _SELF or not rel.endswith((".md", ".py", ".yaml", ".yml", ".toml")):
+            continue
+        text = (REPO_ROOT / rel).read_text(encoding="utf-8", errors="replace")
+        for lineno, line in enumerate(text.splitlines(), 1):
+            if any(pattern.search(line) for pattern in _PRIVATE_REPO_NAMES):
+                offenders.append(f"{rel}:{lineno}: {line.strip()}")
+
+    assert not offenders, "examples name a private repo:\n" + "\n".join(offenders)

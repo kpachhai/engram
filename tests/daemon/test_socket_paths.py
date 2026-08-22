@@ -33,7 +33,7 @@ def short_tmp_path() -> Iterator[Path]:
 
 
 def test_resolve_paths_returns_co_located(short_tmp_path: Path) -> None:
-    vault = short_tmp_path / "memex"
+    vault = short_tmp_path / "personal"
     (vault / ".indexes").mkdir(parents=True)
     paths = resolve_paths(vault)
     assert isinstance(paths, SocketPaths)
@@ -44,7 +44,7 @@ def test_resolve_paths_returns_co_located(short_tmp_path: Path) -> None:
 
 
 def test_resolve_paths_creates_indexes_dir_if_missing(short_tmp_path: Path) -> None:
-    vault = short_tmp_path / "memex"
+    vault = short_tmp_path / "personal"
     vault.mkdir()
     # No .indexes/ yet.
     paths = resolve_paths(vault)
@@ -54,7 +54,7 @@ def test_resolve_paths_creates_indexes_dir_if_missing(short_tmp_path: Path) -> N
 
 def test_resolve_paths_rejects_long_uds_path(short_tmp_path: Path) -> None:
     long_name = "x" * 120
-    vault = short_tmp_path / long_name / "memex"
+    vault = short_tmp_path / long_name / "personal"
     vault.mkdir(parents=True)
     with pytest.raises(DaemonError) as exc_info:
         resolve_paths(vault)

@@ -37,7 +37,6 @@
 12fd944ada87d9b1	1	docs/archive/phases/PHASE_4_PLAN.md
 1561dae62ae951c7	1	docs/archive/phases/PHASE_4_PLAN.md
 1647137a2383f063	1	docs/archive/phases/PHASE_4_PLAN.md
-1681ca87f4c88ca0	1	docs/archive/phases/PHASE_5_PLAN.md
 16d0f94d4f9a237e	1	docs/archive/phases/PHASE_3_PLAN.md
 16eae1c5ce74cab0	1	docs/archive/phases/PHASE_3_PLAN.md
 17451b9ff83647bf	1	docs/archive/phases/PHASE_5_PLAN.md
@@ -148,6 +147,7 @@
 4ccec43cf6f05f5c	1	docs/archive/phases/PHASE_1_PLAN.md
 4d4d7f91b225ef85	1	docs/archive/phases/PHASE_4_PLAN.md
 4d6b3f603c34fa76	1	docs/archive/phases/PHASE_4_PLAN.md
+4dd0b6823af486ce	1	docs/archive/phases/PHASE_5_PLAN.md
 4e20c6ab9f9f8a53	1	tests/migration/test_open_brain.py
 4e8b5b92eed07e9d	1	docs/archive/phases/PHASE_5_PLAN.md
 4ea5a94dea2644fa	1	docs/adr/001-storage-recipe.md
@@ -207,7 +207,6 @@
 6909ce54f16a4bad	1	docs/archive/phases/PHASE_5_PLAN.md
 691812ff71b279d5	1	docs/archive/phases/PHASE_3_PLAN.md
 69fcf71a6519339a	1	docs/archive/phases/PHASE_5_PLAN.md
-6bd648164ae8fbbd	1	CLAUDE.md
 6bf91f7b52ee1f84	1	docs/archive/phases/PHASE_5_PLAN.md
 6d10eb0a3d934885	1	docs/archive/phases/PHASE_2_PLAN.md
 6e0c742bd839aab4	1	docs/archive/phases/PHASE_1_PLAN.md
@@ -255,7 +254,6 @@
 832943d7f61f6835	1	docs/archive/phases/PHASE_5_PLAN.md
 84f014d3e8d053fb	1	docs/archive/phases/PHASE_2_PLAN.md
 8557bbc701df7a68	1	docs/archive/phases/PHASE_4_PLAN.md
-8587df797937c6a9	1	docs/archive/phases/PHASE_5_PLAN.md
 863b8c97d087832f	1	docs/archive/phases/PHASE_5_PLAN.md
 874591f4181c23f2	1	docs/archive/phases/PHASE_4_PLAN.md
 8768a90fa5b6b00d	1	docs/archive/phases/PHASE_4_PLAN.md
@@ -307,7 +305,6 @@
 9f87e41a4194ecb4	1	docs/archive/phases/PHASE_3_PLAN.md
 9ff69d3ba5f895ce	1	docs/archive/phases/PHASE_3_PLAN.md
 a0040ab1bd463741	1	docs/archive/phases/PHASE_4_PLAN.md
-a1542a7bea87d798	1	docs/adr/003-sync-model.md
 a1c9900789c8575d	1	docs/archive/phases/PHASE_5_PLAN.md
 a297173d26863db3	1	docs/archive/phases/PHASE_5_PLAN.md
 a3100d310b3dc5c0	1	docs/archive/phases/PHASE_5_PLAN.md
@@ -363,6 +360,7 @@ c03ba3460eca7399	1	docs/archive/phases/PHASE_5_PLAN.md
 c0b857b134cabf56	1	docs/archive/phases/PHASE_3_CODE_COMPLETE.md
 c1847b0cbe5cc356	1	docs/archive/phases/PHASE_4_PLAN.md
 c1a76b06e6072249	1	docs/archive/phases/PHASE_5_PLAN.md
+c1c1d915cdacd5cb	1	docs/archive/phases/PHASE_5_PLAN.md
 c1c9bd168d8fd5dc	1	docs/archive/phases/PHASE_5_PLAN.md
 c1f6e5b8c00e2a7e	1	docs/archive/phases/PHASE_3_CODE_COMPLETE.md
 c1f99f44f00dcf34	1	docs/archive/phases/PHASE_5_PLAN.md

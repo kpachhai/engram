@@ -99,12 +99,12 @@ engram daemon status
 You should see something like:
 
 ```text
-vault     : memex (~/.local/share/engram/memex)
+vault     : personal (~/.local/share/engram/personal)
 daemon pid: 47832
 started at: 2026-05-13T17:04:21+00:00
 uptime    : 134s
-socket    : ~/.local/share/engram/memex/.indexes/engram.sock
-log file  : ~/.local/share/engram/memex/.indexes/engram.log
+socket    : ~/.local/share/engram/personal/.indexes/engram.sock
+log file  : ~/.local/share/engram/personal/.indexes/engram.log
 ```
 
 JSON form for scripting:
@@ -178,23 +178,23 @@ Claude Code; same first-session latency cost.
 Default human-readable output:
 
 ```text
-vault     : memex (~/.local/share/engram/memex)
+vault     : personal (~/.local/share/engram/personal)
 daemon pid: 47832
 started at: 2026-05-12T14:20:04+00:00
 uptime    : 5027s
-socket    : ~/.local/share/engram/memex/.indexes/engram.sock
-log file  : ~/.local/share/engram/memex/.indexes/engram.log
+socket    : ~/.local/share/engram/personal/.indexes/engram.sock
+log file  : ~/.local/share/engram/personal/.indexes/engram.log
 ```
 
 When the daemon is not running, the command exits 0 (not-running is
 a normal state) and prints:
 
 ```text
-vault     : memex (~/.local/share/engram/memex)
+vault     : personal (~/.local/share/engram/personal)
 daemon    : not running
 socket    : not present at <path>
 state file: not present at <path>
-hint      : run `engram serve` (auto-spawn) or `engram daemon start --vault memex`
+hint      : run `engram serve` (auto-spawn) or `engram daemon start --vault personal`
 ```
 
 JSON form for scripting:

@@ -219,7 +219,7 @@ connections sharing one vault.
 Pre-v0.5.0, ``engram serve`` held the per-vault advisory lock for its
 lifetime. A second concurrent session against the same vault failed
 with ``LockError``. Users hit this regularly with two Claude Code
-sessions open against the same memex vault. Daemon mode resolves it
+sessions open against the same personal vault. Daemon mode resolves it
 without requiring any MCP config changes — the proxy IS still
 ``engram serve`` from the AI client's POV.
 

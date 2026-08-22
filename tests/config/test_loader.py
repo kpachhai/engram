@@ -41,7 +41,7 @@ def fake_home(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Path:
 
 @pytest.fixture
 def sample_vault(tmp_path: Path) -> Path:
-    vault = tmp_path / "memex"
+    vault = tmp_path / "personal"
     vault.mkdir()
     return vault
 

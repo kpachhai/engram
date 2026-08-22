@@ -50,7 +50,7 @@ Uptime concerns translate cleanly to local-first patterns:
 
 ## The private-vault-repo pattern
 
-A common convention: your personal vault lives in its own private git repo (the maintainer's is named `memex`). The repo holds:
+A common convention: your personal vault lives in its own private git repo, named whatever you like. The repo holds:
 
 - `thoughts/` — the markdown source of truth
 - `engram.config.yaml` — vault config (committed)
@@ -67,7 +67,7 @@ You DON'T deploy that repo anywhere. You:
 
 ## What about teams?
 
-The same model scales to small teams via the `team-write` role. Each team member has their personal `memex` (or whatever they named it) repo PLUS the shared team-vault repo. Each member's `engram serve` mounts both. See `docs/TEAM_BRAIN_GUIDE.md`.
+The same model scales to small teams via the `team-write` role. Each team member has their own personal vault repo PLUS the shared team-vault repo. Each member's `engram serve` mounts both. See `docs/TEAM_BRAIN_GUIDE.md`.
 
 The team-vault repo is hosted on whatever git host the team trusts (GitHub Enterprise, self-hosted Forgejo, etc). The pre-receive hook enforces team policy at the git host. There is still no central engram server — every team member runs their own `engram serve` locally.
 
@@ -97,7 +97,7 @@ These are designed-for, not built. The watch trigger is real-org adoption (a 50+
 - **Don't deploy engram to the cloud.** It's local-first by design.
 - **Sync the markdown vault via git** to a private remote you control.
 - **Run `engram serve` on each device** that has an AI client.
-- **A private vault repo is the right pattern.** See `MEMEX_SETUP_GUIDE.md` in the planning workspace for the full walkthrough.
+- **A private vault repo is the right pattern.** `docs/MULTI_MACHINE_SETUP.md` is the full walkthrough.
 - **"Always available" comes from "the data is on every device,"** not from "the server is in the cloud."
 
 ## See also
