@@ -25,7 +25,7 @@ def _base_frontmatter_dict(**overrides: object) -> dict[str, object]:
         "id": uuid4(),
         "prefix": "Lesson",
         "portability": "portable",
-        "source": "kpachhai",
+        "source": "testuser",
         "created_at": _NOW,
         "updated_at": _NOW,
         "fingerprint": _GOOD_FINGERPRINT,

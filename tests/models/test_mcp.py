@@ -30,7 +30,7 @@ _THOUGHT_DICT = {
     "id": uuid4(),
     "prefix": "Lesson",
     "portability": "portable",
-    "source": "kpachhai",
+    "source": "testuser",
     "created_at": _NOW,
     "updated_at": _NOW,
     "fingerprint": _FP,
@@ -124,7 +124,7 @@ def test_search_input_filter_full_shape():
             "filter": {
                 "prefix": ["Lesson", "Pattern"],
                 "portability": "portable",
-                "source": "kpachhai",
+                "source": "testuser",
                 "tags": ["debugging"],
                 "vault": "personal",
                 "created_after": "2026-01-01T00:00:00+00:00",
@@ -209,12 +209,12 @@ def test_stats_output_populated():
             "total_count": 5,
             "by_prefix": {"Lesson": 3, "Pattern": 2},
             "by_portability": {"portable": 4, "sensitive": 1, "block": 0},
-            "by_source": {"kpachhai": 5},
+            "by_source": {"testuser": 5},
             "by_vault": {"personal": 5},
             "oldest": _NOW,
             "newest": _NOW,
             "index_size_bytes": 12345,
-            "vault_paths": ["/home/k/repos/memex"],
+            "vault_paths": ["/srv/vaults/personal"],
         }
     )
     assert out.total_count == 5

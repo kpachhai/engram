@@ -279,7 +279,6 @@
 911b782e2e8abaa4	1	docs/archive/phases/PHASE_4_PLAN.md
 91ff83a3bca8a86c	1	docs/archive/phases/PHASE_5_PLAN.md
 92b23c022e6c8e75	1	docs/archive/phases/PHASE_3_PLAN.md
-940a0a5fa757efe9	1	docs/archive/phases/PHASE_4_PLAN.md
 95e053dcbf9b1487	1	tests/migration/test_open_brain.py
 9634faac808cfb0c	1	docs/archive/phases/PHASE_1_PLAN.md
 96a34442a10a8a13	1	docs/archive/phases/PHASE_3_PLAN.md
@@ -334,6 +333,7 @@ ace333038bd4d1f8	1	docs/archive/phases/PHASE_5_PLAN.md
 acf2fcd370248a60	1	docs/archive/phases/PHASE_2_PLAN.md
 ad16318be781c537	1	docs/archive/phases/PHASE_5_PLAN.md
 ae40ea8c6761d5cb	1	docs/archive/phases/PHASE_4_CODE_COMPLETE.md
+b0b96d4085d1131d	1	docs/archive/phases/PHASE_4_PLAN.md
 b0ca84e858c78916	1	docs/archive/phases/PHASE_5_PLAN.md
 b1289b07c7aa9012	1	docs/archive/phases/PHASE_5_FASTMCP_AUDIT.md
 b1b50ac743411e14	1	docs/archive/phases/PHASE_5_PLAN.md

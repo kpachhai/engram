@@ -115,7 +115,7 @@ The plan is layered (config + errors → utils → coordinator → server → CL
 - `allow_unsigned: bool = False` (R-H8)
 - `use_no_verify: bool = True` (edge 53)
 - `signed_pull_required: bool = False` (R-H2; opt-in)
-- `expected_remote_pattern: str | None = None` (R-H3; e.g. `r"^git@github.com:kpachhai/.*-personal\.git$"`)
+- `expected_remote_pattern: str | None = None` (R-H3; e.g. `r"^git@github.com:your-username/.*-personal\.git$"`)
 
 Update `loader._coerce_sync_config()` to honor the new fields. Update `engram init` starter `engram.config.yaml` template with commented-out examples. -> verify: `tests/config/test_sync_config.py` round-trips all fields with expected defaults; rejects `role: "primary-or-readonly"` invalid value.
 

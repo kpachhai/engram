@@ -20,7 +20,7 @@ from engram.storage.markdown import (
 )
 
 _NOW = datetime(2026, 5, 5, 14, 23, 1, tzinfo=UTC)
-_GOOD_FP = "2cf24dba5fb0a30e26e83b2ac5b9e29e1b161e5c1fa7425e73043362938b9824"
+_GOOD_FP = "2cf24dba5fb0a30e26e83b2ac5b9e29e1b161e5c1fa7425e73043362938b9824"  # pii-allow: sha256
 
 
 def _frontmatter_yaml(
@@ -29,7 +29,7 @@ def _frontmatter_yaml(
     thought_id: str | None = None,
     prefix: str = "Lesson",
     portability: str = "portable",
-    source: str = "kpachhai",
+    source: str = "testuser",
     created_at: str = "2026-05-05T14:23:01+00:00",
     updated_at: str = "2026-05-05T14:23:01+00:00",
     fingerprint: str = _GOOD_FP,
@@ -150,7 +150,7 @@ def test_read_thought_missing_schema_version_defaults_to_1(tmp_path: Path):
         f"id: {tid}",
         "prefix: Lesson",
         "portability: portable",
-        "source: kpachhai",
+        "source: testuser",
         "created_at: 2026-05-05T14:23:01+00:00",
         "updated_at: 2026-05-05T14:23:01+00:00",
         f"fingerprint: {_GOOD_FP}",
@@ -173,7 +173,7 @@ def test_read_thought_missing_required_field_returns_drift(tmp_path: Path):
         # id deliberately missing
         "prefix: Lesson",
         "portability: portable",
-        "source: kpachhai",
+        "source: testuser",
         "created_at: 2026-05-05T14:23:01+00:00",
         "updated_at: 2026-05-05T14:23:01+00:00",
         f"fingerprint: {_GOOD_FP}",
@@ -257,7 +257,7 @@ def test_write_thought_creates_file_with_frontmatter(tmp_path: Path):
             "schema_version": 1,
             "prefix": "Lesson",
             "portability": "portable",
-            "source": "kpachhai",
+            "source": "testuser",
             "created_at": _NOW,
             "updated_at": _NOW,
             "fingerprint": _GOOD_FP,
@@ -293,7 +293,7 @@ def test_write_thought_round_trip_through_read(tmp_path: Path):
             "schema_version": 1,
             "prefix": "Lesson",
             "portability": "portable",
-            "source": "kpachhai",
+            "source": "testuser",
             "created_at": _NOW,
             "updated_at": _NOW,
             "fingerprint": _GOOD_FP,
@@ -348,7 +348,7 @@ def test_write_thought_normalizes_crlf_to_lf(tmp_path: Path):
             "id": uuid4(),
             "prefix": "Lesson",
             "portability": "portable",
-            "source": "kpachhai",
+            "source": "testuser",
             "created_at": _NOW,
             "updated_at": _NOW,
             "fingerprint": _GOOD_FP,
@@ -377,7 +377,7 @@ def test_write_thought_body_with_inner_triple_dash_round_trip(tmp_path: Path):
             "id": uuid4(),
             "prefix": "Lesson",
             "portability": "portable",
-            "source": "kpachhai",
+            "source": "testuser",
             "created_at": _NOW,
             "updated_at": _NOW,
             "fingerprint": _GOOD_FP,
@@ -406,7 +406,7 @@ def test_write_thought_file_mode_is_0600(tmp_path: Path):
             "id": uuid4(),
             "prefix": "Lesson",
             "portability": "portable",
-            "source": "kpachhai",
+            "source": "testuser",
             "created_at": _NOW,
             "updated_at": _NOW,
             "fingerprint": _GOOD_FP,
@@ -473,7 +473,7 @@ def test_write_read_roundtrip_property(
             "id": tid,
             "prefix": "Lesson",
             "portability": "portable",
-            "source": "kpachhai",
+            "source": "testuser",
             "created_at": _NOW,
             "updated_at": _NOW,
             "fingerprint": _GOOD_FP,

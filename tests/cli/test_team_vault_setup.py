@@ -14,7 +14,7 @@ from ruamel.yaml import YAML
 from engram.cli.team_vault import setup_cmd
 from engram.errors import TeamVaultAlreadyInitialized, VaultError
 
-VALID_FP = "1234567890ABCDEF1234567890ABCDEF12345678"
+VALID_FP = "1234567890ABCDEF1234567890ABCDEF12345678"  # pii-allow: synthetic key fixture
 
 
 def _yaml_load(path: Path) -> dict[str, object]:

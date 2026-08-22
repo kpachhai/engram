@@ -25,6 +25,7 @@ from pathlib import Path
 import pytest
 
 BASH = shutil.which("bash") or "bash"
+GIT = shutil.which("git") or "git"
 SHASUM = shutil.which("shasum") or "shasum"
 
 REPO_ROOT = Path(__file__).resolve().parent.parent
@@ -112,3 +113,44 @@ def test_detects_a_scanner_that_stopped_detecting(tmp_path: Path) -> None:
     assert result.returncode == 1
     assert "did NOT flag planted PII" in result.stderr
     assert "hash drift" not in result.stderr
+
+
+def test_the_whole_tracked_tree_passes_the_pii_scan() -> None:
+    """No tracked file carries structural PII, with no identity file present.
+
+    The CI gate scans only the files a ref changes, which cannot see what the
+    tree already carried; this scans everything. ``LICENSE`` is excluded: its
+    copyright attribution is the one sanctioned place for the maintainer's
+    name, and a license text must not carry a scanner marker.
+
+    ``PII_IDENTITY_FILE`` points at nothing, so this measures what a fork or a
+    CI runner measures - structural patterns only. The identity half (name,
+    emails, username) is machine-local by construction and stays with the
+    maintainer's pre-commit hook.
+    """
+    tracked = subprocess.run(  # noqa: S603 - test-only, controlled args
+        [GIT, "ls-files"],
+        cwd=REPO_ROOT,
+        capture_output=True,
+        text=True,
+        check=True,
+    ).stdout.split()
+    files = [f for f in tracked if f != "LICENSE"]
+    assert files, "git ls-files returned nothing; the scan would be a no-op"
+
+    result = subprocess.run(  # noqa: S603 - test-only, controlled args
+        [BASH, str(GITHOOKS / "pii-scan.sh"), *files],
+        cwd=REPO_ROOT,
+        capture_output=True,
+        text=True,
+        timeout=300,
+        stdin=subprocess.DEVNULL,
+        env={
+            "PATH": "/usr/local/bin:/usr/bin:/bin",
+            "HOME": str(REPO_ROOT),
+            "PII_IDENTITY_FILE": str(REPO_ROOT / "no-such-identity.json"),
+        },
+    )
+    assert result.returncode == 0, (
+        "tracked files carry PII the changed-files CI scan cannot see:\n" + result.stdout
+    )

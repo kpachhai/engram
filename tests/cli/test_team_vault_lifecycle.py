@@ -25,8 +25,8 @@ from engram.errors import (
     VaultError,
 )
 
-STEWARD = "1234567890ABCDEF1234567890ABCDEF12345678"
-NON_STEWARD = "9999999988887777666655554444333322221111"
+STEWARD = "1234567890ABCDEF1234567890ABCDEF12345678"  # pii-allow: synthetic key fixture
+NON_STEWARD = "9999999988887777666655554444333322221111"  # pii-allow: synthetic key fixture
 
 
 def _seed_team_vault_files(tmp_path: Path) -> Path:

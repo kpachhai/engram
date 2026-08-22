@@ -29,7 +29,7 @@ from engram.storage.sqlite import set_setting
 from engram.team.policy import TeamVaultPolicy
 
 DIM = 16
-VALID_FP = "1234567890ABCDEF1234567890ABCDEF12345678"
+VALID_FP = "1234567890ABCDEF1234567890ABCDEF12345678"  # pii-allow: synthetic key fixture
 
 
 class _FakeEmbedder:

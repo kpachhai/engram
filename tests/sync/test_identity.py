@@ -45,14 +45,14 @@ def test_load_identity_with_user_overrides(tmp_path: Path) -> None:
         (
             "vault_id: work\n"
             "expected_remote_pattern: '^git@enterprise\\.example\\.com:.*\\.git$'\n"
-            "user_email: kiran@work.example\n"
-            "user_name: Kiran W\n"
+            "user_email: dev@work.example\n"
+            "user_name: Dev User\n"
         ),
     )
     identity = load_identity(tmp_path)
     assert identity is not None
-    assert identity.user_email == "kiran@work.example"
-    assert identity.user_name == "Kiran W"
+    assert identity.user_email == "dev@work.example"
+    assert identity.user_name == "Dev User"
 
 
 def test_load_identity_invalid_yaml_raises(tmp_path: Path) -> None:

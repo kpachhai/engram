@@ -26,8 +26,8 @@ from engram.team.members import (
 )
 from engram.team.policy import TeamVaultPolicy
 
-VALID_FP_1 = "1234567890ABCDEF1234567890ABCDEF12345678"
-VALID_FP_2 = "ABCDEFABCDEFABCDEFABCDEFABCDEFABCDEFABCD"
+VALID_FP_1 = "1234567890ABCDEF1234567890ABCDEF12345678"  # pii-allow: synthetic key fixture
+VALID_FP_2 = "ABCDEFABCDEFABCDEFABCDEFABCDEFABCDEFABCD"  # pii-allow: synthetic key fixture
 
 
 def _make_thought(

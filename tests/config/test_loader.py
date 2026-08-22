@@ -60,7 +60,7 @@ def test_no_config_at_all_raises(fake_home: Path) -> None:
 
 def test_user_config_no_vaults_raises(fake_home: Path) -> None:
     """D2: per-user config exists but has no `vaults:` -> fatal."""
-    _write_yaml(loader_module._USER_CONFIG_FILE, "default_user: kpachhai\n")
+    _write_yaml(loader_module._USER_CONFIG_FILE, "default_user: testuser\n")
     with pytest.raises(ConfigError, match="no vaults configured"):
         load_config()
 
@@ -69,7 +69,7 @@ def test_user_config_vault_path_doesnt_exist_raises(fake_home: Path) -> None:
     """D6: vault path doesn't exist -> fatal."""
     _write_yaml(
         loader_module._USER_CONFIG_FILE,
-        "default_user: kpachhai\n"
+        "default_user: testuser\n"
         "vaults:\n"
         "  - name: personal\n"
         f"    path: {fake_home / 'nonexistent'}\n"
@@ -112,14 +112,14 @@ def test_load_config_from_user_yaml_only(fake_home: Path, sample_vault: Path) ->
     """Per-user YAML alone is enough; vault YAML is optional."""
     _write_yaml(
         loader_module._USER_CONFIG_FILE,
-        "default_user: kpachhai\n"
+        "default_user: testuser\n"
         "vaults:\n"
         "  - name: personal\n"
         f"    path: {sample_vault}\n"
         "    role: primary\n",
     )
     cfg = load_config()
-    assert cfg.default_user == "kpachhai"
+    assert cfg.default_user == "testuser"
     assert cfg.vault_path == sample_vault.resolve()
     assert cfg.vault_name == "default"  # from VaultConfig defaults
     assert cfg.embedding_model == "BAAI/bge-small-en-v1.5"
@@ -129,7 +129,7 @@ def test_load_config_with_vault_yaml(fake_home: Path, sample_vault: Path) -> Non
     """Vault YAML overrides defaults."""
     _write_yaml(
         loader_module._USER_CONFIG_FILE,
-        "default_user: kpachhai\n"
+        "default_user: testuser\n"
         "vaults:\n"
         "  - name: personal\n"
         f"    path: {sample_vault}\n"
@@ -188,7 +188,7 @@ def test_env_overrides_yaml(
 ) -> None:
     _write_yaml(
         loader_module._USER_CONFIG_FILE,
-        "default_user: kpachhai\n"
+        "default_user: testuser\n"
         "log_level: INFO\n"
         "vaults:\n"
         "  - name: personal\n"
@@ -236,7 +236,7 @@ def test_cli_overrides_env_and_yaml(
 def test_defaults_apply_when_no_other_layer_sets(fake_home: Path, sample_vault: Path) -> None:
     _write_yaml(
         loader_module._USER_CONFIG_FILE,
-        "default_user: kpachhai\n"
+        "default_user: testuser\n"
         "vaults:\n"
         "  - name: personal\n"
         f"    path: {sample_vault}\n"
@@ -341,7 +341,7 @@ def test_resolve_default_user_priority_chain(
 def test_llm_block_in_user_yaml_parses(fake_home: Path, sample_vault: Path) -> None:
     _write_yaml(
         loader_module._USER_CONFIG_FILE,
-        "default_user: kpachhai\n"
+        "default_user: testuser\n"
         "llm:\n"
         "  provider: anthropic\n"
         "  model: claude-sonnet-4-6\n"
@@ -360,7 +360,7 @@ def test_llm_block_in_user_yaml_parses(fake_home: Path, sample_vault: Path) -> N
 def test_vault_llm_overrides_user_llm(fake_home: Path, sample_vault: Path) -> None:
     _write_yaml(
         loader_module._USER_CONFIG_FILE,
-        "default_user: kpachhai\n"
+        "default_user: testuser\n"
         "llm:\n"
         "  provider: anthropic\n"
         "vaults:\n"

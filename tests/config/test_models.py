@@ -124,16 +124,16 @@ def test_vault_config_unknown_field_rejected():
 
 def test_effective_config_construction():
     ec = EffectiveConfig(
-        default_user="kpachhai",
-        vault_path=Path("/home/k/repos/memex"),
-        thoughts_dir=Path("/home/k/repos/memex/thoughts"),
-        index_dir=Path("/home/k/repos/memex/.indexes"),
+        default_user="testuser",
+        vault_path=Path("/srv/vaults/personal"),
+        thoughts_dir=Path("/srv/vaults/personal/thoughts"),
+        index_dir=Path("/srv/vaults/personal/.indexes"),
         embedding_model=DEFAULT_EMBEDDING_MODEL,
         vault_name="personal",
         sync=SyncConfig(),
         llm=LLMConfig(),
     )
-    assert ec.default_user == "kpachhai"
+    assert ec.default_user == "testuser"
     assert ec.log_level == "INFO"
     assert ec.log_format == "text"
 

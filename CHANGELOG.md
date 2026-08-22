@@ -89,6 +89,19 @@ The MCP tool surface is committed-stable for the v1.x lifetime per the API stabi
   Reports written before this change are refused as invalid; re-run
   `engram consolidate`.
 
+### Changed
+
+- **The repo no longer bakes the maintainer's identity into tests and docs.**
+  Test fixtures used the maintainer's GitHub username as `default_user` /
+  `source` values, a real first name as a git identity fixture, and
+  `/home/<name>/` paths; the multi-vault and sync-coordinator docs used the
+  same username in example config. All are neutral fixture values and
+  `your-username` placeholders now, so a fork reads as its own. The synthetic
+  40-hex key fixtures and sha256 test vectors that trip the scanner's
+  GPG-fingerprint pattern carry `pii-allow` markers instead of being rewritten.
+  A new test scans every tracked file, which the changed-files CI gate cannot
+  do; `LICENSE` is excluded as the sanctioned attribution exception.
+
 ### Added
 
 - `.githooks/verify-gates.sh` and `tests/test_gates.py`. The gates had no tests.

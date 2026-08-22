@@ -45,7 +45,7 @@ without network).
 Edit `~/.config/engram/config.yaml` with the `vaults:` list:
 
 ```yaml
-default_user: kpachhai
+default_user: your-username
 vaults:
   - name: personal
     path: ~/.local/share/engram-vaults/personal

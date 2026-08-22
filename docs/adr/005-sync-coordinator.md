@@ -72,8 +72,8 @@ Each vault carries a machine-local file at `<vault>/.engram/identity.local`
 (gitignored, NOT committed) with two required fields:
 
 ```yaml
-vault_id: kpachhai-personal
-expected_remote_pattern: '^git@github.com:kpachhai/.*-personal\.git$'
+vault_id: your-username-personal
+expected_remote_pattern: '^git@github.com:your-username/.*-personal\.git$'
 ```
 
 `engram serve` startup probe 11 (`vault_identity_remote_match`) reads the

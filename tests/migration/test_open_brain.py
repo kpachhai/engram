@@ -186,7 +186,7 @@ def test_migration_empty_corpus(vault, embedder, monkeypatch):
         open_brain_key="k",
         vault_storage=vault,
         embedder=embedder,
-        default_user="kpachhai",
+        default_user="testuser",
     )
     report = run_migration(config)
     assert report.enumerated == 0
@@ -204,7 +204,7 @@ def test_migration_idempotent_on_rerun(vault, embedder, monkeypatch, tmp_path):
             "content": "[Lesson] dedupe me",
             "created_at": "2026-01-01T00:00:00+00:00",
             "updated_at": "2026-01-01T00:00:00+00:00",
-            "metadata": {"source": "kpachhai"},
+            "metadata": {"source": "testuser"},
         }
     ]
     transport = httpx.MockTransport(_make_handler([page, []]))
@@ -223,7 +223,7 @@ def test_migration_idempotent_on_rerun(vault, embedder, monkeypatch, tmp_path):
         open_brain_key="k",
         vault_storage=vault,
         embedder=embedder,
-        default_user="kpachhai",
+        default_user="testuser",
         report_path=tmp_path / "rep1.json",
     )
     report1 = run_migration(config)
@@ -236,7 +236,7 @@ def test_migration_idempotent_on_rerun(vault, embedder, monkeypatch, tmp_path):
         open_brain_key="k",
         vault_storage=vault,
         embedder=embedder,
-        default_user="kpachhai",
+        default_user="testuser",
         report_path=tmp_path / "rep2.json",
     )
     report2 = run_migration(config2)
@@ -255,7 +255,7 @@ def test_migration_future_created_at_preserved(vault, embedder, monkeypatch, tmp
             "content": "[Lesson] from the future",
             "created_at": future,
             "updated_at": future,
-            "metadata": {"source": "kpachhai"},
+            "metadata": {"source": "testuser"},
         }
     ]
     transport = httpx.MockTransport(_make_handler([page, []]))
@@ -274,7 +274,7 @@ def test_migration_future_created_at_preserved(vault, embedder, monkeypatch, tmp
         open_brain_key="k",
         vault_storage=vault,
         embedder=embedder,
-        default_user="kpachhai",
+        default_user="testuser",
         report_path=tmp_path / "rep.json",
     )
     report = run_migration(config)
@@ -301,14 +301,14 @@ def test_migration_empty_body_skipped(vault, embedder, monkeypatch, tmp_path):
             "content": "   ",
             "created_at": "2026-01-01T00:00:00+00:00",
             "updated_at": "2026-01-01T00:00:00+00:00",
-            "metadata": {"source": "kpachhai"},
+            "metadata": {"source": "testuser"},
         },
         {
             "id": "ob-good",
             "content": "[Lesson] valid",
             "created_at": "2026-01-02T00:00:00+00:00",
             "updated_at": "2026-01-02T00:00:00+00:00",
-            "metadata": {"source": "kpachhai"},
+            "metadata": {"source": "testuser"},
         },
     ]
     transport = httpx.MockTransport(_make_handler([page, []]))
@@ -327,7 +327,7 @@ def test_migration_empty_body_skipped(vault, embedder, monkeypatch, tmp_path):
         open_brain_key="k",
         vault_storage=vault,
         embedder=embedder,
-        default_user="kpachhai",
+        default_user="testuser",
         report_path=tmp_path / "rep.json",
     )
     report = run_migration(config)
@@ -346,7 +346,7 @@ def test_migration_dry_run_writes_nothing(vault, embedder, monkeypatch, tmp_path
             "content": "[Lesson] dry-run probe",
             "created_at": "2026-01-01T00:00:00+00:00",
             "updated_at": "2026-01-01T00:00:00+00:00",
-            "metadata": {"source": "kpachhai"},
+            "metadata": {"source": "testuser"},
         }
     ]
     transport = httpx.MockTransport(_make_handler([page, []]))
@@ -365,7 +365,7 @@ def test_migration_dry_run_writes_nothing(vault, embedder, monkeypatch, tmp_path
         open_brain_key="k",
         vault_storage=vault,
         embedder=embedder,
-        default_user="kpachhai",
+        default_user="testuser",
         dry_run=True,
         report_path=tmp_path / "rep.json",
     )
@@ -388,7 +388,7 @@ def test_migration_limit_caps_at_n(vault, embedder, monkeypatch, tmp_path):
             "content": f"[Lesson] number {i}",
             "created_at": f"2026-01-{i + 1:02}T00:00:00+00:00",
             "updated_at": f"2026-01-{i + 1:02}T00:00:00+00:00",
-            "metadata": {"source": "kpachhai"},
+            "metadata": {"source": "testuser"},
         }
         for i in range(5)
     ]
@@ -408,7 +408,7 @@ def test_migration_limit_caps_at_n(vault, embedder, monkeypatch, tmp_path):
         open_brain_key="k",
         vault_storage=vault,
         embedder=embedder,
-        default_user="kpachhai",
+        default_user="testuser",
         limit=3,
         report_path=tmp_path / "rep.json",
     )
@@ -428,7 +428,7 @@ def test_migration_prefer_legacy_id_match_updates_in_place(vault, embedder, monk
             "content": "[Lesson] original content",
             "created_at": "2026-01-01T00:00:00+00:00",
             "updated_at": "2026-01-01T00:00:00+00:00",
-            "metadata": {"source": "kpachhai"},
+            "metadata": {"source": "testuser"},
         }
     ]
     page_v2 = [
@@ -437,7 +437,7 @@ def test_migration_prefer_legacy_id_match_updates_in_place(vault, embedder, monk
             "content": "[Lesson] EDITED content",
             "created_at": "2026-01-01T00:00:00+00:00",
             "updated_at": "2026-02-01T00:00:00+00:00",
-            "metadata": {"source": "kpachhai"},
+            "metadata": {"source": "testuser"},
         }
     ]
     transports = {"current": httpx.MockTransport(_make_handler([page_v1, []]))}
@@ -457,7 +457,7 @@ def test_migration_prefer_legacy_id_match_updates_in_place(vault, embedder, monk
         open_brain_key="k",
         vault_storage=vault,
         embedder=embedder,
-        default_user="kpachhai",
+        default_user="testuser",
         report_path=tmp_path / "rep1.json",
     )
     rpt1 = run_migration(cfg1)
@@ -480,7 +480,7 @@ def test_migration_prefer_legacy_id_match_updates_in_place(vault, embedder, monk
         open_brain_key="k",
         vault_storage=vault,
         embedder=embedder,
-        default_user="kpachhai",
+        default_user="testuser",
         prefer_legacy_id_match=True,
         report_path=tmp_path / "rep2.json",
     )
@@ -507,7 +507,7 @@ def test_migration_report_written_to_path(vault, embedder, monkeypatch, tmp_path
             "content": "[Lesson] x",
             "created_at": "2026-01-01T00:00:00+00:00",
             "updated_at": "2026-01-01T00:00:00+00:00",
-            "metadata": {"source": "kpachhai"},
+            "metadata": {"source": "testuser"},
         }
     ]
     transport = httpx.MockTransport(_make_handler([page, []]))
@@ -527,7 +527,7 @@ def test_migration_report_written_to_path(vault, embedder, monkeypatch, tmp_path
         open_brain_key="k",
         vault_storage=vault,
         embedder=embedder,
-        default_user="kpachhai",
+        default_user="testuser",
         report_path=report_path,
     )
     run_migration(config)
@@ -549,7 +549,7 @@ def test_migration_records_audit_trail(vault, embedder, monkeypatch, tmp_path):
             "content": "[Lesson] x",
             "created_at": "2026-01-01T00:00:00+00:00",
             "updated_at": "2026-01-01T00:00:00+00:00",
-            "metadata": {"source": "kpachhai"},
+            "metadata": {"source": "testuser"},
         }
     ]
     transport = httpx.MockTransport(_make_handler([page, []]))
@@ -568,7 +568,7 @@ def test_migration_records_audit_trail(vault, embedder, monkeypatch, tmp_path):
         open_brain_key="k",
         vault_storage=vault,
         embedder=embedder,
-        default_user="kpachhai",
+        default_user="testuser",
         report_path=tmp_path / "rep.json",
     )
     run_migration(config)

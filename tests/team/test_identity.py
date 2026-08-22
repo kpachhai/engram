@@ -17,9 +17,9 @@ from engram.team.identity import (
 )
 from engram.team.members import MemberEntry, MembersList
 
-VALID_FP_PRIMARY = "1234567890ABCDEF1234567890ABCDEF12345678"
-VALID_FP_SUB = "9999999988887777666655554444333322221111"
-VALID_FP_OTHER = "ABCDEFABCDEFABCDEFABCDEFABCDEFABCDEFABCD"
+VALID_FP_PRIMARY = "1234567890ABCDEF1234567890ABCDEF12345678"  # pii-allow: synthetic key fixture
+VALID_FP_SUB = "9999999988887777666655554444333322221111"  # pii-allow: synthetic key fixture
+VALID_FP_OTHER = "ABCDEFABCDEFABCDEFABCDEFABCDEFABCDEFABCD"  # pii-allow: synthetic key fixture
 
 # Sample gpg --list-secret-keys --with-colons output covering one primary +
 # one signing subkey + one uid.
@@ -76,7 +76,7 @@ def test_parse_colon_output_empty_returns_empty() -> None:
 
 
 def test_parse_colon_output_two_secrets() -> None:
-    other_fp = "FFFFEEEEDDDDCCCCBBBBAAAA9999888877776666"
+    other_fp = "FFFFEEEEDDDDCCCCBBBBAAAA9999888877776666"  # pii-allow: synthetic key fixture
     text = (
         SAMPLE_COLON_OUTPUT
         + f"""sec:u:255:22:OTHEROTHER:1700000000:::u:::scESC:::+:::ed25519:::0:

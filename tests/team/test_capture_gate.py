@@ -23,8 +23,8 @@ from engram.team.capture_gate import gate_team_capture
 from engram.team.members import MemberEntry, MembersList
 from engram.team.policy import TeamVaultPolicy
 
-VALID_FP = "1234567890ABCDEF1234567890ABCDEF12345678"
-OTHER_FP = "ABCDEFABCDEFABCDEFABCDEFABCDEFABCDEFABCD"
+VALID_FP = "1234567890ABCDEF1234567890ABCDEF12345678"  # pii-allow: synthetic key fixture
+OTHER_FP = "ABCDEFABCDEFABCDEFABCDEFABCDEFABCDEFABCD"  # pii-allow: synthetic key fixture
 
 
 def _thought(*, prefix: str = "Postmortem", portability: str = "portable") -> Thought:

@@ -37,8 +37,8 @@ from engram.team.policy import TeamVaultPolicy
 from engram.team.push_queue import PersistentPushQueue
 from engram.team.routing import resolve_target_vault
 
-VALID_FP = "1234567890ABCDEF1234567890ABCDEF12345678"
-OTHER_FP = "ABCDEFABCDEFABCDEFABCDEFABCDEFABCDEFABCD"
+VALID_FP = "1234567890ABCDEF1234567890ABCDEF12345678"  # pii-allow: synthetic key fixture
+OTHER_FP = "ABCDEFABCDEFABCDEFABCDEFABCDEFABCDEFABCD"  # pii-allow: synthetic key fixture
 
 
 def _thought(*, prefix: str = "Postmortem", portability: str = "portable") -> Thought:
