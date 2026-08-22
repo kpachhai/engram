@@ -49,6 +49,6 @@ Markdown is authoritative. The index is rebuildable. On `engram serve` startup, 
 
 ## References
 
-* `docs/superpowers/specs/2026-05-04-engram/02-TECHNICAL_DESIGN.md` Storage Schema
-* `docs/superpowers/specs/2026-05-04-engram/01-PRODUCT_SPEC.md` NFR1
+* Original spec: Storage Schema (technical design) and NFR1 (product spec). The spec
+  is in the maintainer's unpublished planning repo; the decision as shipped is above.
 * `bench/search_10k.py` - measurement harness

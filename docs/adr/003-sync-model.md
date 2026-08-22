@@ -46,6 +46,6 @@ The sync transport is the **system `git` CLI**, invoked via `subprocess.run([...
 
 ## References
 
-* `docs/superpowers/specs/2026-05-04-engram/02-TECHNICAL_DESIGN.md` Flow C, Flow D
-* `docs/superpowers/specs/2026-05-04-engram/03-ROADMAP.md` Phase 2 - Multi-machine sync
+* Original spec: Flow C and Flow D (technical design) plus the multi-machine sync
+  milestone (roadmap), in the maintainer's unpublished planning repo.
 * `src/engram/utils/run_command.py` - `run_git` wrapper with curated env

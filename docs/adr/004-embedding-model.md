@@ -54,7 +54,7 @@ The model is **lazy-loaded on first use** under a `threading.Lock` so cold-start
 
 ## References
 
-* `docs/superpowers/specs/2026-05-04-engram/02-TECHNICAL_DESIGN.md` Embeddings
-* `docs/superpowers/specs/2026-05-04-engram/01-PRODUCT_SPEC.md` NFR1, NFR2
+* Original spec: Embeddings (technical design) and NFR1/NFR2 (product spec), in the
+  maintainer's unpublished planning repo.
 * `src/engram/embedding/fastembed.py` - `FastEmbedProvider`
 * `src/engram/embedding/protocol.py` - `EmbeddingProvider` Protocol so the storage layer never imports the concrete provider

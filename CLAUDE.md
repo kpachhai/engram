@@ -58,7 +58,7 @@ engram/
 └── bench/                            # NFR1 search-latency benchmarks
 ```
 
-The spec lives outside this repo at `~/repos/github.com/kpachhai/idea-forge/docs/superpowers/specs/2026-05-04-engram/` (the maintainer's planning repo). Treat the spec as historical context; the shipped repo is authoritative for what engram actually does today. <!-- pii-allow:spec-back-ref -->
+engram was built from a written spec that lives in the maintainer's separate planning repo. That spec is not published and is not part of this repo, so nothing here should cite it: this repo is authoritative for what engram does, and `docs/adr/` plus `docs/archive/phases/` carry the design history a reader can actually open.
 
 ## Phase history (historical context, not active work)
 
@@ -82,10 +82,10 @@ These are the load-bearing properties that every change must preserve:
 
 This repo is publicly forkable. Follow the global PII rules in `~/.claude/CLAUDE.md` ("PII Discipline (publishable repos)" + "Pre-Write Checklist for Publishable Repos") plus these engram-specific notes:
 
-- **`pyproject.toml` `authors` field** is the only place a real maintainer name is permitted in committed content (project-attribution exception, parallel to `package.json` `"author"` in idea-forge).
+- **`pyproject.toml` `authors` field** is the only place a real maintainer name is permitted in committed content (the project-attribution exception, same as `package.json` `"author"`).
 - **No employer or company brand names** in source, tests, docs, ADRs, or commit messages. The pinned-invariants list, the spec, and the migration guide should all be readable by any forker without context about who built engram.
 - **No hardcoded `/Users/<name>/` paths.** Examples in docs use `~/.local/share/engram/personal` or similar generic paths; tests use `tmp_path` fixtures.
-- **No companion-repo paths bearing the maintainer's GitHub username.** Cross-references to other repos use generic terms (`your dotfiles`, `your meta-stack repo`, `your persistent-memory MCP`) — except for the spec back-reference in `## Repository layout`, which IS the maintainer's planning repo and is acknowledged as such.
+- **No companion-repo paths bearing the maintainer's GitHub username.** Cross-references to other repos use generic terms (`your dotfiles`, `your meta-stack repo`, `your persistent-memory MCP`). Do not cite a path in an unpublished repo at all: a reader cannot open it, so it is a dead pointer whether or not it carries a username.
 - **No GPG fingerprints, API keys, MCP URLs with secrets, or test fixtures derived from real keys** in committed content. Test GPG keys are generated in `tmp_path` per-test; OB1 migration secrets live in `~/.config/devkit/references.json` (machine-local, gitignored).
 
 Run the Pre-Write Checklist before writing or editing any file in this repo. If candidate PII slips in, flag it before staging - active guidance over silent rewrites.
@@ -152,4 +152,4 @@ The CLI is self-documenting (`engram --help`, `engram <cmd> --help`); recipes fo
 - `docs/adr/` — 9 ADRs (storage, MCP, sync, embedding, sync coordinator, multi-vault, team brain, daemon mode, consolidation).
 - `docs/DAEMON_MODE.md` — operator + migration guide for daemon mode (v0.5.0+).
 - `docs/CONSOLIDATION.md` — report-then-action vault curation (v0.6.0+).
-- `~/repos/github.com/kpachhai/idea-forge/workspace/engram/PHASE_<N>_RETROSPECTIVE.md` — lessons learned (Phase 2-4). <!-- pii-allow:spec-back-ref -->
+- `docs/archive/phases/` — the shipped delivery plans and close-out records. The per-phase retrospectives live in the maintainer's unpublished planning repo and are not readable from here.

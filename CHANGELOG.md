@@ -91,6 +91,13 @@ The MCP tool surface is committed-stable for the v1.x lifetime per the API stabi
 
 ### Changed
 
+- **Docs no longer point readers at files that are not in the repo.** The
+  ADRs, `CLAUDE.md`, `docs/ARCHITECTURE.md`, the migration guide and `bench/`
+  cited a spec under `docs/superpowers/` (gitignored) and retrospectives under
+  the maintainer's home directory. Each now points at what a clone actually
+  contains and says plainly that the original spec is unpublished. A test walks
+  every tracked file for such references; `docs/archive/` and this changelog are
+  exempt as records of what was written at the time.
 - **The vendored gate scripts have a re-vendor path anyone can run.**
   `.githooks/README.md` told the reader to copy the files out of the
   maintainer's home directory, which no contributor has, so the documented way

@@ -70,9 +70,8 @@ git history is attacker-influenceable (account compromise, sloppy
 hygiene) and contains arbitrary markdown that `engram` would index
 with neither path-traversal validation, per-file size caps, YAML
 safe-load enforcement, nor `portability=block` filtering at ingest.
-The bundle import gate is the only place
-`docs/superpowers/specs/2026-05-04-engram/06-SECURITY.md` lines 31-44
-(per-file 1 MB, per-bundle 4 GB streaming, `safe_load`,
+The bundle import gate is the only place the spec's import-safety
+requirements (per-file 1 MB, per-bundle 4 GB streaming, `safe_load`,
 path-traversal refusal, id-collision refusal, block filter) can be
 applied to friend-derived content. Live-pull is deferred to Phase 4
 where capability-token-based vault sharing can layer on.

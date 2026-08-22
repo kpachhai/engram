@@ -420,4 +420,4 @@ After migration, when using engram day-to-day, expect these differences:
 - `docs/USE_CASES.md` — five concrete personas with example flows.
 - `docs/ARCHITECTURE.md` — engram's components, data flow, storage layout.
 - `docs/MULTI_MACHINE_SETUP.md` — once you've migrated, sync your vault across personal devices via git.
-- The original Open Brain → engram migration spec lives at `~/repos/github.com/kpachhai/idea-forge/docs/superpowers/specs/2026-05-04-engram/04-MIGRATION.md` in the maintainer's planning repo (historical authority on the design). <!-- pii-allow:spec-back-ref -->
+- `docs/archive/phases/` — the delivery plans and close-out records behind the migration pipeline. The original migration spec is in the maintainer's unpublished planning repo; everything a reader needs is in this repo.

@@ -397,7 +397,7 @@ This is the contract that makes "your data outlives every vendor" actually true:
 
 ## See also
 
-- `docs/superpowers/specs/2026-05-04-engram/` (in the planning repo) — the full spec including roadmap, security model, operations playbook, competitive landscape, and migration plan.
+- `docs/archive/phases/` — the delivery plans and close-out records, including the security model and operations decisions as they were made. (The original spec lives in the maintainer's unpublished planning repo and is not readable from here.)
 - `docs/adr/` — Architecture Decision Records for each major design choice.
 - `docs/QUICKSTART.md` — five-minute install + first capture.
 - `docs/USE_CASES.md` — five concrete personas with example flows.

@@ -59,6 +59,7 @@ The surface is frozen for the v1.x lifetime. New capabilities go behind new tool
 
 ## References
 
-* `docs/superpowers/specs/2026-05-04-engram/02-TECHNICAL_DESIGN.md` MCP Tool Surface
+* Original spec: MCP Tool Surface (technical design), in the maintainer's unpublished
+  planning repo; the tool surface as shipped is above.
 * `src/engram/mcp/tools.py` - five pure async handlers
 * `src/engram/mcp/server.py` - FastMCP wiring with `@mcp.tool` decorators

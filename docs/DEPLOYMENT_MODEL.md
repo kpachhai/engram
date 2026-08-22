@@ -63,7 +63,7 @@ You DON'T deploy that repo anywhere. You:
 3. Run `engram serve` on each device against its local clone.
 4. Let the sync coordinator handle push/pull.
 
-The full setup walkthrough lives in `<your-meta-stack-repo>/workspace/engram/MEMEX_SETUP_GUIDE.md` (in the maintainer's planning repo).
+`docs/MULTI_MACHINE_SETUP.md` is the full walkthrough for that setup.
 
 ## What about teams?
 

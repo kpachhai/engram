@@ -1,7 +1,6 @@
 """Performance benchmarks for engram (NFR1).
 
-Each benchmark targets a specific NFR1 number from
-``docs/superpowers/specs/2026-05-04-engram/01-PRODUCT_SPEC.md``:
+Each benchmark targets a specific NFR1 number from the original product spec:
 
 * Capture: <200ms p95 for typical thoughts (<2KB), warm model.
 * Search top-10 over 10K thoughts: <100ms p95, warm model.
