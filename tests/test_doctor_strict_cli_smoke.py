@@ -105,4 +105,7 @@ def test_strict_reports_the_same_rows_as_the_default_run(skipping_vault: Path) -
     strict = _doctor(skipping_vault, "--strict").stdout.splitlines()
     rows_plain = [line for line in plain if line.lstrip().startswith("[")]
     rows_strict = [line for line in strict if line.lstrip().startswith("[")]
+    # Two empty lists compare equal, so a run that printed nothing at all would
+    # satisfy the comparison below without either mode having been exercised.
+    assert rows_plain, f"the default run printed no rows to compare:\n{plain}"
     assert rows_plain == rows_strict
