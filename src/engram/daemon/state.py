@@ -1,6 +1,7 @@
 """Daemon state file at ``<vault>/.indexes/engram.state.json``.
 
-Holds: pid, started_at, vault_name, vault_path, hostname, config snapshot.
+Holds: pid, started_at, vault_name, vault_path, hostname, engram version,
+config snapshot.
 Used by ``engram daemon status`` and to detect cross-machine sync
 confusion (the daemon writes the hostname so a stale state file from a
 different machine surfaces as a doctor row rather than silently
@@ -32,6 +33,11 @@ class DaemonState:
     vault_path: str
     hostname: str
     config_snapshot: dict[str, Any]
+    #: ``engram.__version__`` of the process that wrote this file. Defaulted so
+    #: a state file written by a daemon predating the field still parses through
+    #: ``DaemonState(**data)`` rather than degrading to "state file missing",
+    #: which would make a live daemon read as mid-startup. Empty means unknown.
+    engram_version: str = ""
 
 
 def write_state(path: Path, state: DaemonState) -> None:

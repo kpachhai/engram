@@ -45,9 +45,17 @@ _log = logging.getLogger("engram.diagnostics.doctor")
 
 
 class CheckStatus(enum.StrEnum):
-    """Per-check outcome category."""
+    """Per-check outcome category.
+
+    ``SKIP`` is distinct from ``OK`` on purpose: a check whose precondition
+    is absent did not run, and a report that renders those two the same way
+    lets "20 checks passed and 14 never ran" read as "34 checks passed".
+    It exits 0 like ``OK`` - a skip is not a degradation - but it is
+    counted and rendered separately.
+    """
 
     OK = "ok"
+    SKIP = "skip"
     WARN = "warn"
     FAIL = "fail"
 
@@ -70,7 +78,11 @@ class DoctorReport:
 
     @property
     def exit_code(self) -> int:
-        """0 if all OK; 1 if any WARN (no FAILs); 2 if any FAIL."""
+        """0 if nothing is degraded; 1 if any WARN (no FAILs); 2 if any FAIL.
+
+        OK and SKIP both count as clean: a skipped check is not a
+        degradation, only an unanswered question.
+        """
         if any(c.status is CheckStatus.FAIL for c in self.checks):
             return 2
         if any(c.status is CheckStatus.WARN for c in self.checks):
@@ -559,8 +571,9 @@ def run_sync_diagnostics(
     its own pathway during ``engram serve`` startup).
 
     When the vault is NOT a git working tree, the entire sync-check
-    sweep is skipped (returning OK for every code) - non-git vaults
-    are a valid local-only configuration.
+    sweep is skipped (returning SKIP for every code) - non-git vaults
+    are a valid local-only configuration, but a skipped signing or
+    attribution probe must not read as one that ran and passed.
     """
     # Conflict-marker scan first - it is the highest-priority FAIL.
     _check_conflict_markers_present(report, config)
@@ -571,7 +584,7 @@ def run_sync_diagnostics(
                 continue
             report.add(
                 code,
-                CheckStatus.OK,
+                CheckStatus.SKIP,
                 f"{code}: skipped (vault is not a git working tree)",
             )
         return

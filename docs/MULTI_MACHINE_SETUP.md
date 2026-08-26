@@ -236,8 +236,11 @@ git config commit.gpgsign false   # or true if you have GPG infra
 engram doctor --config ~/engram-personal/engram.config.yaml
 ```
 
-This runs all 9 base health checks plus the 14 sync-specific checks. Every
-row should be OK or WARN; FAILs must be resolved before serving.
+This runs the base health checks plus the 14 sync-specific ones; the summary line
+at the end reports how many passed, were skipped, warned and failed. On a vault set
+up as above none of the sync rows should be `[SKIP]` - a skipped sync row means that
+directory is not a git working tree, so the bootstrap (Step 2) or the clone (Step 3)
+did not take. FAILs must be resolved before serving.
 
 ### 5. Start the server
 

@@ -60,7 +60,12 @@ def _config_for(repo: Path) -> EffectiveConfig:
 
 
 def test_non_git_vault_skips_all_sync_checks(tmp_path: Path) -> None:
-    """A vault without .git emits OK rows for every sync code."""
+    """A vault without .git emits SKIP rows for every sync code.
+
+    SKIP rather than OK: a signing or attribution probe that never ran must
+    not be indistinguishable from one that ran and passed. The conflict-marker
+    scan is the exception - it runs on any vault, git or not.
+    """
     thoughts = tmp_path / "thoughts"
     thoughts.mkdir()
     indexes = tmp_path / ".indexes"
@@ -78,8 +83,19 @@ def test_non_git_vault_skips_all_sync_checks(tmp_path: Path) -> None:
     report = DoctorReport()
     run_sync_diagnostics(report, config)
     statuses = {c.name: c.status for c in report.checks}
+    # The loop below asserts once per code, so an empty tuple asserts nothing
+    # and this test passes over a sweep that emitted no rows at all.
+    assert check_codes.ALL_PHASE_2_CHECK_CODES, (
+        "examined 0 sync check codes - the canonical tuple is empty, so nothing below ran"
+    )
     for code in check_codes.ALL_PHASE_2_CHECK_CODES:
-        assert statuses.get(code) is CheckStatus.OK
+        expected = (
+            CheckStatus.OK if code == check_codes.CONFLICT_MARKERS_PRESENT else CheckStatus.SKIP
+        )
+        assert statuses.get(code) is expected, code
+    assert not any(c.status is CheckStatus.OK and "skipped" in c.message for c in report.checks), (
+        "a row that did not run must not render as a pass"
+    )
 
 
 # === conflict markers ===

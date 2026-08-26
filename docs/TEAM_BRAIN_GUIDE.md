@@ -131,7 +131,7 @@ git push
 
 ### What the hook enforces, and where it reads policy from
 
-Two properties are worth knowing before you operate a team vault:
+Three properties are worth knowing before you operate a team vault:
 
 * **Policy and membership come from the remote's canonical state (`HEAD`,
   i.e. the default branch), never from the tree being pushed.** Otherwise a
@@ -144,6 +144,13 @@ Two properties are worth knowing before you operate a team vault:
   your base and your tip. Signatures from revoked or expired keys are refused.
   Pushing a range whose middle commits are unsigned is refused even when the tip
   is signed, so avoid rebasing in unsigned work from elsewhere before pushing.
+* **Every git call the hook makes is capped at 30 seconds, and a call that does not
+  return in time refuses the push.** `git verify-commit` shells out to gpg, which
+  blocks indefinitely against an unreachable agent; uncapped, one such commit holds
+  the push open for whoever is pushing and for anyone waiting on the remote. A
+  timed-out signature check yields no fingerprint, which the hook already treats as
+  "no verifiable GPG signature". If pushes start being refused this way, check the
+  gpg agent and keyring on the *remote* host, not on the pusher's machine.
 
 Content is gated per commit rather than by diffing the range endpoints, so
 adding a `portability=block` thought and deleting it again in a later commit of

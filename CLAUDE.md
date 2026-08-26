@@ -33,7 +33,10 @@ engram/
 │   ├── LLM_FEATURES.md               # opt-in summarize / synthesize tools
 │   ├── CONSOLIDATION.md              # report-then-action vault curation guide
 │   ├── DAEMON_MODE.md                # daemon operator + migration guide (v0.5.0+)
-│   ├── PUBLISHING.md                 # PyPI release procedure (maintainer-only)
+│   ├── PUBLISHING.md                 # PyPI release procedure. Never run `uv publish` (or
+│                                     #   `--index testpypi`, also a real upload) without an
+│                                     #   instruction naming the version: an upload consumes
+│                                     #   that number for good, and a yank does not free it.
 │   ├── DEPLOYMENT_MODEL.md           # local-first thesis (why not cloud-hosted)
 │   ├── adr/                          # 9 ADRs (one per major design choice)
 │   └── archive/                      # historical: shipped plans + closed investigations
@@ -54,7 +57,7 @@ engram/
 │   ├── migration/                    # Open Brain migration pipeline
 │   ├── diagnostics/                  # engram doctor; check codes enumerated in check_codes.py
 │   └── utils/                        # atomic_write, fingerprint, file_naming, lock
-├── tests/                            # 1605 tests (unit + integration + smoke)
+├── tests/                            # unit + integration + smoke (count: pytest --collect-only -q)
 └── bench/                            # NFR1 search-latency benchmarks
 ```
 
@@ -65,6 +68,8 @@ engram was built from a written spec that lives in the maintainer's separate pla
 engram shipped in six phases (solo MVP + Open Brain migration -> multi-machine git sync -> multi-vault/friend-share/LLM -> Team Brain -> daemon mode, v0.5.0 -> consolidation, v0.6.0), all code-complete; the record lives in `docs/archive/phases/`, `docs/adr/`, and `CHANGELOG.md`. Future work is operational dogfood and incremental polish, not phased delivery.
 
 **Don't reintroduce "Phase N" framing in source comments.** That historical context belongs in plan / ADR / retrospective docs. Source code reads as a polished v1.0 product.
+
+Known gate gap (2026-08-25): the vocabulary gate greps file *contents* and never matches the path, so planning vocabulary in a filename passes it - `git ls-files | grep -ciE 'phase[0-9]'` counts the tracked paths that still carry it, two of them modules in the shipped wheel. Until the vendored scanner reads paths too, filenames are enforced by review. Gate gaps in the vendored scripts themselves: `.githooks/README.md`.
 
 ## Pinned invariants (DO NOT VIOLATE)
 
@@ -95,7 +100,7 @@ Run the Pre-Write Checklist before writing or editing any file in this repo. If 
 Follow the global rules in `~/.claude/CLAUDE.md` (use hyphens or semicolons instead of em-dashes, no emojis unless asked, fail-fast error handling, descriptive names, surgical changes only). Engram-specific additions:
 
 - **Pydantic at every boundary.** All MCP I/O, all config files, all bundle manifests use Pydantic models with `model_config = ConfigDict(extra="forbid")` for inputs and `extra="ignore"` for outputs. New fields are additive only.
-- **Atomic writes.** All file mutations go through `engram.utils.atomic_write.atomic_write_text` or `atomic_write_bytes` (tempfile + fsync + rename). Never write to the destination path directly.
+- **Atomic writes.** All file mutations go through `engram.utils.atomic_write.atomic_write_text` or `atomic_write_bytes` (tempfile + fsync + rename). Never write to the destination path directly. Enforced by `test_file_mutations_go_through_atomic_write`, which holds a reasoned allowlist of the remaining direct-write sites; a new one fails there.
 - **Parameterized SQL.** All queries in `engram.storage.sqlite_queries` use `?`-placeholders. Never f-string user input into SQL. ruff S enforces this.
 - **No shell=True.** Subprocess calls in `engram.utils.run_command` and `engram.sync.gitops` use list-form `subprocess.run(["cmd", "arg"], shell=False)`. ruff S enforces this.
 - **Type-strict mypy.** `pyproject.toml` has `[tool.mypy] strict = true`. Every new function has type hints; `Any` is a code smell.
@@ -106,11 +111,11 @@ Follow the global rules in `~/.claude/CLAUDE.md` (use hyphens or semicolons inst
 
 ```bash
 uv sync --all-extras --dev          # install + lock deps
-uv run pytest -q                     # full suite (1605 tests; ~7 min)
+uv run pytest -q                     # full suite (~7 min)
 uv run ruff format                   # auto-format
 uv run ruff check --fix              # lint + auto-fix
-uv run mypy                          # strict type-check (259 source files)
-uv run pytest --cov=src --cov-fail-under=80   # coverage gate
+uv run mypy                          # strict type-check (prints its own file count)
+uv run pytest --cov=src            # coverage gate (floor: pyproject.toml)
 ```
 
 Test taxonomy:

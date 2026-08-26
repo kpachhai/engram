@@ -228,15 +228,28 @@ def _parse_stdin(stdin_text: str) -> list[_RefUpdate]:
     return updates
 
 
+#: Wall-clock cap on every git call this hook makes. Same value the rest of
+#: the repo puts on local git operations (``engram.sync.gitops``). A hook that
+#: hangs holds the push open indefinitely for every member of the vault, and a
+#: hang is indistinguishable from a slow network from the pusher's side; a cap
+#: turns it into a refusal, which is the safe direction for a gate.
+_GIT_TIMEOUT_SECONDS = 30.0
+
+
 def _git_cmd(args: list[str], *, cwd: str | None = None) -> str:
-    """Run a git plumbing command, return stdout, raise on nonzero."""
-    result = subprocess.run(  # noqa: S603 - git is the canonical tool here
-        ["git", *args],  # noqa: S607
-        cwd=cwd,
-        capture_output=True,
-        text=True,
-        check=False,
-    )
+    """Run a git plumbing command, return stdout, raise on nonzero or on timeout."""
+    try:
+        result = subprocess.run(  # noqa: S603 - git is the canonical tool here
+            ["git", *args],  # noqa: S607
+            cwd=cwd,
+            capture_output=True,
+            text=True,
+            check=False,
+            timeout=_GIT_TIMEOUT_SECONDS,
+        )
+    except subprocess.TimeoutExpired as exc:
+        msg = f"git {' '.join(args)} timed out after {_GIT_TIMEOUT_SECONDS}s"
+        raise RuntimeError(msg) from exc
     if result.returncode != 0:
         msg = f"git {' '.join(args)} failed (rc={result.returncode}): {result.stderr.strip()}"
         raise RuntimeError(msg)
@@ -378,8 +391,12 @@ def _committer_fingerprint(sha: str, *, cwd: str | None = None) -> str | None:
             capture_output=True,
             text=True,
             check=False,
+            timeout=_GIT_TIMEOUT_SECONDS,
         )
-    except OSError:
+    except (OSError, subprocess.TimeoutExpired):
+        # verify-commit shells out to gpg, which blocks indefinitely on an
+        # unreachable agent. No answer is not an authorizing answer: returning
+        # None makes the caller record "no verifiable GPG signature".
         return None
     # A failed verification must never yield an authorizing identity.
     if result.returncode != 0:

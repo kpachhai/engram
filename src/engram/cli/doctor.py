@@ -22,6 +22,7 @@ from engram.errors import ConfigError
 
 _STATUS_COLOR = {
     CheckStatus.OK: typer.colors.GREEN,
+    CheckStatus.SKIP: typer.colors.BLUE,
     CheckStatus.WARN: typer.colors.YELLOW,
     CheckStatus.FAIL: typer.colors.RED,
 }
@@ -128,16 +129,52 @@ def register(app: typer.Typer) -> None:
                 typer.echo(f"           {check.detail}")
 
         typer.echo()
-        if report.exit_code == 0:
-            typer.secho("engram doctor: all checks green", fg=typer.colors.GREEN)
-        elif report.exit_code == 1:
-            typer.secho(
-                "engram doctor: warnings (operational, with caveats)", fg=typer.colors.YELLOW
-            )
-        else:
-            typer.secho("engram doctor: failures detected", fg=typer.colors.RED)
+        # Print the size of each bucket, including the zero ones. A verdict
+        # alone hides a run whose executed-check count collapsed: "34 checks"
+        # and "20 executed, 14 skipped" read identically without this line.
+        counts = {status: 0 for status in CheckStatus}
+        for check in report.checks:
+            counts[check.status] += 1
+        typer.echo(
+            f"engram doctor: {len(report.checks)} checks - "
+            f"{counts[CheckStatus.OK]} passed, "
+            f"{counts[CheckStatus.SKIP]} skipped, "
+            f"{counts[CheckStatus.WARN]} warnings, "
+            f"{counts[CheckStatus.FAIL]} failures"
+        )
+        message, color = _verdict_line(
+            exit_code=report.exit_code,
+            skipped=counts[CheckStatus.SKIP],
+            total=len(report.checks),
+        )
+        typer.secho(message, fg=color)
 
         raise typer.Exit(report.exit_code)
+
+
+def _verdict_line(*, exit_code: int, skipped: int, total: int) -> tuple[str, str]:
+    """The closing verdict sentence and its colour.
+
+    Exit 0 with skipped rows is not "all checks green": those rows answered
+    nothing, and a verdict that reads identically either way lets "did not
+    run" pass for "passed". Only the sentence changes here - the exit code
+    still treats a skip as clean, because a skip is an unanswered question
+    rather than a degradation.
+    """
+    if exit_code == 0:
+        if skipped:
+            return (
+                f"engram doctor: no warnings or failures, but {skipped} of "
+                f"{total} checks did not run",
+                typer.colors.BLUE,
+            )
+        return "engram doctor: all checks green", typer.colors.GREEN
+    if exit_code == 1:
+        return (
+            "engram doctor: warnings (operational, with caveats)",
+            typer.colors.YELLOW,
+        )
+    return "engram doctor: failures detected", typer.colors.RED
 
 
 def _append_llm_rows(*, report: DoctorReport, config: object) -> None:

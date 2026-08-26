@@ -39,12 +39,16 @@ that behaves differently on the maintainer's machine: it adds name, email and us
 patterns from an optional machine-local file that only they have, so on your clone and
 in CI it runs on structural patterns alone. `verify-gates.sh` prints which of the two
 modes it ran in - a scan reporting "clean" with half its rules unloaded looks exactly
-like a full pass otherwise.
+like a full pass otherwise. `.githooks/README.md` is the reference for that directory:
+which files are vendored and must not be edited in place, how to take an upstream change,
+what `verify-gates.sh` proves, and the gaps the current vendored copies still have.
 
 CI runs ruff, mypy, pytest (property tests included) and the repo gates across Python
-3.11/3.12 x macOS/Ubuntu. The benchmarks in `bench/` are run manually, not in CI. Coverage gate is 80% (line); test quality over coverage percentage. Write
-tests first; add a hermetic CLI smoke test for every new subcommand. Update
-`CHANGELOG.md` under `[Unreleased]`, and write an ADR in `docs/adr/` for any
+3.11/3.12 x macOS/Ubuntu. The benchmarks in `bench/` are run manually, not in CI. The
+coverage floor lives in `pyproject.toml` under `[tool.coverage.report]` and applies to
+any `pytest --cov` run from the repo root, CI included; test quality over coverage
+percentage. Write tests first; add a hermetic CLI smoke test for every new subcommand.
+Update `CHANGELOG.md` under `[Unreleased]`, and write an ADR in `docs/adr/` for any
 ADR-worthy decision. Tests use synthetic data only - never real user thoughts (the
 three-repo data-ownership model: this repo is code only, ever).
 

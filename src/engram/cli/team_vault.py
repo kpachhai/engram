@@ -43,6 +43,14 @@ from engram.team.members import (
 
 _log = logging.getLogger("engram.cli.team_vault")
 
+#: Wall-clock cap on local git metadata operations here. Matches the value
+#: ``engram.sync.gitops`` puts on its own local calls; a local git command that
+#: has not returned inside it is wedged, not slow. Deliberately not applied to
+#: ``git clone`` below: a first clone of a large team vault is legitimately slow
+#: and no principled ceiling exists for it, so that one stays uncapped and the
+#: operator watching the command is the control.
+_LOCAL_GIT_TIMEOUT_SECONDS = 30.0
+
 
 _TEAM_GITIGNORE = """\
 # engram team-vault canonical .gitignore. DO NOT REMOVE these entries.
@@ -544,9 +552,11 @@ def unmount_cmd(
     data["vaults"] = new_vaults
     import io
 
+    from engram.utils.atomic_write import atomic_write_text
+
     buf = io.StringIO()
     yaml_rt.dump(data, buf)
-    user_config_path.write_text(buf.getvalue(), encoding="utf-8")
+    atomic_write_text(user_config_path, buf.getvalue())
 
     removed_local = False
     if remove_local:
@@ -597,17 +607,35 @@ def rebind_cmd(
         raise VaultError(msg)
     import io
 
+    from engram.utils.atomic_write import atomic_write_text
+
     buf = io.StringIO()
     yaml_rt.dump(data, buf)
-    user_config_path.write_text(buf.getvalue(), encoding="utf-8")
+    atomic_write_text(user_config_path, buf.getvalue())
 
     if local_clone_path is not None and local_clone_path.exists():
-        result = subprocess.run(  # noqa: S603
-            ["git", "-C", str(local_clone_path), "remote", "set-url", "origin", new_remote_url],  # noqa: S607
-            capture_output=True,
-            text=True,
-            check=False,
-        )
+        try:
+            result = subprocess.run(  # noqa: S603
+                [  # noqa: S607
+                    "git",
+                    "-C",
+                    str(local_clone_path),
+                    "remote",
+                    "set-url",
+                    "origin",
+                    new_remote_url,
+                ],
+                capture_output=True,
+                text=True,
+                check=False,
+                timeout=_LOCAL_GIT_TIMEOUT_SECONDS,
+            )
+        except subprocess.TimeoutExpired as exc:
+            msg = (
+                f"git remote set-url did not return within "
+                f"{_LOCAL_GIT_TIMEOUT_SECONDS}s; the remote URL was not changed"
+            )
+            raise VaultError(msg) from exc
         if result.returncode != 0:
             msg = f"git remote set-url failed: {result.stderr.strip()}"
             raise VaultError(msg)
@@ -689,13 +717,15 @@ def redact_history_cmd(
     log_path.parent.mkdir(parents=True, exist_ok=True)
     from datetime import UTC, datetime
 
+    from engram.utils.atomic_write import atomic_write_text
+
     timestamp = datetime.now(tz=UTC).isoformat()
     entry = f"\n## {timestamp}\n- Steward: {caller_fingerprint}\n- Reason: {reason}\n\n"
     if log_path.exists():
         existing = log_path.read_text(encoding="utf-8")
     else:
         existing = "# engram team-vault redaction log\n"
-    log_path.write_text(existing + entry, encoding="utf-8")
+    atomic_write_text(log_path, existing + entry)
     return {
         "log_path": str(log_path),
         "next_step": (

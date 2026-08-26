@@ -99,13 +99,18 @@ Verify both version files agree:
 
 ```bash
 grep '^version' pyproject.toml             # confirms new version
-grep '^__version__' src/engram/__init__.py  # confirms same value
 head -20 CHANGELOG.md                      # confirms new section header
+uv sync --all-extras --dev                 # reinstall so dist metadata carries the new version
+uv run pytest tests/test_smoke.py -q       # confirms pyproject and __init__ agree
 ```
 
-Both `engram --version` and `python -m engram --version` must report
-the same string after the bump — the CI ``console-script-smoke`` job
-enforces this.
+`test_package_metadata_matches_dunder_version` is the check that the two
+version files agree; it compares the installed distribution metadata against
+`engram.__version__`, so a bump that lands in one file and not the other goes
+red there. The CI ``console-script-smoke`` job separately confirms that
+`engram --version` and `python -m engram --version` report the same string,
+but both of those read `engram.__version__`, so that job cannot see a skew
+against `pyproject.toml`.
 
 ### 3. Run the full validation gate
 
@@ -116,10 +121,13 @@ uv sync --all-extras --dev
 uv run ruff format
 uv run ruff check
 uv run mypy
-uv run pytest --cov=src --cov-fail-under=80
+uv run pytest --cov=src
 ```
 
-All four must pass. If any fails, fix it before continuing.
+All of them must pass. If any fails, fix it before continuing. The coverage floor is
+`fail_under` in `pyproject.toml` under `[tool.coverage.report]`; do not repeat it as
+`--cov-fail-under` on the command line, because the flag wins and the config value
+then stops meaning anything.
 
 ### 4. Build the wheel
 
@@ -275,10 +283,10 @@ Shipping with stale hashes either fails on legitimate upgrades or (worse) silent
 Save this for the next release:
 
 - [ ] CI green on the commit being released
-- [ ] `pyproject.toml` version bumped
+- [ ] `pyproject.toml` and `src/engram/__init__.py` both bumped to the same version
 - [ ] `CHANGELOG.md` `[Unreleased]` → `[<version>] - <date>` rename
 - [ ] `uv run ruff format && uv run ruff check && uv run mypy` clean
-- [ ] `uv run pytest --cov=src --cov-fail-under=80` clean
+- [ ] `uv run pytest --cov=src` clean
 - [ ] `uv build` produces a `dist/engram_mcp_server-<version>-py3-none-any.whl` that contains only `src/engram/**/*.py`
 - [ ] Clean-venv smoke test passes
 - [ ] TestPyPI publish + smoke passes

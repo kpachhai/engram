@@ -85,13 +85,13 @@ engram doctor --download-model
 
 This pulls `BAAI/bge-small-en-v1.5` (~130MB) from HuggingFace into the vault's local cache. The migration step then uses the cached model. If you skip this, the migration's first capture also triggers the download — which works but adds 1-2 minutes to the run.
 
-### 6. Verify the doctor is all-green on the empty vault
+### 6. Verify the doctor is clean on the empty vault
 
 ```bash
 engram doctor
 ```
 
-Expected output: every check `[OK]`. If anything is `[FAIL]` or `[WARN]`, the message tells you the remediation. **Don't proceed with migration until the doctor is green.**
+Expected output: `[OK]` or `[SKIP]` on every row, and a verdict line reporting no warnings and no failures. `[SKIP]` rows are checks that did not run because what they inspect is absent - all but one of the sync rows skip on a vault that is not a git repository, which is fine for a local-only migration target. If anything is `[FAIL]` or `[WARN]`, the message tells you the remediation. **Don't proceed with migration until the doctor reports no warnings and no failures.**
 
 ### 7. Set the `default_user` in your per-user config
 
@@ -266,11 +266,11 @@ The frontmatter should be well-formed YAML with all required fields (`id`, `pref
 engram doctor
 ```
 
-Expected: every check `[OK]`. The `pending_embedding_count` row should be 0 (every thought got an embedding). If non-zero, run `engram doctor --repair` to backfill.
+Expected: `[OK]` or `[SKIP]` on every row. The `pending_embeddings` row should report no pending embeddings (every thought got one). If it warns, run `engram doctor --repair` to backfill.
 
 ### 4. MCP smoke test
 
-Wire engram into your MCP client (Claude Code, Claude Desktop, etc) — see `docs/QUICKSTART.md` Step 4. Then run a search query that you know previously worked against Open Brain:
+Wire engram into your MCP client (Claude Code, Claude Desktop, etc) — see `docs/QUICKSTART.md` Step 5. Then run a search query that you know previously worked against Open Brain:
 
 > "Search my thoughts for things I've learned about <topic-with-known-results>."
 

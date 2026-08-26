@@ -6,7 +6,9 @@ orphan_recover_cmd, redact_history_cmd.
 
 from __future__ import annotations
 
+import os
 import tarfile
+import time
 from pathlib import Path
 
 import pytest
@@ -167,6 +169,41 @@ def test_rebind_updates_remote_url(tmp_path: Path) -> None:
     )
     assert outcome["new_remote_url"] == "git@new:team-x.git"
     assert "git@new:team-x.git" in cfg_path.read_text(encoding="utf-8")
+
+
+def test_rebind_refuses_when_git_hangs(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    """A wedged local git must surface as a refusal, not a hung CLI.
+
+    ``git remote set-url`` is a local metadata write; one that has not returned
+    inside the cap is wedged rather than slow. The shim sleeps far longer than
+    the cap, so raising at all proves the cap fired.
+    """
+    cfg_path = tmp_path / "config.yaml"
+    cfg_path.write_text(
+        "vaults:\n  - name: team-x\n    path: ~/x\n    role: team-write\n    "
+        "remote_url: git@old:team-x.git\n",
+        encoding="utf-8",
+    )
+    clone_path = tmp_path / "clone"
+    clone_path.mkdir()
+    shim_dir = tmp_path / "hanging-bin"
+    shim_dir.mkdir()
+    shim = shim_dir / "git"
+    shim.write_text("#!/bin/sh\nsleep 30\n", encoding="utf-8")
+    shim.chmod(0o755)
+    monkeypatch.setenv("PATH", f"{shim_dir}{os.pathsep}{os.environ['PATH']}")
+    monkeypatch.setattr("engram.cli.team_vault._LOCAL_GIT_TIMEOUT_SECONDS", 0.5)
+
+    started = time.monotonic()
+    with pytest.raises(VaultError, match="did not return within"):
+        rebind_cmd(
+            vault_alias="team-x",
+            user_config_path=cfg_path,
+            new_remote_url="git@new:team-x.git",
+            local_clone_path=clone_path,
+        )
+    elapsed = time.monotonic() - started
+    assert elapsed < 10, f"raised after {elapsed:.1f}s - that is not the cap firing"
 
 
 def test_rebind_refuses_unknown_alias(tmp_path: Path) -> None:

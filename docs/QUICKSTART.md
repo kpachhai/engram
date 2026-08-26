@@ -96,7 +96,37 @@ Multi-vault setups (friend-imported corpus, team-shared vault) add additional ro
 engram doctor
 ```
 
-Expected: a list of green check rows. If anything is RED, the message text on that row tells you what to fix. Common first-time issues:
+Every row carries one of four statuses, and the run ends with a count line and a
+verdict line. An excerpt from a real run against a local-only vault (rows elided):
+
+```
+  [OK  ] index_consistency: 0 thoughts indexed; matches on-disk count
+  [SKIP] consolidate_journal_orphan: skipped (no consolidation state)
+  [WARN] llm_provider_reachable: provider llama_cpp did not respond to health_check; LLM tools may fail until the provider is reachable.
+
+engram doctor: 37 checks - 12 passed, 22 skipped, 3 warnings, 0 failures
+engram doctor: warnings (operational, with caveats)
+```
+
+The row count and the bucket sizes depend on how the vault is set up; what matters is
+that the count line always prints all four buckets, zeros included.
+
+- `[OK  ]` - the check ran and the vault is healthy on that point.
+- `[SKIP]` - the check did not run, because what it inspects is not present. A vault
+  that is not a git repository skips thirteen of the fourteen sync checks (the
+  conflict-marker scan runs either way); a vault that has never run `engram consolidate`
+  skips the two consolidation rows. Nothing is wrong, but the row answered nothing
+  either, so it is counted apart from the passes.
+- `[WARN]` - degraded but serviceable. The row text names the remediation.
+- `[FAIL]` - resolve before serving.
+
+Exit codes: `0` when nothing is degraded (skips included), `1` when the worst row is a
+WARN, `2` when anything FAILed. A run that exits 0 with skipped rows says so on the
+verdict line ("no warnings or failures, but N of M checks did not run") rather than
+claiming everything is green.
+
+If anything is `[FAIL]`, the message text on that row tells you what to fix. Common
+first-time issues:
 
 - A FAIL row on `thoughts_dir` or `index_dir` means the `path` in `~/.config/engram/config.yaml` doesn't point at the vault `engram init` created. Re-check Step 3.
 - A FAIL row on `sqlite_vec` means your Python's stdlib `sqlite3` was built without loadable extensions. See the Troubleshooting section below for the uv-based fix.
@@ -114,7 +144,7 @@ claude mcp add --scope user engram -- "$(which engram)" serve
 
 Confirm with `claude mcp list` - you should see an `engram:` line. Under the hood this writes to `~/.claude.json`; don't hand-edit that file - use the `claude mcp` CLI to add or remove servers. Passing the absolute path (`"$(which engram)"`) rather than the bare command matters because Claude Code launches MCP subprocesses with a stripped PATH that does not source your shell rc.
 
-Restart Claude Code. You should see seven engram tools registered: `capture_thought`, `search_thoughts`, `list_thoughts`, `thought_stats`, `fetch`, `summarize_thought`, `synthesize_thoughts`.
+Restart Claude Code. On the single-vault setup above you should see six engram tools registered: `capture_thought`, `search_thoughts`, `list_thoughts`, `thought_stats`, `fetch`, `delete_thought`. The two optional LLM tools (`summarize_thought`, `synthesize_thoughts`) are wired only once a second vault is mounted - see [MULTI_VAULT_SETUP.md](MULTI_VAULT_SETUP.md) and [LLM_FEATURES.md](LLM_FEATURES.md).
 
 The first session has a small (~1-2s) spawn latency while engram boots its per-vault daemon and loads the embedding model. Subsequent concurrent Claude Code sessions on the same vault attach in milliseconds — you can run two or more sessions against the same vault simultaneously. See [DAEMON_MODE.md](DAEMON_MODE.md) for the operator-facing controls (`engram daemon status`, `engram daemon stop`, etc).
 
@@ -176,6 +206,16 @@ uv tool install engram-mcp-server
 ### Search returns no results even though I captured thoughts
 
 Check `engram doctor` for a `pending_embeddings` WARN row — it means the embedding model failed to load on capture. Run `engram doctor --repair` to backfill, or `engram reindex` to rebuild from markdown.
+
+### `model integrity check failed ... Refusing to load`
+
+A cached model file no longer matches the SHA-256 pinned in
+`src/engram/embedding/model_hashes.py`, so engram refuses to embed through it rather
+than loading it anyway. A truncated or interrupted download is the usual cause. Note
+that `engram doctor`'s `embedding_cache_integrity` row is a presence check, not a hash
+check, so it can report the snapshot intact while the load still refuses. Either way
+that row prints the snapshot directory: delete it and re-run
+`engram doctor --download-model` to re-fetch.
 
 ### My MCP client doesn't see the engram tools
 

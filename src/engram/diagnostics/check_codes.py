@@ -147,8 +147,10 @@ DAEMON_SOCKET_STALE: Final[str] = "daemon_socket_stale"
 DAEMON_LOG_ROTATION_HEALTHY: Final[str] = "daemon_log_rotation_healthy"
 DAEMON_UPTIME_EXCESSIVE: Final[str] = "daemon_uptime_excessive"
 DAEMON_SOCKET_PATH_TOO_LONG: Final[str] = "daemon_socket_path_too_long"
+DAEMON_VERSION_MATCHES_CLI: Final[str] = "daemon_version_matches_cli"
+DAEMON_CONFIG_DRIFTED: Final[str] = "daemon_config_drifted"
 
-#: Canonical daemon-mode check tuple. Tests iterate this to assert the six
+#: Canonical daemon-mode check tuple. Tests iterate this to assert the
 #: codes are unique snake_case strings.
 ALL_DAEMON_CHECK_CODES: Final[tuple[str, ...]] = (
     DAEMON_RUNNING,
@@ -157,6 +159,8 @@ ALL_DAEMON_CHECK_CODES: Final[tuple[str, ...]] = (
     DAEMON_LOG_ROTATION_HEALTHY,
     DAEMON_UPTIME_EXCESSIVE,
     DAEMON_SOCKET_PATH_TOO_LONG,
+    DAEMON_VERSION_MATCHES_CLI,
+    DAEMON_CONFIG_DRIFTED,
 )
 
 
@@ -191,12 +195,14 @@ __all__ = [
     "CLOUD_SYNC_UNDER_DOTGIT",
     "CONFLICT_MARKERS_PRESENT",
     "CONSOLIDATE_JOURNAL_ORPHAN",
+    "DAEMON_CONFIG_DRIFTED",
     "DAEMON_LOG_ROTATION_HEALTHY",
     "DAEMON_RUNNING",
     "DAEMON_SOCKET_PATH_TOO_LONG",
     "DAEMON_SOCKET_PERMISSIONS",
     "DAEMON_SOCKET_STALE",
     "DAEMON_UPTIME_EXCESSIVE",
+    "DAEMON_VERSION_MATCHES_CLI",
     "EMBEDDING_MODEL_MISMATCH_ACROSS_VAULTS",
     "FRIEND_VAULT_BLOCK_THOUGHT_PRESENT",
     "GITIGNORE_INDEXES",

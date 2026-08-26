@@ -141,7 +141,7 @@ ranking.
 
 ## Doctor checks the multi-vault config
 
-`engram doctor` runs the eight multi-vault checks per `docs/adr/006-multi-vault-and-llm.md`:
+`engram doctor` runs the multi-vault checks per `docs/adr/006-multi-vault-and-llm.md`:
 
 | Code | When it fires |
 |---|---|
@@ -153,6 +153,7 @@ ranking.
 | `llm_daily_cost_cap_approached` | WARN at >=80% of daily cap |
 | `read_only_vault_declares_llm` | WARN when a read-only vault has an `llm:` block |
 | `friend_vault_block_thought_present` | FAIL when a read-only vault carries `portability=block` |
+| `user_config_vault_name_mismatch` | WARN when a vault's `name:` in `~/.config/engram/config.yaml` differs from the `vault_name:` in its own `engram.config.yaml` |
 
 ## Local two-machine smoke test
 

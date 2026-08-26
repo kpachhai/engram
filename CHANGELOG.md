@@ -9,6 +9,45 @@ The MCP tool surface is committed-stable for the v1.x lifetime per the API stabi
 
 ## [Unreleased]
 
+### Added
+
+- **`engram doctor` distinguishes a check that was skipped from one that
+  passed.** A new `SKIP` status renders as `[SKIP]` and still exits 0. On a
+  non-git vault fifteen of thirty-five rows were reporting `[OK  ]` for probes
+  that never ran - among them `signed_commits_required` and
+  `vault_identity_remote_match` - so a lost `.git` directory looked identical
+  to a clean signing configuration. The summary line now prints the size of
+  every bucket, and the daemon rows that a rejected UDS path used to drop
+  from the report in silence are emitted as skips instead.
+- **`daemon_version_matches_cli` and `daemon_config_drifted` doctor rows.** The
+  daemon recorded its config snapshot in `engram.state.json` and nothing ever
+  read it; it recorded no version at all. An upgrade replaces the wheel while
+  the running daemon keeps serving the code it loaded at spawn, and a config
+  edit lands on disk contradicted by the live process - both were invisible
+  behind six green daemon rows. `DaemonState` now carries `engram_version`
+  (defaulted, so a state file from an older daemon still parses). When the
+  state file cannot answer, both rows consult the socket rather than passing:
+  with nothing listening they skip, and a daemon that is listening while its
+  state file is missing or unreadable warns, because an unanswered question is
+  not a match.
+
+### Fixed
+
+- **`pyproject.toml` and `src/engram/__init__.py` are compared by a test.** The
+  release procedure bumps them with two separate `sed` calls, and a build with
+  the two disagreeing passed `twine check` and the console-script smoke job -
+  which compares two reads of the same constant and so cannot see the skew.
+  `test_package_metadata_matches_dunder_version` compares the installed
+  distribution metadata against `engram.__version__`.
+- **`VaultStorage._read_current_branch` honours its documented contract under
+  timeout.** `subprocess.TimeoutExpired` derives from `SubprocessError`, not
+  `OSError`, so the 2-second cap on `git symbolic-ref` raised straight out of
+  `VaultStorage.__init__` instead of returning `None`.
+- **The coverage floor lives in one place.** `pyproject.toml` and the CI
+  command both named 80, and the command-line flag won - so raising the value
+  in the config file would have changed nothing about what merges. CI no longer
+  passes `--cov-fail-under`.
+
 ### Fixed - CI
 
 - **The repo-gates job's PII scan had never run.** Its step carried
@@ -25,6 +64,27 @@ The MCP tool surface is committed-stable for the v1.x lifetime per the API stabi
 
 ### Security
 
+- **The pinned model-hash check hashed nothing on every shipped code path.**
+  `verify_model_files` bailed out when no explicit `cache_dir` was passed, and
+  the only one of its thirteen construction sites that passes one is a
+  maintainer-only hash-printing helper - so on every serving path a
+  tampered or corrupted file in FastEmbed's default cache logged one warning
+  and loaded anyway, while `engram doctor` reported the model rows green. It
+  now resolves the cache the same way `check_cache_integrity` already did, so
+  the manifest in `model_hashes.py` is compared against the bytes that will
+  actually be embedded through.
+- **A hung `git` in the team-vault pre-receive hook is now a refusal.** Every
+  git call the hook makes was uncapped, and `git verify-commit` shells out to
+  gpg, which blocks indefinitely on an unreachable agent - holding the push
+  open for the whole team. All hook git calls carry a timeout; a timed-out
+  signature check yields no fingerprint, which the caller already treats as
+  "no verifiable GPG signature" and refuses.
+- **Two rewrites of the operator's own `~/.config/engram/config.yaml` and one
+  read-modify-write of the redaction audit log now go through
+  `atomic_write_text`.** An interruption mid-write truncated a file that has no
+  other copy. `test_file_mutations_go_through_atomic_write` is the enforcement
+  point CLAUDE.md's atomic-write rule never had; it holds a reasoned allowlist
+  of the remaining direct-write sites.
 - **The bundled PII scanner had fallen three fixes behind its upstream.** The
   stale copy let `git mv` renames carry content past the gate (`--diff-filter=AM`
   excludes renames), treated an invalid regex in the pattern file as "nothing

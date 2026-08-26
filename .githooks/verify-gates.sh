@@ -103,5 +103,55 @@ run_gate bash "$ROOT/.githooks/planning-vocab-scan.sh" "$probe/clean.py" </dev/n
 [[ "$rc" -eq 0 ]] || bad "planning-vocab-scan flagged clean content (rc=$rc)"
 note "planning-vocab: planted vocabulary flagged, clean content passes"
 
+# --- vocab ratchet must flag vocabulary the baseline does not accept ---
+#
+# CI runs the ratchet, not the bare scanner, so the ratchet is what has to
+# work. It swallows the scanner's exit status and reports "no new findings"
+# over whatever the scan produced, which means a scanner that emitted nothing
+# is indistinguishable from a clean tree. Nothing watched it until this probe:
+# a throwaway repo with one accepted finding in the baseline and one that is
+# not, so a ratchet that stopped detecting anything fails here rather than
+# reporting a green nothing on the real tree.
+#
+# The baseline is deliberately non-empty. An empty baseline makes the ratchet
+# blind to every finding (its awk comparison reads the current set as the
+# baseline when the baseline file has no lines), which is a defect in a
+# vendored file rather than something this probe can fix - see .githooks/README.md.
+if ! command -v git >/dev/null 2>&1; then
+  bad "vocab-ratchet probe SKIPPED - no git(1) on PATH, so the ratchet was NOT exercised; nothing was run, which is not the same as everything passing"
+else
+  rr="$probe/ratchet-repo"; mkdir -p "$rr"
+  git -C "$rr" init -q >/dev/null 2>&1
+  printf '# Phase 1: pre-existing debt, accepted into the baseline\na = 0\n' >"$rr/accepted.py"  # vocab-allow: planted probe fixture
+  git -C "$rr" add -A >/dev/null 2>&1
+  run_gate bash "$ROOT/.githooks/planning-vocab-ratchet.sh" --write "$rr" </dev/null >/dev/null 2>&1; rc=$?
+  [[ "$rc" -eq 124 ]] && bad "planning-vocab-ratchet HUNG writing the probe baseline (60s timeout)"
+  seeded=0
+  if [[ -f "$rr/.planning-vocab-baseline" ]]; then
+    seeded="$(grep -cv '^#' "$rr/.planning-vocab-baseline")"
+  fi
+  if [[ "$rc" -ne 0 || "$seeded" -lt 1 ]]; then
+    bad "planning-vocab-ratchet could not seed a probe baseline (rc=$rc entries=$seeded) - the probe proves nothing"
+  else
+    ratchet_ok=1
+    printf '# Phase 3: planted vocabulary the baseline does not accept\nx = 1\n' >"$rr/planted.py"  # vocab-allow: planted probe fixture
+    git -C "$rr" add -A >/dev/null 2>&1
+    out="$(run_gate bash "$ROOT/.githooks/planning-vocab-ratchet.sh" --check "$rr" </dev/null 2>&1)"; rc=$?
+    [[ "$rc" -eq 124 ]] && bad "planning-vocab-ratchet HUNG on planted input (60s timeout)"
+    if [[ "$rc" -ne 1 ]] || ! printf '%s' "$out" | grep -q 'planted.py'; then
+      bad "planning-vocab-ratchet did NOT flag vocabulary absent from the baseline (rc=$rc) - the gate CI runs is not working"
+      ratchet_ok=0
+    fi
+    rm -f "$rr/planted.py"; git -C "$rr" add -A >/dev/null 2>&1
+    run_gate bash "$ROOT/.githooks/planning-vocab-ratchet.sh" --check "$rr" </dev/null >/dev/null 2>&1; rc=$?
+    [[ "$rc" -eq 124 ]] && bad "planning-vocab-ratchet HUNG on the restored probe repo (60s timeout)"
+    if [[ "$rc" -ne 0 ]]; then
+      bad "planning-vocab-ratchet flagged a repo whose findings are all baselined (rc=$rc) - gate is over-firing"
+      ratchet_ok=0
+    fi
+    [[ "$ratchet_ok" -eq 1 ]] && note "planning-vocab-ratchet: probe baseline seeded with $seeded entry, unbaselined vocabulary flagged, baselined-only repo passes"
+  fi
+fi
+
 [[ "$FAIL" -eq 0 ]] || exit 1
 note "OK"

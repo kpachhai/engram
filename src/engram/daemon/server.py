@@ -39,6 +39,7 @@ from collections.abc import Awaitable, Callable
 from datetime import UTC, datetime
 from typing import TYPE_CHECKING
 
+from engram import __version__
 from engram.config.models import DaemonConfig
 from engram.daemon.auth import check_peer_or_reject
 from engram.daemon.fastmcp_dispatch import serve_session
@@ -153,6 +154,7 @@ class DaemonServer:
                 vault_path=str(self.paths.vault),
                 hostname=socket.gethostname(),
                 config_snapshot=self.daemon_config.model_dump(),
+                engram_version=__version__,
             ),
         )
 

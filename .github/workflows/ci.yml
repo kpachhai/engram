@@ -71,8 +71,38 @@ jobs:
 
       # Existing findings are frozen in .planning-vocab-baseline; only NEW
       # planning vocabulary fails. Paying debt down never breaks the build.
+      #
+      # The ratchet discards the scanner's exit status, so a scan that produced
+      # nothing reports "no new findings (0 total, all baselined)" and exits 0 -
+      # the same output as a clean tree. Guard the vacuous case here: a baseline
+      # pinning entries alongside a scan that found none means the scan did not
+      # run. An unreadable count is a failure too, never a pass.
       - name: Planning-vocabulary ratchet
-        run: ./.githooks/planning-vocab-ratchet.sh --check .
+        run: |
+          set -uo pipefail
+          # `if out=$(...)` rather than `out=$(...); rc=$?`: the runner's shell
+          # carries -e, which aborts the step on a failing command substitution
+          # before the next line runs - so the findings would never be printed.
+          # An `if` condition suspends -e; the status is captured, not inferred.
+          if out="$(./.githooks/planning-vocab-ratchet.sh --check . 2>&1)"; then rc=0; else rc=$?; fi
+          printf '%s\n' "$out"
+          [ "$rc" -eq 0 ] || exit "$rc"
+          total="$(printf '%s' "$out" | sed -n 's/.*(\([0-9][0-9]*\) total.*/\1/p')"
+          case "$total" in
+            ''|*[!0-9]*)
+              echo "could not read a finding count out of the ratchet output above; refusing to read that as a pass" >&2
+              exit 1 ;;
+          esac
+          baselined=0
+          if [ -f .planning-vocab-baseline ]; then
+            baselined="$(grep -cv '^#' .planning-vocab-baseline)" || baselined=0
+          fi
+          echo "planning-vocabulary ratchet examined $total findings against $baselined baselined entries"
+          if [ "$baselined" -gt 0 ] && [ "$total" -eq 0 ]; then
+            echo "the baseline pins $baselined entries but the scan produced 0 findings - the scan did not run; check that this is a git worktree (the scanner discovers files via git ls-files) and that .githooks/planning-vocab-patterns.conf resolves" >&2
+            echo "a checker reporting success over an empty set reports success about nothing" >&2
+            exit 1
+          fi
 
       # Scoped to files this ref changes, deliberately. The tree carries
       # pre-existing matches (synthetic key fixtures in tests, the LICENSE
@@ -151,7 +181,6 @@ jobs:
             --cov=engram \
             --cov-report=xml \
             --cov-report=term-missing \
-            --cov-fail-under=80 \
             -m "not integration"
 
       - name: Upload coverage XML

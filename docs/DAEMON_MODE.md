@@ -365,7 +365,9 @@ documents what each knob does so operators can tune deliberately.
 
 ## Doctor checks
 
-``engram doctor`` learned 7 new daemon-mode and config rows in v0.5.0:
+``engram doctor`` carries these daemon-mode and config rows. All but
+``daemon_version_matches_cli`` and ``daemon_config_drifted``, which are
+newer, shipped in v0.5.0:
 
 - ``daemon_running`` (INFO) — is the daemon up?
 - ``daemon_socket_permissions`` (WARN on non-0o600 or foreign owner)
@@ -376,12 +378,38 @@ documents what each knob does so operators can tune deliberately.
   suggesting a restart to pick up engram updates)
 - ``daemon_socket_path_too_long`` (WARN when the resolved UDS path
   exceeds macOS's 104-byte ``sun_path`` limit)
+- ``daemon_version_matches_cli`` (WARN when the running daemon was
+  built from a different engram than the installed CLI). An upgrade
+  replaces the wheel; the daemon keeps serving from the code it loaded
+  at spawn, so every CLI command reports the new version while MCP
+  traffic still runs the old one. A daemon started before this row
+  existed records no version and warns until it is restarted.
+- ``daemon_config_drifted`` (WARN when the ``daemon:`` block in the
+  vault config no longer matches the snapshot the running daemon
+  recorded at startup). Editing the config file does not reconfigure a
+  live daemon; ``engram daemon stop && engram daemon start`` does.
 - ``user_config_vault_name_mismatch`` (WARN) — the ``name:`` field in
   ``~/.config/engram/config.yaml`` does not match the ``vault_name:``
   in the vault's own ``engram.config.yaml``. This mismatch causes
   ``VaultError: primary vault already mounted`` at daemon startup.
   Correct the ``name:`` in the user config to match the vault's own
   ``vault_name:``, then restart.
+
+Every ``daemon_*`` row except ``daemon_socket_path_too_long`` needs a
+resolved socket path to inspect anything, so when the path is over the
+104-byte limit those rows render as ``[SKIP]`` with that error as their
+detail, rather than disappearing from the report.
+
+``daemon_version_matches_cli`` and ``daemon_config_drifted`` compare against
+what the daemon recorded in ``engram.state.json``, and consult the socket only
+when that file cannot answer. A missing or unreadable state file with a daemon
+listening is a WARN: a process is serving and what it is serving from is
+unknown, which is the question these rows exist to ask. A missing or unreadable
+state file with nothing listening is a ``[SKIP]`` - no running daemon, nothing
+to compare against. A *readable* state file is taken at its word, so a daemon
+killed without cleanup leaves both rows describing the daemon that file
+records until the file is removed; ``daemon_running`` is the row that answers
+whether anything is actually up.
 
 ---
 

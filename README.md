@@ -213,7 +213,7 @@ Claude Code sessions causes the daemon to exit within about 30 seconds.
 
 ### Schema migrations
 
-For most updates, `engram doctor` post-update is the catch-all: if any check is RED, the message tells you the remediation command. Changing the embedding model is the one case worth calling out: set `embedding_model` in your config first, then run `engram reindex --full` to regenerate every embedding under the new model. Skip the restart of your MCP client until doctor is all-green.
+For most updates, `engram doctor` post-update is the catch-all: if any check is RED, the message tells you the remediation command. Changing the embedding model is the one case worth calling out: set `embedding_model` in your config first, then run `engram reindex --full` to regenerate every embedding under the new model. Skip the restart of your MCP client until doctor reports no warnings and no failures.
 
 ## Development
 
@@ -224,9 +224,15 @@ uv sync --all-extras --dev
 uv run pytest
 uv run ruff check .
 uv run mypy
+./.githooks/verify-gates.sh                       # vendored gate scripts: hashes match, and each still flags planted input
+./.githooks/planning-vocab-ratchet.sh --check .   # new planning vocabulary only; accepted findings are frozen in .planning-vocab-baseline
 ```
 
-The test suite (1605 tests) covers unit, integration, and hermetic CLI smoke against the installed binary.
+The test suite covers unit, integration, and hermetic CLI smoke against the installed
+binary; `uv run pytest --collect-only -q` prints the current count. The last two commands
+are two of the three steps in CI's `gates` job, which additionally scans the files a push
+changes for PII. `.githooks/README.md` describes what each gate checks, how to take an
+upstream change, and the gap the ratchet currently has.
 
 ## Migrating from Open Brain
 

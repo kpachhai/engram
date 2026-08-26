@@ -88,7 +88,7 @@ A vault is a directory:
 │   ├── engram.lock                     # advisory flock (held by daemon)
 │   ├── engram.sock                     # UDS (daemon listener; mode 0o600)
 │   ├── engram.spawn.lock               # serializes concurrent spawn dances
-│   ├── engram.state.json               # daemon PID + hostname + config snapshot
+│   ├── engram.state.json               # daemon PID + hostname + engram version + config snapshot
 │   ├── engram.log                      # daemon log (rotated)
 │   └── consolidate/                    # consolidation reports + apply journals (v0.6.0+)
 └── .engram/                            # local-only operational state (gitignored)
@@ -346,8 +346,11 @@ See [docs/LLM_FEATURES.md](LLM_FEATURES.md) for the full spec.
 - Multi-vault: at-most-one-primary, vault-path collision, embedding-model uniformity.
 - LLM: provider reachability, cost-cap proximity.
 - Team-vault: member enrollment, pending push queue depth, membership revocation, policy-violation orphans, branch-drift, stale serve config.
+- Daemon: liveness, socket permissions, stale socket, log rotation, uptime, UDS path length, version match against the installed CLI, config drift against the running process. See [DAEMON_MODE.md](DAEMON_MODE.md).
 
 Each probe maps to a stable string code (see `src/engram/diagnostics/check_codes.py`). Codes are part of the public API — operators script against them.
+
+Each row reports one of four statuses. `OK` and `SKIP` both exit clean; `WARN` exits 1, `FAIL` exits 2. `SKIP` is not a pass: it means the probe's precondition was absent - the vault is not a git working tree, no daemon is listening, no consolidation has ever run - so the row answered nothing. Rendering the two alike is how "20 ran and 14 did not" reads as "34 passed", so the closing summary line prints the size of every bucket and a run that exits 0 with skipped rows says so on its verdict line rather than claiming all-green.
 
 ## Embedding model
 

@@ -162,8 +162,11 @@ class FastEmbedProvider:
 
         FastEmbed downloads models into the HuggingFace cache layout
         (``<cache>/models--<org>--<repo>/snapshots/<commit>/<file>``).
-        We resolve the most-recent snapshot directory and verify each
-        manifest entry against the file at that path.
+        The cache root is resolved the same way FastEmbed resolves it -
+        explicit ``cache_dir`` override if given, else the module default -
+        because every call site on a serving path leaves it unset. We then
+        resolve the most-recent snapshot directory and verify each manifest
+        entry against the file at that path.
         """
         manifest = KNOWN_MODEL_HASHES.get(self._model_name)
         if not manifest:
@@ -174,18 +177,19 @@ class FastEmbedProvider:
             )
             return
 
-        if self._cache_dir is None or not self._cache_dir.exists():
+        cache_dir = self._resolve_effective_cache_dir()
+        if not cache_dir.exists():
             _log.warning(
                 "model cache dir %s missing at verify time; deferring to FastEmbed",
-                self._cache_dir,
+                cache_dir,
             )
             return
 
-        snapshot_dir = self._resolve_snapshot_dir()
+        snapshot_dir = self._scan_snapshots_under(cache_dir)
         if snapshot_dir is None:
             _log.warning(
                 "no model snapshot found under %s; FastEmbed will download on next call",
-                self._cache_dir,
+                cache_dir,
             )
             return
 

@@ -23,16 +23,19 @@ from typing import TYPE_CHECKING, Literal
 from engram.daemon.socket_paths import (
     _INDEXES_SUBDIR,
     UDS_PATH_LIMIT_BYTES,
+    SocketPaths,
     resolve_paths,
 )
 from engram.daemon.state import read_state
 from engram.diagnostics.check_codes import (
+    DAEMON_CONFIG_DRIFTED,
     DAEMON_LOG_ROTATION_HEALTHY,
     DAEMON_RUNNING,
     DAEMON_SOCKET_PATH_TOO_LONG,
     DAEMON_SOCKET_PERMISSIONS,
     DAEMON_SOCKET_STALE,
     DAEMON_UPTIME_EXCESSIVE,
+    DAEMON_VERSION_MATCHES_CLI,
 )
 from engram.errors import DaemonError
 
@@ -40,7 +43,36 @@ if TYPE_CHECKING:
     from engram.config.models import EffectiveConfig
     from engram.diagnostics.doctor import DoctorReport
 
-DaemonDoctorStatus = Literal["OK", "INFO", "WARN", "FAIL"]
+#: ``SKIP`` is distinct from ``OK``: a row whose precondition is absent
+#: answered nothing, and a report that renders the two alike lets "did not
+#: run" read as "passed".
+DaemonDoctorStatus = Literal["OK", "INFO", "SKIP", "WARN", "FAIL"]
+
+#: What the socket says about a daemon right now. The state file cannot
+#: answer this: :func:`read_state` returns ``None`` for a missing file, an
+#: unparseable one and a schema-drifted one alike, so "no state" is not
+#: evidence that nothing is running.
+DaemonLiveness = Literal["no_socket", "not_listening", "listening"]
+
+
+def _probe_daemon(socket_path: Path, *, timeout: float = 1.0) -> DaemonLiveness:
+    """Non-blocking UDS connect: is a daemon serving on ``socket_path``?
+
+    One predicate for every row that needs the answer, so the report cannot
+    say a daemon is listening on one line and not running on the next.
+    """
+    if not socket_path.exists():
+        return "no_socket"
+    s = socket_module.socket(socket_module.AF_UNIX, socket_module.SOCK_STREAM)
+    s.settimeout(timeout)
+    try:
+        s.connect(str(socket_path))
+    except OSError:
+        return "not_listening"
+    finally:
+        with contextlib.suppress(OSError):
+            s.close()
+    return "listening"
 
 
 @dataclass(frozen=True)
@@ -66,7 +98,8 @@ def check_daemon_running(vault_path: Path) -> DaemonDoctorRow:
     error.
     """
     paths = resolve_paths(vault_path)
-    if not paths.socket.exists():
+    liveness = _probe_daemon(paths.socket)
+    if liveness == "no_socket":
         return DaemonDoctorRow(
             code=DAEMON_RUNNING,
             status="INFO",
@@ -76,12 +109,7 @@ def check_daemon_running(vault_path: Path) -> DaemonDoctorRow:
                 f"(`engram serve` auto-spawns by default)."
             ),
         )
-
-    s = socket_module.socket(socket_module.AF_UNIX, socket_module.SOCK_STREAM)
-    s.settimeout(1.0)
-    try:
-        s.connect(str(paths.socket))
-    except OSError:
+    if liveness == "not_listening":
         return DaemonDoctorRow(
             code=DAEMON_RUNNING,
             status="INFO",
@@ -90,9 +118,6 @@ def check_daemon_running(vault_path: Path) -> DaemonDoctorRow:
                 f"is listening; consider `engram daemon start`."
             ),
         )
-    finally:
-        with contextlib.suppress(OSError):
-            s.close()
 
     state = read_state(paths.state_file)
     if state is None:
@@ -285,8 +310,156 @@ def check_daemon_socket_path_too_long(vault_path: Path) -> DaemonDoctorRow:
     )
 
 
+def _row_for_unreadable_state(
+    code: str,
+    paths: SocketPaths,
+    *,
+    unknown: str,
+) -> DaemonDoctorRow:
+    """The row for "the state file did not answer".
+
+    ``read_state`` returns ``None`` for a missing file, an unparseable one
+    and a schema-drifted one alike, so the file alone cannot say whether a
+    daemon is running. The socket can. A daemon serving with no readable
+    state is exactly the condition these rows exist to warn about, so it
+    must not render as a pass; with nothing listening there is nothing to
+    compare against, which is a skip and not a pass either.
+    """
+    if _probe_daemon(paths.socket) == "listening":
+        cause = "is unreadable" if paths.state_file.exists() else "is missing"
+        return DaemonDoctorRow(
+            code=code,
+            status="WARN",
+            detail=(
+                f"A daemon is listening on {paths.socket} but its state file "
+                f"{cause} ({paths.state_file}), so {unknown} is unknown. "
+                f"Restart it so it re-records: `engram daemon stop && "
+                f"engram daemon start`."
+            ),
+        )
+    return DaemonDoctorRow(
+        code=code,
+        status="SKIP",
+        detail=(
+            f"not run: no daemon is listening on {paths.socket}, so there is "
+            f"no running daemon to compare against"
+        ),
+    )
+
+
+def check_daemon_version_matches_cli(vault_path: Path) -> DaemonDoctorRow:
+    """WARN when the running daemon was built from a different engram than the CLI.
+
+    An install replaces the wheel; the daemon keeps serving from the module
+    objects it loaded at spawn. Every CLI command, ``engram doctor`` included,
+    then reports the new code while ``capture_thought`` and ``search_thoughts``
+    still run the old. The state file is the only place the running process
+    says what it was built from.
+    """
+    from engram import __version__
+
+    paths = resolve_paths(vault_path)
+    state = read_state(paths.state_file)
+    if state is None:
+        return _row_for_unreadable_state(
+            DAEMON_VERSION_MATCHES_CLI,
+            paths,
+            unknown="the engram version it is serving from",
+        )
+    if not state.engram_version:
+        return DaemonDoctorRow(
+            code=DAEMON_VERSION_MATCHES_CLI,
+            status="WARN",
+            detail=(
+                "Running daemon records no engram version, so it predates this "
+                "field and its code is unknown. Restart to confirm: "
+                "`engram daemon stop && engram daemon start`."
+            ),
+        )
+    if state.engram_version != __version__:
+        return DaemonDoctorRow(
+            code=DAEMON_VERSION_MATCHES_CLI,
+            status="WARN",
+            detail=(
+                f"Running daemon was built from engram {state.engram_version}; "
+                f"this CLI is {__version__}. The daemon serves MCP traffic from "
+                f"the older code until it restarts: "
+                f"`engram daemon stop && engram daemon start`."
+            ),
+        )
+    return DaemonDoctorRow(
+        code=DAEMON_VERSION_MATCHES_CLI,
+        status="OK",
+        detail=f"daemon and CLI both engram {__version__}",
+    )
+
+
+def check_daemon_config_drifted(vault_path: Path, config: EffectiveConfig) -> DaemonDoctorRow:
+    """WARN when the vault's daemon config no longer matches the running daemon's.
+
+    The daemon records the resolved :class:`DaemonConfig` it started with.
+    Nothing read that record until this row: an edit to ``engram.config.yaml``
+    lands on disk, is contradicted by the live process, and every other row
+    reports healthy.
+    """
+    paths = resolve_paths(vault_path)
+    state = read_state(paths.state_file)
+    if state is None:
+        return _row_for_unreadable_state(
+            DAEMON_CONFIG_DRIFTED,
+            paths,
+            unknown="the daemon config it is serving with",
+        )
+    current = config.daemon.model_dump()
+    snapshot = state.config_snapshot
+    # Compare only keys both sides carry: a daemon from another engram version
+    # may know a different key set, and that is a version finding, not a config
+    # one - the version row above owns it.
+    shared = sorted(set(current) & set(snapshot))
+    if not shared:
+        return DaemonDoctorRow(
+            code=DAEMON_CONFIG_DRIFTED,
+            status="WARN",
+            detail=(
+                "Running daemon's config snapshot shares no keys with the "
+                "current daemon config; the comparison could not be made. "
+                "Restart the daemon to re-record it."
+            ),
+        )
+    drifted = [key for key in shared if snapshot[key] != current[key]]
+    if drifted:
+        return DaemonDoctorRow(
+            code=DAEMON_CONFIG_DRIFTED,
+            status="WARN",
+            detail=(
+                f"Running daemon started with different values for "
+                f"{', '.join(drifted)}; the vault config on disk is not what is "
+                f"serving. `engram daemon stop && engram daemon start` to apply."
+            ),
+        )
+    return DaemonDoctorRow(
+        code=DAEMON_CONFIG_DRIFTED,
+        status="OK",
+        detail=f"{len(shared)} daemon config keys match the running daemon",
+    )
+
+
+#: The daemon rows that cannot run when ``resolve_paths`` refuses the vault.
+#: Named here so a suppressed sweep reports one SKIP row per check rather
+#: than silently returning a shorter report.
+_PATH_DEPENDENT_CHECK_CODES: tuple[str, ...] = (
+    DAEMON_RUNNING,
+    DAEMON_SOCKET_PERMISSIONS,
+    DAEMON_SOCKET_STALE,
+    DAEMON_LOG_ROTATION_HEALTHY,
+    DAEMON_UPTIME_EXCESSIVE,
+    DAEMON_VERSION_MATCHES_CLI,
+    DAEMON_CONFIG_DRIFTED,
+)
+
+
 def run_daemon_checks(report: DoctorReport, config: EffectiveConfig) -> None:
-    """Fold the six daemon-mode rows into the doctor report.
+    """Fold the daemon-mode rows into the doctor report.
 
     ``INFO`` maps to :attr:`CheckStatus.OK` - the doctor report has no
     info tier and INFO rows are advisory, not degraded.
@@ -296,6 +469,7 @@ def run_daemon_checks(report: DoctorReport, config: EffectiveConfig) -> None:
     status_map = {
         "OK": CheckStatus.OK,
         "INFO": CheckStatus.OK,
+        "SKIP": CheckStatus.SKIP,
         "WARN": CheckStatus.WARN,
         "FAIL": CheckStatus.FAIL,
     }
@@ -303,7 +477,8 @@ def run_daemon_checks(report: DoctorReport, config: EffectiveConfig) -> None:
     # resolve_paths refuses over-limit UDS paths with DaemonError; the
     # path-length row above already carries the WARN + remediation, and
     # no daemon can exist there for the other checks to inspect.
-    with contextlib.suppress(DaemonError):
+    unreachable: str | None = None
+    try:
         rows.extend(
             [
                 check_daemon_running(config.vault_path),
@@ -311,20 +486,39 @@ def run_daemon_checks(report: DoctorReport, config: EffectiveConfig) -> None:
                 check_daemon_socket_stale(config.vault_path),
                 check_daemon_log_rotation_healthy(config.vault_path),
                 check_daemon_uptime_excessive(config.vault_path),
+                check_daemon_version_matches_cli(config.vault_path),
+                check_daemon_config_drifted(config.vault_path, config),
             ]
         )
+    except DaemonError as exc:
+        # Dropping those rows entirely would shrink the report without
+        # saying so, and a shorter all-green report reads like a healthy one.
+        # Emit each as SKIP instead, so the row count stays constant and the
+        # reason is on the row that did not run.
+        unreachable = str(exc)
     for row in rows:
         report.add(row.code, status_map[row.status], row.detail)
+    if unreachable is not None:
+        for code in _PATH_DEPENDENT_CHECK_CODES:
+            report.add(
+                code,
+                CheckStatus.SKIP,
+                f"{code}: not run (daemon paths could not be resolved)",
+                detail=unreachable,
+            )
 
 
 __all__ = [
     "DaemonDoctorRow",
     "DaemonDoctorStatus",
+    "DaemonLiveness",
+    "check_daemon_config_drifted",
     "check_daemon_log_rotation_healthy",
     "check_daemon_running",
     "check_daemon_socket_path_too_long",
     "check_daemon_socket_permissions",
     "check_daemon_socket_stale",
     "check_daemon_uptime_excessive",
+    "check_daemon_version_matches_cli",
     "run_daemon_checks",
 ]

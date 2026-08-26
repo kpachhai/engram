@@ -46,11 +46,12 @@ def _journal_line(state: JournalEntryState) -> str:
 
 
 class TestJournalOrphanCheck:
-    def test_no_state_dir_is_ok_skipped(self, tmp_path: Path):
+    def test_no_state_dir_is_skipped_not_passed(self, tmp_path: Path):
+        """A vault that never consolidated did not pass this check; it skipped it."""
         report = DoctorReport()
         run_consolidate_checks(report, _make_config(tmp_path))
         row = _row(report, CONSOLIDATE_JOURNAL_ORPHAN)
-        assert row.status is CheckStatus.OK
+        assert row.status is CheckStatus.SKIP
         assert "skipped" in row.message
 
     def test_interrupted_journal_warns_with_resume_guidance(self, tmp_path: Path):
@@ -83,11 +84,12 @@ class TestJournalOrphanCheck:
 
 
 class TestArchiveConflictCheck:
-    def test_no_archive_is_ok_skipped(self, tmp_path: Path):
+    def test_no_archive_is_skipped_not_passed(self, tmp_path: Path):
+        """No archive means the marker scan never ran; that is not a pass."""
         report = DoctorReport()
         run_consolidate_checks(report, _make_config(tmp_path))
         row = _row(report, ARCHIVE_CONFLICT_MARKERS)
-        assert row.status is CheckStatus.OK
+        assert row.status is CheckStatus.SKIP
         assert "skipped" in row.message
 
     def test_conflict_markers_in_archive_warn(self, tmp_path: Path):

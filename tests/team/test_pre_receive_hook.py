@@ -6,11 +6,16 @@ suite stays hermetic (no real git binary required).
 
 from __future__ import annotations
 
+import os
+import time
+from pathlib import Path
 from unittest.mock import patch
 
 import pytest
 
 from engram.team.server_hooks.pre_receive import (
+    _committer_fingerprint,
+    _git_cmd,
     _is_indexes_path,
     _is_valid_fingerprint,
     _normalize_fingerprint,
@@ -463,3 +468,51 @@ def test_hook_refuses_non_enrolled_committer() -> None:
     code, stderr = _drive_hook(STDIN, patches)
     assert code == 1
     assert "team_member_not_enrolled" in stderr
+
+
+# === a hung git is a refusal, never a wedged push ===
+
+
+def _hanging_git_on_path(tmp_path: Path, monkeypatch: pytest.MonkeyPatch, sleep_for: int) -> None:
+    """Shadow ``git`` with a shim that sleeps, so a real timeout can be observed."""
+    shim_dir = tmp_path / "hanging-bin"
+    shim_dir.mkdir()
+    shim = shim_dir / "git"
+    shim.write_text(f"#!/bin/sh\nsleep {sleep_for}\n", encoding="utf-8")
+    shim.chmod(0o755)
+    monkeypatch.setenv("PATH", f"{shim_dir}{os.pathsep}{os.environ['PATH']}")
+
+
+def test_git_cmd_raises_rather_than_hanging(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """This hook runs on the git server; a hang holds the push open for everyone."""
+    _hanging_git_on_path(tmp_path, monkeypatch, sleep_for=30)
+    monkeypatch.setattr(
+        "engram.team.server_hooks.pre_receive._GIT_TIMEOUT_SECONDS",
+        0.5,
+    )
+    started = time.monotonic()
+    with pytest.raises(RuntimeError, match="timed out after"):
+        _git_cmd(["rev-list", "--all"])
+    elapsed = time.monotonic() - started
+    assert elapsed < 10, f"raised after {elapsed:.1f}s - that is not the cap firing"
+
+
+def test_committer_fingerprint_yields_no_identity_when_gpg_hangs(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """verify-commit shells out to gpg, which blocks on an unreachable agent.
+
+    No answer must not become an authorizing answer: the caller treats None
+    as "commit carries no verifiable GPG signature" and refuses the push.
+    """
+    _hanging_git_on_path(tmp_path, monkeypatch, sleep_for=30)
+    monkeypatch.setattr(
+        "engram.team.server_hooks.pre_receive._GIT_TIMEOUT_SECONDS",
+        0.5,
+    )
+    started = time.monotonic()
+    assert _committer_fingerprint("deadbeef") is None
+    elapsed = time.monotonic() - started
+    assert elapsed < 10, f"returned after {elapsed:.1f}s - that is not the cap firing"

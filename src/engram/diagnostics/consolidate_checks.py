@@ -3,9 +3,9 @@
 Two rows: an interrupted-apply journal (resumable; surfaced so the operator
 knows a run stopped midway) and conflict markers inside ``<vault>/archive/``
 (the thoughts-dir conflict scan deliberately does not cover the archive).
-Vaults that never ran consolidate report OK rows with a "skipped" message
-rather than failing on the missing state (doctor checks handle absent
-preconditions gracefully).
+Vaults that never ran consolidate report SKIP rows rather than failing on
+the missing state (doctor checks handle absent preconditions gracefully);
+SKIP rather than OK because the check did not run.
 """
 
 from __future__ import annotations
@@ -39,7 +39,7 @@ def check_consolidate_journal_orphan(report: DoctorReport, config: EffectiveConf
     if not state_dir.exists():
         report.add(
             CONSOLIDATE_JOURNAL_ORPHAN,
-            CheckStatus.OK,
+            CheckStatus.SKIP,
             "skipped (no consolidation state)",
         )
         return
@@ -69,7 +69,7 @@ def check_archive_conflict_markers(report: DoctorReport, config: EffectiveConfig
     if not archive_dir.exists():
         report.add(
             ARCHIVE_CONFLICT_MARKERS,
-            CheckStatus.OK,
+            CheckStatus.SKIP,
             "skipped (no archive)",
         )
         return

@@ -204,7 +204,11 @@ class VaultStorage:
                 return None
             branch = result.stdout.strip()
             return branch or None
-        except (OSError, ValueError):
+        except (OSError, ValueError, subprocess.TimeoutExpired):
+            # TimeoutExpired derives from SubprocessError, not OSError, so the
+            # 2.0s cap set above would otherwise raise straight out of
+            # VaultStorage.__init__ rather than honouring the documented
+            # "returns None when the branch cannot be resolved" contract.
             return None
 
     def current_branch_drifted(self) -> tuple[bool, str | None, str | None]:

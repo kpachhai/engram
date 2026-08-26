@@ -65,8 +65,28 @@ Every gate call is wrapped in `timeout` and passes `</dev/null`. A gate that
 hangs is failing, and is reported as `HUNG` rather than dying at the CI job
 limit where it reads as an infrastructure flake.
 
+The ratchet gets its own probe, because the ratchet - not the bare scanner -
+is what CI runs for planning vocabulary. It plants a finding the probe baseline
+does not accept and requires the ratchet to flag it.
+
 It also reports whether the PII scan is running with its identity patterns
 loaded. Those come from a machine-local file (`~/.config/devkit/identity.json`)
 that only the maintainer has; on a fork and in CI the scan runs on structural
 patterns alone - paths, keys, emails by shape - and says so rather than
 reporting a full pass.
+
+## Known gate gap (2026-08-25)
+
+`planning-vocab-ratchet.sh` discards the scanner's exit status
+(`bash "$SCAN" ... 2>/dev/null || true`), so a scanner that crashed or produced
+nothing reports `no new findings (0 total, all baselined)` and exits 0 - the same
+line and the same status as a clean tree. Its awk comparison has a second edge:
+an empty baseline file makes it read the current findings as the baseline, so a
+repo with no accepted debt is not checked at all.
+
+Both are in a vendored file, so the fix is upstream and then a re-vendor; open an
+issue rather than editing the copy here. Until then two first-party controls stand
+in: `verify-gates.sh` plants an unbaselined finding and requires the ratchet to
+flag it, and the CI ratchet step refuses a run that reports zero findings against
+a baseline that pins some. Delete this section when the vendored copy fails on its
+own scanner's status and on a vacuous comparison.

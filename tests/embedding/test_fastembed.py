@@ -219,6 +219,66 @@ def test_verify_model_files_missing_file_warns_only(
     assert any("missing in" in rec.message for rec in caplog.records)
 
 
+def test_verify_model_files_detects_mismatch_without_explicit_cache_dir(
+    tmp_path: Path,
+    fake_fastembed_module,
+    monkeypatch: pytest.MonkeyPatch,
+):
+    """Verification must reach the cache FastEmbed would actually load from.
+
+    Every construction site on a serving path builds the provider as
+    ``FastEmbedProvider(model_name=...)`` with no ``cache_dir``; if hash
+    verification only inspects an explicitly-passed override it hashes
+    nothing on the path that ships. Monkeypatches
+    ``default_fastembed_cache_dir`` for the same reason
+    ``test_check_cache_integrity_uses_fastembed_default_when_no_cache_dir``
+    does.
+    """
+    del fake_fastembed_module
+
+    cache_dir = tmp_path / "fastembed_cache"
+    cache_dir.mkdir()
+    snapshot = _make_hf_snapshot_dir(cache_dir)
+    (snapshot / "model.onnx").write_bytes(b"tampered content")
+    monkeypatch.setattr(
+        "engram.embedding.fastembed.default_fastembed_cache_dir",
+        lambda: cache_dir,
+    )
+
+    fake_manifest = {"BAAI/bge-small-en-v1.5": {"model.onnx": "f" * 64}}
+    monkeypatch.setattr("engram.embedding.fastembed.KNOWN_MODEL_HASHES", fake_manifest)
+
+    provider = FastEmbedProvider(model_name="BAAI/bge-small-en-v1.5")  # as production builds it
+    with pytest.raises(EmbeddingError, match="model integrity check failed"):
+        provider.verify_model_files()
+
+
+def test_verify_model_files_accepts_match_without_explicit_cache_dir(
+    tmp_path: Path,
+    fake_fastembed_module,
+    monkeypatch: pytest.MonkeyPatch,
+):
+    """The default-cache path stays quiet when the cached bytes match the manifest."""
+    del fake_fastembed_module
+
+    cache_dir = tmp_path / "fastembed_cache"
+    cache_dir.mkdir()
+    snapshot = _make_hf_snapshot_dir(cache_dir)
+    content = b"the real model bytes"
+    (snapshot / "model.onnx").write_bytes(content)
+    monkeypatch.setattr(
+        "engram.embedding.fastembed.default_fastembed_cache_dir",
+        lambda: cache_dir,
+    )
+
+    real_hash = _sha256_of_file(snapshot / "model.onnx")
+    fake_manifest = {"BAAI/bge-small-en-v1.5": {"model.onnx": real_hash}}
+    monkeypatch.setattr("engram.embedding.fastembed.KNOWN_MODEL_HASHES", fake_manifest)
+
+    provider = FastEmbedProvider(model_name="BAAI/bge-small-en-v1.5")
+    provider.verify_model_files()  # no raise
+
+
 def test_list_cached_files_returns_snapshot_files(tmp_path: Path):
     """list_cached_files surfaces the snapshot dir's files (used by --print-hashes)."""
     cache_dir = tmp_path / "fastembed-cache"
