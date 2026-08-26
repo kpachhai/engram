@@ -14,7 +14,7 @@ from engram.config.models import (
     LLMConfig,
     SyncConfig,
 )
-from engram.diagnostics.doctor import CheckStatus, run_diagnostics
+from engram.diagnostics.doctor import CheckStatus, DoctorReport, run_diagnostics
 from engram.embedding.model_hashes import KNOWN_MODEL_HASHES
 from engram.embedding.protocol import EmbeddingProvider
 from engram.storage.facade import VaultStorage
@@ -298,6 +298,52 @@ def test_exit_code_two_when_any_fail(tmp_path: Path):
     config.thoughts_dir.rmdir()  # induces a FAIL
     report = run_diagnostics(config, embedder_factory=_stub_factory)
     assert report.exit_code == 2
+
+
+def test_a_report_holding_no_rows_exits_two_in_both_modes():
+    """A run that examined nothing cannot report a clean vault.
+
+    Every other exit code answers a question about the vault. Zero rows
+    answers none, so it is a wiring failure and never a pass - in the
+    default mode as much as under --strict.
+    """
+    report = DoctorReport()
+    assert report.exit_code == 2
+    assert report.strict_exit_code == 2
+
+
+def test_default_exit_code_keeps_treating_a_skip_as_clean():
+    """The published contract: exit 0 does not distinguish skip from pass."""
+    report = DoctorReport()
+    report.add("ran", CheckStatus.OK, "fine")
+    report.add("never_ran", CheckStatus.SKIP, "skipped (precondition absent)")
+    assert report.exit_code == 0
+    assert report.skipped == 1
+
+
+def test_strict_exit_code_is_three_when_any_row_did_not_run():
+    report = DoctorReport()
+    report.add("ran", CheckStatus.OK, "fine")
+    report.add("never_ran", CheckStatus.SKIP, "skipped (precondition absent)")
+    assert report.strict_exit_code == 3
+
+
+def test_strict_exit_code_is_zero_when_every_row_ran():
+    report = DoctorReport()
+    report.add("ran", CheckStatus.OK, "fine")
+    assert report.strict_exit_code == 0
+
+
+@pytest.mark.parametrize(
+    ("status", "expected"),
+    [(CheckStatus.WARN, 1), (CheckStatus.FAIL, 2)],
+)
+def test_a_real_degradation_outranks_a_skip_under_strict(status: CheckStatus, expected: int):
+    """3 means "only unanswered questions"; a WARN or FAIL is the better news to report."""
+    report = DoctorReport()
+    report.add("never_ran", CheckStatus.SKIP, "skipped (precondition absent)")
+    report.add("degraded", status, "something is wrong")
+    assert report.strict_exit_code == expected
 
 
 # === embedding_cache_integrity check ===

@@ -37,3 +37,21 @@ def test_verdict_reports_failures_unchanged() -> None:
     message, color = _verdict_line(exit_code=2, skipped=3, total=37)
     assert message == "engram doctor: failures detected"
     assert color == typer.colors.RED
+
+
+def test_verdict_names_strict_as_the_reason_for_a_non_zero_exit() -> None:
+    """Exit 3 with no WARN and no FAIL reads as a failure unless the line says why."""
+    message, color = _verdict_line(exit_code=3, skipped=17, total=37)
+    assert "--strict" in message
+    assert "17 of 37" in message
+    assert "did not run" in message
+    assert color == typer.colors.RED
+
+
+def test_verdict_refuses_to_certify_a_report_with_no_rows() -> None:
+    """Zero rows is a wiring failure; the verdict must not read like a clean vault."""
+    message, color = _verdict_line(exit_code=2, skipped=0, total=0)
+    assert "no checks ran at all" in message
+    assert "wiring failure" in message
+    assert "--config" in message
+    assert color == typer.colors.RED

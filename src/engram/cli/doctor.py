@@ -6,6 +6,9 @@ When the per-user config lists more than one vault, the CLI ALSO runs
 the cross-vault checks via
 :func:`engram.diagnostics.phase3_checks.run_phase3_checks`. The
 single-vault rows still surface for the targeted vault.
+
+The default exit code counts a skipped row as clean, which is a published
+contract; ``--strict`` is the opt-in that exits 3 when any row never ran.
 """
 
 from __future__ import annotations
@@ -57,6 +60,14 @@ def register(app: typer.Typer) -> None:
             False,
             "--remove-orphans",
             help="With --repair: also delete SQLite rows whose markdown is missing.",
+        ),
+        strict: bool = typer.Option(
+            False,
+            "--strict",
+            help=(
+                "Exit 3 when any check did not run. Without it the exit code "
+                "cannot tell a skipped check from a passing one."
+            ),
         ),
         print_hashes: bool = typer.Option(
             False,
@@ -142,14 +153,15 @@ def register(app: typer.Typer) -> None:
             f"{counts[CheckStatus.WARN]} warnings, "
             f"{counts[CheckStatus.FAIL]} failures"
         )
+        exit_code = report.strict_exit_code if strict else report.exit_code
         message, color = _verdict_line(
-            exit_code=report.exit_code,
+            exit_code=exit_code,
             skipped=counts[CheckStatus.SKIP],
             total=len(report.checks),
         )
         typer.secho(message, fg=color)
 
-        raise typer.Exit(report.exit_code)
+        raise typer.Exit(exit_code)
 
 
 def _verdict_line(*, exit_code: int, skipped: int, total: int) -> tuple[str, str]:
@@ -157,10 +169,24 @@ def _verdict_line(*, exit_code: int, skipped: int, total: int) -> tuple[str, str
 
     Exit 0 with skipped rows is not "all checks green": those rows answered
     nothing, and a verdict that reads identically either way lets "did not
-    run" pass for "passed". Only the sentence changes here - the exit code
-    still treats a skip as clean, because a skip is an unanswered question
-    rather than a degradation.
+    run" pass for "passed". Without ``--strict`` only the sentence changes -
+    the exit code treats a skip as clean, because it is an unanswered
+    question rather than a degradation, and because wrappers already branch
+    on it. ``--strict`` raises the same run to exit 3.
     """
+    if total == 0:
+        return (
+            "engram doctor: no checks ran at all - the diagnostic examined "
+            "nothing, which is a wiring failure and not a clean vault; check "
+            "that --config or --vault names a real vault",
+            typer.colors.RED,
+        )
+    if exit_code == 3:
+        return (
+            f"engram doctor: --strict: {skipped} of {total} checks did not "
+            "run; each [SKIP] row above names the precondition it wanted",
+            typer.colors.RED,
+        )
     if exit_code == 0:
         if skipped:
             return (

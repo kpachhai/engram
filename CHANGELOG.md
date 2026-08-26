@@ -11,6 +11,16 @@ The MCP tool surface is committed-stable for the v1.x lifetime per the API stabi
 
 ### Added
 
+- **`engram doctor --strict` puts a skipped row in the exit code.** The default
+  exit code treats a skip as clean, so on a vault that is not a git repository
+  seventeen of thirty-seven rows never ran and the command still exited 0,
+  indistinguishable from a run where every row passed. The verdict line said so
+  in words but the exit code is what a wrapper reads. That contract does not
+  move without a version bump, so the strict behaviour is a flag: `--strict`
+  exits 3 - distinct from WARN's 1 and FAIL's 2, so a caller can tell "did not
+  run" from "ran and was unhappy" - when any row did not run. A report holding
+  no rows at all exits 2 in either mode, because a diagnostic that examined
+  nothing cannot certify anything.
 - **`engram doctor` distinguishes a check that was skipped from one that
   passed.** A new `SKIP` status renders as `[SKIP]` and still exits 0. On a
   non-git vault fifteen of thirty-five rows were reporting `[OK  ]` for probes

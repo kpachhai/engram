@@ -130,10 +130,11 @@ Test taxonomy:
 
 ## Common operations
 
-The CLI is self-documenting (`engram --help`, `engram <cmd> --help`); recipes for serve / doctor / reindex / export / import / team-vault / model-hash printing live there and in the docs. Two gotchas that are NOT obvious from `--help`:
+The CLI is self-documenting (`engram --help`, `engram <cmd> --help`); recipes for serve / doctor / reindex / export / import / team-vault / model-hash printing live there and in the docs. Three gotchas that are NOT obvious from `--help`:
 
 - The MCP-based `migrate-from-open-brain` CLI is broken against real OB1 (OB1's MCP tools return human-readable text, not structured records) - use the Postgres-direct path in `docs/OPENBRAIN_MIGRATION_GUIDE.md`.
 - `engram consolidate` (report) is safe beside the running daemon; `engram consolidate --apply` requires `engram daemon stop` first.
+- `engram doctor` exiting 0 does not mean every check ran - a skip exits clean, and on a vault that is not a git repository seventeen of thirty-seven rows never run. Pass `--strict` (exits 3 when any row did not run) whenever a green doctor run is being offered as evidence that something works.
 
 ## When making changes
 

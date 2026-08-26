@@ -352,6 +352,8 @@ Each probe maps to a stable string code (see `src/engram/diagnostics/check_codes
 
 Each row reports one of four statuses. `OK` and `SKIP` both exit clean; `WARN` exits 1, `FAIL` exits 2. `SKIP` is not a pass: it means the probe's precondition was absent - the vault is not a git working tree, no daemon is listening, no consolidation has ever run - so the row answered nothing. Rendering the two alike is how "20 ran and 14 did not" reads as "34 passed", so the closing summary line prints the size of every bucket and a run that exits 0 with skipped rows says so on its verdict line rather than claiming all-green.
 
+The exit code itself still cannot tell those two apart, and it stays that way on purpose: it is a published contract that wrappers and CI jobs branch on, so it does not move without a version bump. `engram doctor --strict` is the opt-in that exits 3 when any row did not run. A report holding no rows at all is the one case that fails in both modes, exiting 2: a diagnostic that examined nothing cannot certify anything.
+
 ## Embedding model
 
 `BAAI/bge-small-en-v1.5` is the pinned default. 384-dim. ~130MB model file. Runs on CPU in milliseconds via FastEmbed. Local; no API calls.

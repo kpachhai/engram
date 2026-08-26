@@ -97,15 +97,16 @@ engram doctor
 ```
 
 Every row carries one of four statuses, and the run ends with a count line and a
-verdict line. An excerpt from a real run against a local-only vault (rows elided):
+verdict line. Rows elided from a run against a freshly initialized vault that is not a
+git repository and has no LLM provider configured:
 
 ```
   [OK  ] index_consistency: 0 thoughts indexed; matches on-disk count
+  [SKIP] branch_alignment: branch_alignment: skipped (vault is not a git working tree)
   [SKIP] consolidate_journal_orphan: skipped (no consolidation state)
-  [WARN] llm_provider_reachable: provider llama_cpp did not respond to health_check; LLM tools may fail until the provider is reachable.
 
-engram doctor: 37 checks - 12 passed, 22 skipped, 3 warnings, 0 failures
-engram doctor: warnings (operational, with caveats)
+engram doctor: 37 checks - 20 passed, 17 skipped, 0 warnings, 0 failures
+engram doctor: no warnings or failures, but 17 of 37 checks did not run
 ```
 
 The row count and the bucket sizes depend on how the vault is set up; what matters is
@@ -120,10 +121,24 @@ that the count line always prints all four buckets, zeros included.
 - `[WARN]` - degraded but serviceable. The row text names the remediation.
 - `[FAIL]` - resolve before serving.
 
-Exit codes: `0` when nothing is degraded (skips included), `1` when the worst row is a
-WARN, `2` when anything FAILed. A run that exits 0 with skipped rows says so on the
-verdict line ("no warnings or failures, but N of M checks did not run") rather than
-claiming everything is green.
+Exit codes: `0` when nothing is degraded, `1` when the worst row is a WARN, `2` when
+anything FAILed - and `2` as well for a run that produced no rows at all, because a
+diagnostic that examined nothing is a wiring failure and not a clean vault.
+
+Skips do not move the exit code. The run above exits 0 with seventeen rows that never
+ran, so **the default exit code cannot tell a skipped check from a passing one**. The
+verdict line says so in words ("no warnings or failures, but N of M checks did not
+run"); `--strict` is how you put it in the exit code:
+
+```bash
+engram doctor --strict    # exits 3 when any row did not run
+```
+
+`3` is distinct from WARN's `1` and FAIL's `2` so a wrapper can tell "did not run" from
+"ran and was unhappy"; a real WARN or FAIL still outranks it. Nothing else about the
+run changes - the rows and their statuses are identical either way. Reach for it in CI,
+where an unanswered question should stop the job, and leave it off in anything that
+branches on the published `0` / `1` / `2` contract.
 
 If anything is `[FAIL]`, the message text on that row tells you what to fix. Common
 first-time issues:

@@ -2,12 +2,17 @@
 
 The doctor command runs a series of read-only checks against an engram vault
 and reports their status. Each check produces a :class:`CheckResult` with one
-of three statuses: ``OK``, ``WARN``, or ``FAIL``. The aggregated
+of four statuses: ``OK``, ``SKIP``, ``WARN``, or ``FAIL``. The aggregated
 :class:`DoctorReport` exposes ``exit_code`` per the spec convention:
 
 * ``0`` - all green
 * ``1`` - warnings only (degraded but operational)
-* ``2`` - any failure (refuse to serve)
+* ``2`` - any failure (refuse to serve), or a report holding no rows at all
+
+``exit_code`` deliberately treats a skip as clean; ``strict_exit_code``
+is the opt-in variant behind ``engram doctor --strict`` that adds:
+
+* ``3`` - nothing was degraded, but at least one row never ran
 """
 
 from __future__ import annotations
@@ -51,7 +56,10 @@ class CheckStatus(enum.StrEnum):
     is absent did not run, and a report that renders those two the same way
     lets "20 checks passed and 14 never ran" read as "34 checks passed".
     It exits 0 like ``OK`` - a skip is not a degradation - but it is
-    counted and rendered separately.
+    counted and rendered separately. ``engram doctor --strict`` is the
+    opt-in that turns those unanswered questions into a non-zero exit;
+    the default stays 0 because the exit code is a published contract
+    that wrappers already branch on.
     """
 
     OK = "ok"
@@ -82,12 +90,37 @@ class DoctorReport:
 
         OK and SKIP both count as clean: a skipped check is not a
         degradation, only an unanswered question.
+
+        A report holding no rows at all is the exception, and it exits 2 in
+        every mode: a diagnostic that examined nothing cannot certify
+        anything, so reporting it clean would be success over an empty set.
         """
+        if not self.checks:
+            return 2
         if any(c.status is CheckStatus.FAIL for c in self.checks):
             return 2
         if any(c.status is CheckStatus.WARN for c in self.checks):
             return 1
         return 0
+
+    @property
+    def skipped(self) -> int:
+        """How many rows did not run."""
+        return sum(1 for c in self.checks if c.status is CheckStatus.SKIP)
+
+    @property
+    def strict_exit_code(self) -> int:
+        """``exit_code``, except that a row which never ran is a failure.
+
+        Exits 3 - distinct from WARN's 1 and FAIL's 2 - so a caller can tell
+        "did not run" from "ran and was unhappy". Reached only through
+        ``engram doctor --strict``; any WARN or FAIL still wins, because a
+        real degradation is the more useful thing to report.
+        """
+        code = self.exit_code
+        if code != 0:
+            return code
+        return 3 if self.skipped else 0
 
     def add(
         self,
