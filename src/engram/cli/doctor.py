@@ -110,7 +110,7 @@ def register(app: typer.Typer) -> None:
         # before exiting.
         user_config = _load_user_config_if_present()
         if user_config is not None and len(user_config.vaults) > 1:
-            _append_phase3_rows(report=report, user_config=user_config)
+            _append_multivault_rows(report=report, user_config=user_config)
 
         # Team-vault checks: surfaced whenever a team-write vault is
         # configured (enrollment, pending pushes, orphan quarantine,
@@ -247,7 +247,7 @@ def _append_llm_rows(*, report: DoctorReport, config: object) -> None:
     )
 
 
-def _append_phase3_rows(*, report: DoctorReport, user_config: object) -> None:
+def _append_multivault_rows(*, report: DoctorReport, user_config: object) -> None:
     """Mount each user-config vault read-only + run the multi-vault checks.
 
     The registry built here exists for the duration of doctor's read-only

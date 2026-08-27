@@ -105,8 +105,8 @@ git repository and has no LLM provider configured:
   [SKIP] branch_alignment: branch_alignment: skipped (vault is not a git working tree)
   [SKIP] consolidate_journal_orphan: skipped (no consolidation state)
 
-engram doctor: 37 checks - 20 passed, 17 skipped, 0 warnings, 0 failures
-engram doctor: no warnings or failures, but 17 of 37 checks did not run
+engram doctor: 38 checks - 21 passed, 17 skipped, 0 warnings, 0 failures
+engram doctor: no warnings or failures, but 17 of 38 checks did not run
 ```
 
 The row count and the bucket sizes depend on how the vault is set up; what matters is

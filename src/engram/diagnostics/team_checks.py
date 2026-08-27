@@ -279,7 +279,7 @@ def run_team_checks(
     primary_vault_path: Path | None,
     gpg_identity: GpgIdentity | None = None,
 ) -> None:
-    """Fold the team-vault (phase4) rows into the doctor report.
+    """Fold the team-vault rows into the doctor report.
 
     One-shot doctor scope: ``check_serve_config_stale`` and
     ``check_branch_drift`` need a live serve process's state (config

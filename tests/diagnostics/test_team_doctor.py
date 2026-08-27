@@ -248,13 +248,13 @@ def test_routing_rule_priority_collision_resolved_by_priority(tmp_path: Path) ->
     assert rows == []
 
 
-# === orchestrator: phase4 rows fold into the doctor report ===
+# === orchestrator: team-vault rows fold into the doctor report ===
 
 
 def test_run_team_checks_folds_rows_into_report(tmp_path: Path) -> None:
     """The team-vault doctor family must be foldable into a DoctorReport.
 
-    Regression: every phase4 check function existed (and was unit-tested)
+    Regression: every team-vault check function existed (and was unit-tested)
     but had zero callers in src/, so `engram doctor` on a team-write
     configuration never emitted team_member_not_enrolled or orphan rows.
     """
