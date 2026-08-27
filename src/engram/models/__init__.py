@@ -7,7 +7,7 @@ Three module groups:
 * :mod:`engram.models.thought` - the runtime Thought object exposed via MCP
   and used by the storage layer.
 * :mod:`engram.models.mcp` - Pydantic models for the 5 MCP tools' input and
-  output shapes per ``02-TECHNICAL_DESIGN.md`` MCP API Contract.
+  output shapes.
 """
 
 from __future__ import annotations

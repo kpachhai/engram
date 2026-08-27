@@ -1,7 +1,7 @@
 """Storage facade: composes markdown SoT + SQLite index under the Flow A atomicity contract.
 
 :class:`VaultStorage` is the single entry-point for the MCP tool layer. It
-implements the capture flow per ``02-TECHNICAL_DESIGN.md`` Flow A:
+implements the capture flow:
 
 1. Markdown write must succeed first. If it fails, the capture errors and
    nothing else happens.

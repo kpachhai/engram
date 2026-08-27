@@ -3,9 +3,9 @@
 Friend-share runs through ``engram export`` -> transport channel ->
 ``engram import``, NOT live git-pull from a friend's vault. A friend's
 git history is attacker-influenceable, and the bundle import gate is the
-only place ``06-SECURITY.md`` lines 31-44 (path-traversal refusal,
-per-file 1 MB, per-bundle 4 GB streaming, ``yaml.safe_load`` only,
-id-collision refusal, ``portability=block`` filtering) can be applied
+only place the reception rules (path-traversal refusal, per-file 1 MB,
+per-bundle 4 GB streaming, ``yaml.safe_load`` only, id-collision refusal,
+``portability=block`` filtering) can be applied
 to friend content.
 
 This package surfaces three things:

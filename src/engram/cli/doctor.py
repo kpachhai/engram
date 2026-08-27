@@ -1,10 +1,10 @@
 """``engram doctor`` CLI command - thin wrapper over engram.diagnostics.run_diagnostics.
 
 The LLM rows (provider reachability, daily cost cap) run for every
-install via :func:`engram.diagnostics.phase3_checks.run_llm_checks`.
+install via :func:`engram.diagnostics.multivault_checks.run_llm_checks`.
 When the per-user config lists more than one vault, the CLI ALSO runs
 the cross-vault checks via
-:func:`engram.diagnostics.phase3_checks.run_phase3_checks`. The
+:func:`engram.diagnostics.multivault_checks.run_multivault_checks`. The
 single-vault rows still surface for the targeted vault.
 
 The default exit code counts a skipped row as clean, which is a published
@@ -20,7 +20,7 @@ import typer
 
 from engram.config.loader import _load_user_config_if_present, load_config
 from engram.diagnostics.doctor import CheckStatus, DoctorReport, run_diagnostics
-from engram.diagnostics.phase3_checks import run_phase3_checks
+from engram.diagnostics.multivault_checks import run_multivault_checks
 from engram.errors import ConfigError
 
 _STATUS_COLOR = {
@@ -116,17 +116,17 @@ def register(app: typer.Typer) -> None:
         # configured (enrollment, pending pushes, orphan quarantine,
         # routing-priority collisions).
         if user_config is not None and any(v.role == "team-write" for v in user_config.vaults):
-            from engram.diagnostics.phase4_checks import run_phase4_checks
+            from engram.diagnostics.team_checks import run_team_checks
 
             try:
-                run_phase4_checks(
+                run_team_checks(
                     report,
                     user_config,
                     primary_vault_path=config.vault_path,
                 )
             except Exception as exc:
                 report.add(
-                    "phase4_checks_internal",
+                    "team_checks_internal",
                     CheckStatus.FAIL,
                     "team-vault diagnostics raised an unexpected error",
                     detail=str(exc),
@@ -210,7 +210,7 @@ def _append_llm_rows(*, report: DoctorReport, config: object) -> None:
     each took its "nothing configured" branch and reported OK for something
     it had never looked at.
     """
-    from engram.diagnostics.phase3_checks import run_llm_checks
+    from engram.diagnostics.multivault_checks import run_llm_checks
     from engram.llm.budget import LLMBudget, usage_state_path_for
     from engram.llm.protocol import LLMProvider
     from engram.llm.resolver import resolve_provider
@@ -294,7 +294,7 @@ def _append_phase3_rows(*, report: DoctorReport, user_config: object) -> None:
             mount.name: getattr(mount, "llm", None)
             for mount in user_config.vaults  # type: ignore[attr-defined]
         }
-        run_phase3_checks(
+        run_multivault_checks(
             report,
             user_config=user_config,  # type: ignore[arg-type]
             registry=registry,

@@ -28,6 +28,7 @@ classifiers = [
   "Programming Language :: Python :: 3",
   "Programming Language :: Python :: 3.11",
   "Programming Language :: Python :: 3.12",
+  "Programming Language :: Python :: 3.13",
   "License :: OSI Approved :: Apache Software License",
   "Operating System :: MacOS",
   "Operating System :: POSIX :: Linux",
@@ -52,7 +53,9 @@ dependencies = [
   # Pin onnxruntime under 1.21: 1.20.x is the last release that ships
   # macOS x86_64 (Intel Mac) wheels. Engram explicitly supports Intel Macs
   # for the work-laptop deployment scenario; revisit when Intel Mac stops
-  # being a target.
+  # being a target. This pin is also the Python ceiling: no release under it
+  # ships cp314 wheels, so the supported range is 3.11-3.13 and moves only
+  # when this pin does.
   "onnxruntime>=1.17,<1.21",
 ]
 

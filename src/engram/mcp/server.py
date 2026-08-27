@@ -97,11 +97,27 @@ def build_server(
     @mcp.tool
     async def capture_thought(
         content: str,
-        metadata: dict[str, Any] | None = None,
+        metadata: CaptureInputMetadata | None = None,
     ) -> dict[str, Any]:
-        """Write a new thought to the vault and return its identity."""
-        meta = CaptureInputMetadata.model_validate(metadata) if metadata is not None else None
-        payload = CaptureInput(content=content, metadata=meta)
+        """Write a new thought to the vault and return its identity.
+
+        Content convention: open the body with a bracketed prefix marker,
+        e.g. ``[Lesson] Always run engram doctor after install``. The
+        prefix names the thought's category and picks its storage
+        directory; the 15 canonical prefixes are Lesson, Pattern,
+        Decision, Friction, Resolution, Action Item, Parked, Notice,
+        Domain, Workflow, Style, Artifact, Session Summary, Meta, and
+        Note. Unmarked content is filed as Note.
+
+        Classify at capture via ``metadata.portability``: ``portable``
+        may sync anywhere and reach any configured LLM; ``sensitive``
+        only ever reaches LOCAL LLM providers; ``block`` never reaches
+        any LLM. When omitted, portability defaults by prefix (Domain
+        and Artifact default to sensitive, every other prefix to
+        portable). The response echoes the resolved ``portability`` and
+        ``source`` so a misclassified capture is visible immediately.
+        """
+        payload = CaptureInput(content=content, metadata=metadata)
         result: CaptureOutput = await capture_thought_handler(
             storage, embedder, payload=payload, default_user=default_user
         )
@@ -111,11 +127,10 @@ def build_server(
     async def search_thoughts(
         query: str,
         k: int = 10,
-        filter: dict[str, Any] | None = None,
+        filter: Filter | None = None,
     ) -> dict[str, Any]:
         """Semantic search over the vault. Returns top-k by cosine similarity."""
-        f = Filter.model_validate(filter) if filter is not None else None
-        payload = SearchInput(query=query, k=k, filter=f)
+        payload = SearchInput(query=query, k=k, filter=filter)
         result: SearchOutput = await search_thoughts_handler(storage, embedder, payload=payload)
         return result.model_dump(mode="json")
 
@@ -123,12 +138,11 @@ def build_server(
     async def list_thoughts(
         limit: int = 50,
         offset: int = 0,
-        filter: dict[str, Any] | None = None,
+        filter: Filter | None = None,
         sort: SortOption = "created_at_desc",
     ) -> dict[str, Any]:
         """Filtered + sorted + paginated list of thoughts."""
-        f = Filter.model_validate(filter) if filter is not None else None
-        payload = ListInput(limit=limit, offset=offset, filter=f, sort=sort)
+        payload = ListInput(limit=limit, offset=offset, filter=filter, sort=sort)
         result: ListOutput = await list_thoughts_handler(storage, payload=payload)
         return result.model_dump(mode="json")
 
@@ -198,14 +212,30 @@ def build_multivault_server(
     @mcp.tool
     async def capture_thought(
         content: str,
-        metadata: dict[str, Any] | None = None,
+        metadata: CaptureInputMetadata | None = None,
     ) -> dict[str, Any]:
         """Capture a thought, routing to the appropriate vault.
+
+        Content convention: open the body with a bracketed prefix marker,
+        e.g. ``[Lesson] Always run engram doctor after install``. The
+        prefix names the thought's category and picks its storage
+        directory; the 15 canonical prefixes are Lesson, Pattern,
+        Decision, Friction, Resolution, Action Item, Parked, Notice,
+        Domain, Workflow, Style, Artifact, Session Summary, Meta, and
+        Note. Unmarked content is filed as Note.
+
+        Classify at capture via ``metadata.portability``: ``portable``
+        may sync anywhere and reach any configured LLM; ``sensitive``
+        only ever reaches LOCAL LLM providers; ``block`` never reaches
+        any LLM. When omitted, portability defaults by prefix (Domain
+        and Artifact default to sensitive, every other prefix to
+        portable). The response echoes the resolved ``portability`` and
+        ``source`` so a misclassified capture is visible immediately.
 
         Routing precedence (see :func:`engram.team.routing.resolve_target_vault`):
 
         1. ``portability=block`` always lands in primary.
-        2. Explicit ``meta.vault`` arg wins.
+        2. Explicit ``metadata.vault`` arg wins.
         3. If ``auto_route=true`` and a routing rule matches the first
            prefix, the rule's target_vault wins.
         4. Otherwise -> primary.
@@ -219,7 +249,7 @@ def build_multivault_server(
         from engram.team.capture_gate import gate_team_capture
         from engram.team.routing import resolve_target_vault
 
-        meta = CaptureInputMetadata.model_validate(metadata) if metadata is not None else None
+        meta = metadata
         payload = CaptureInput(content=content, metadata=meta)
 
         # Build a transient Thought for the routing dispatcher (it only
@@ -296,7 +326,7 @@ def build_multivault_server(
     async def search_thoughts(
         query: str,
         k: int = 10,
-        filter: dict[str, Any] | None = None,
+        filter: Filter | None = None,
     ) -> dict[str, Any]:
         """Semantic search.
 
@@ -304,7 +334,7 @@ def build_multivault_server(
         value (or absence) routes to the primary only, matching
         single-vault client semantics.
         """
-        f = Filter.model_validate(filter) if filter is not None else None
+        f = filter
         wants_multivault = (f is not None and f.vault == "*") or (
             f is not None and isinstance(f.vault, list) and len(f.vault) > 1
         )
@@ -342,7 +372,7 @@ def build_multivault_server(
     async def list_thoughts(
         limit: int = 50,
         offset: int = 0,
-        filter: dict[str, Any] | None = None,
+        filter: Filter | None = None,
         sort: SortOption = "created_at_desc",
     ) -> dict[str, Any]:
         """Filtered + sorted + paginated list.
@@ -350,7 +380,7 @@ def build_multivault_server(
         Defaults to the primary vault; explicit vault filter routes to
         the named vault.
         """
-        f = Filter.model_validate(filter) if filter is not None else None
+        f = filter
         target_storage = registry.primary()
         if f is not None and isinstance(f.vault, str) and f.vault != "*":
             named = registry.get(f.vault)

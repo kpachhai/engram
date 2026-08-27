@@ -1,7 +1,6 @@
 """Synthetic 100-thought reference corpus generator.
 
-Per ``02-TECHNICAL_DESIGN.md`` (`Fixture corpus`) and ``10-CODE_QUALITY.md``
-testing rules, the engram test suite needs a stable, synthetic corpus that:
+The engram test suite needs a stable, synthetic corpus that:
 
 * Covers every canonical prefix in :mod:`engram.models.frontmatter`.
 * Spans the three portability values (``portable``, ``sensitive``, ``block``).

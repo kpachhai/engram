@@ -17,7 +17,7 @@ from engram.diagnostics.check_codes import (
     VAULT_PATH_COLLISION,
 )
 from engram.diagnostics.doctor import CheckStatus, DoctorReport
-from engram.diagnostics.phase3_checks import (
+from engram.diagnostics.multivault_checks import (
     check_aggregator_mode,
     check_embedding_model_mismatch_across_vaults,
     check_friend_vault_block_thought_present,
@@ -28,7 +28,7 @@ from engram.diagnostics.phase3_checks import (
     check_user_config_vault_name_mismatch,
     check_vault_path_collision,
     run_llm_checks,
-    run_phase3_checks,
+    run_multivault_checks,
 )
 from engram.llm.budget import LLMBudget
 from engram.llm.providers import MockProvider
@@ -325,10 +325,10 @@ def test_friend_vault_block_present_fail(tmp_path: Path) -> None:
     assert _find_check(report, FRIEND_VAULT_BLOCK_THOUGHT_PRESENT) == CheckStatus.FAIL.value
 
 
-# === run_phase3_checks orchestration ===
+# === run_multivault_checks orchestration ===
 
 
-def test_run_phase3_checks_emits_the_cross_vault_rows(tmp_path: Path) -> None:
+def test_run_multivault_checks_emits_the_cross_vault_rows(tmp_path: Path) -> None:
     primary = _vault_storage(tmp_path, "primary")
     registry = VaultRegistry()
     registry.mount(name="primary", storage=primary, role="primary")
@@ -336,7 +336,7 @@ def test_run_phase3_checks_emits_the_cross_vault_rows(tmp_path: Path) -> None:
     a.mkdir()
     user_config = UserConfig(vaults=[VaultMount(name="primary", path=a, role="primary")])
     report = DoctorReport()
-    run_phase3_checks(
+    run_multivault_checks(
         report,
         user_config=user_config,
         registry=registry,

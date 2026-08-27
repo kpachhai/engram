@@ -79,7 +79,7 @@ def _probe_daemon(socket_path: Path, *, timeout: float = 1.0) -> DaemonLiveness:
 class DaemonDoctorRow:
     """One row in the daemon portion of the doctor report.
 
-    Mirrors :class:`engram.diagnostics.phase4_checks.Phase4DoctorRow`
+    Mirrors :class:`engram.diagnostics.team_checks.TeamDoctorRow`
     so the top-level doctor command can fold all rows into a uniform
     output.
     """

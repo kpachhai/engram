@@ -57,7 +57,7 @@ if TYPE_CHECKING:
     from engram.llm.protocol import LLMProvider
     from engram.multivault.registry import VaultRegistry
 
-_log = logging.getLogger("engram.diagnostics.phase3_checks")
+_log = logging.getLogger("engram.diagnostics.multivault_checks")
 
 _VAULT_CONFIG_FILENAME = "engram.config.yaml"
 
@@ -420,7 +420,7 @@ def run_llm_checks(
 ) -> None:
     """Run the LLM rows.
 
-    Kept out of :func:`run_phase3_checks` because neither row is a
+    Kept out of :func:`run_multivault_checks` because neither row is a
     cross-vault property: an LLM configured on a single-vault install is
     exactly as worth checking, and gating them behind a second vault left
     that install with no LLM rows at all.
@@ -434,7 +434,7 @@ def run_llm_checks(
     check_llm_daily_cost_cap_approached(report, budget=budget, cap=daily_cost_cap_usd)
 
 
-def run_phase3_checks(
+def run_multivault_checks(
     report: DoctorReport,
     *,
     user_config: UserConfig,
@@ -472,5 +472,5 @@ __all__ = [
     "check_user_config_vault_name_mismatch",
     "check_vault_path_collision",
     "run_llm_checks",
-    "run_phase3_checks",
+    "run_multivault_checks",
 ]

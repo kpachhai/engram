@@ -65,7 +65,7 @@ uv tool install engram-mcp-server
 engram --version          # confirms install
 ```
 
-Python 3.11+ on macOS or Linux. Windows works under WSL; native Windows is best-effort.
+Python 3.11-3.13 on macOS or Linux. Windows works under WSL; native Windows is best-effort.
 
 ### 4. Initialize a fresh engram vault
 

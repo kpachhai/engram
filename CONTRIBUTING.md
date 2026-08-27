@@ -44,7 +44,7 @@ which files are vendored and must not be edited in place, how to take an upstrea
 what `verify-gates.sh` proves, and the gaps the current vendored copies still have.
 
 CI runs ruff, mypy, pytest (property tests included) and the repo gates across Python
-3.11/3.12 x macOS/Ubuntu. The benchmarks in `bench/` are run manually, not in CI. The
+3.11/3.12/3.13 x macOS/Ubuntu. The benchmarks in `bench/` are run manually, not in CI. The
 coverage floor lives in `pyproject.toml` under `[tool.coverage.report]` and applies to
 any `pytest --cov` run from the repo root, CI included; test quality over coverage
 percentage. Write tests first; add a hermetic CLI smoke test for every new subcommand.

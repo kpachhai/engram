@@ -107,7 +107,7 @@ def test_thoughts_table_columns(tmp_path: Path) -> None:
     try:
         cursor = conn.execute("PRAGMA table_info(thoughts)")
         columns = {row[1] for row in cursor.fetchall()}
-        # All required columns from 02-TECHNICAL_DESIGN.md SQLite Schema.
+        # Every required column of the thoughts table.
         for col in (
             "id",
             "schema_version",

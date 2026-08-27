@@ -4,7 +4,7 @@ A thought is stored as one markdown file with YAML frontmatter and a body. This
 module is the read/write boundary between disk and the typed :class:`Thought`
 model. Writes are atomic (via :mod:`engram.utils.atomic_write`); reads tolerate
 schema drift by returning a structured :class:`FrontmatterDrift` list rather
-than raising, per ``02-TECHNICAL_DESIGN.md`` Frontmatter Schema Drift Handling.
+than raising.
 
 Two-parse design: PyYAML ``safe_load`` for Pydantic-validated read, ruamel.yaml
 round-trip for write-side preservation of unknown extra fields. This avoids the
@@ -20,7 +20,7 @@ Body extraction notes:
   the Thought model is the canonical form.
 * On read, file bytes are UTF-8 decoded; non-UTF-8 produces a drift entry.
 
-All writes use atomic-rename and mode 0600 per ``06-SECURITY.md`` Boundary B1.
+All writes use atomic-rename and mode 0600 (owner-only).
 """
 
 from __future__ import annotations

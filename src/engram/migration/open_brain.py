@@ -1,6 +1,6 @@
 """Open Brain -> engram migration pipeline.
 
-Implements the 6-step pipeline per ``04-MIGRATION.md``:
+Implements the 6-step pipeline:
 
 1. **Connect/Probe**: ``list_thoughts(limit=1, sort=created_at_asc)`` to verify
    connectivity AND that the sort parameter is honored (B4 mitigation -

@@ -1,6 +1,6 @@
 """Hypothesis-driven property tests for storage and embedding invariants.
 
-Per ``10-CODE_QUALITY.md``, these tests assert four high-value invariants:
+These tests assert four high-value invariants:
 
 * Capture-then-fetch round-trips content losslessly (modulo trailing newline).
 * The body fingerprint is stable across whitespace-equivalent inputs.

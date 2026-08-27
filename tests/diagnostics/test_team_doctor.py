@@ -1,4 +1,4 @@
-"""Tests for engram.diagnostics.phase4_checks doctor probes."""
+"""Tests for engram.diagnostics.team_checks doctor probes."""
 
 from __future__ import annotations
 
@@ -16,7 +16,7 @@ from engram.diagnostics.check_codes import (
     TEAM_PENDING_PUSHES,
     TEAM_POLICY_VIOLATION_QUARANTINED,
 )
-from engram.diagnostics.phase4_checks import (
+from engram.diagnostics.team_checks import (
     check_multiple_team_write_vaults,
     check_orphan_quarantine,
     check_pending_pushes,
@@ -251,7 +251,7 @@ def test_routing_rule_priority_collision_resolved_by_priority(tmp_path: Path) ->
 # === orchestrator: phase4 rows fold into the doctor report ===
 
 
-def test_run_phase4_checks_folds_rows_into_report(tmp_path: Path) -> None:
+def test_run_team_checks_folds_rows_into_report(tmp_path: Path) -> None:
     """The team-vault doctor family must be foldable into a DoctorReport.
 
     Regression: every phase4 check function existed (and was unit-tested)
@@ -262,7 +262,7 @@ def test_run_phase4_checks_folds_rows_into_report(tmp_path: Path) -> None:
 
     from engram.config.models import UserConfig, VaultMount
     from engram.diagnostics.doctor import DoctorReport
-    from engram.diagnostics.phase4_checks import run_phase4_checks
+    from engram.diagnostics.team_checks import run_team_checks
 
     team = tmp_path / "team-x"
     (team / ".engram").mkdir(parents=True)
@@ -285,7 +285,7 @@ def test_run_phase4_checks_folds_rows_into_report(tmp_path: Path) -> None:
     gpg.primary_fingerprint.return_value = VALID_FP
 
     report = DoctorReport()
-    run_phase4_checks(
+    run_team_checks(
         report,
         user_config,
         primary_vault_path=tmp_path / "primary",

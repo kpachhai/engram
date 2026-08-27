@@ -1,4 +1,4 @@
-r"""Canonical body fingerprint per ``02-TECHNICAL_DESIGN.md`` Storage Schema.
+r"""Canonical body fingerprint: the stored thought's content identity.
 
 The fingerprint identifies the THOUGHT (body content), not the FILE - metadata
 edits do not invalidate it. Normalization rules:

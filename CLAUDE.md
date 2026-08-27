@@ -19,7 +19,7 @@ engram/
 ├── pyproject.toml                    # PEP 621 + ruff + mypy + pytest config
 ├── uv.lock                           # locked dependencies
 ├── .pre-commit-config.yaml           # ruff + mypy on changed files
-├── .github/workflows/ci.yml          # CI matrix (3.11+3.12 × ubuntu+macos)
+├── .github/workflows/ci.yml          # CI matrix (3.11-3.13 × ubuntu+macos)
 ├── docs/
 │   ├── QUICKSTART.md                 # 5-minute install + first capture
 │   ├── USE_CASES.md                  # 5 personas with examples
@@ -69,7 +69,7 @@ engram shipped in six phases (solo MVP + Open Brain migration -> multi-machine g
 
 **Don't reintroduce "Phase N" framing in source comments.** That historical context belongs in plan / ADR / retrospective docs. Source code reads as a polished v1.0 product.
 
-Known gate gap (2026-08-25): the vocabulary gate greps file *contents* and never matches the path, so planning vocabulary in a filename passes it - `git ls-files | grep -ciE 'phase[0-9]'` counts the tracked paths that still carry it, two of them modules in the shipped wheel. Until the vendored scanner reads paths too, filenames are enforced by review. Gate gaps in the vendored scripts themselves: `.githooks/README.md`.
+Known gate gap (2026-08-25): the vocabulary gate greps file *contents* and never matches the path, and its content pattern only matches the spaced prose form, so neither a phase-named filename nor a phase-named identifier such as `ALL_PHASE_4_CHECK_CODES` trips it - `git ls-files | grep -ciE 'phase[0-9]'` counts the tracked paths that still carry it, all of them under `tests/` now that the two shipped modules are named for what they check. The class is not closed. Until the vendored scanner reads paths too, filenames are enforced by review. Gate gaps in the vendored scripts themselves: `.githooks/README.md`.
 
 ## Pinned invariants (DO NOT VIOLATE)
 
@@ -151,7 +151,7 @@ The CLI is self-documenting (`engram --help`, `engram <cmd> --help`); recipes fo
 - **Locks + state:** `<vault>/.engram/` holds per-machine state (identity, push queue, orphan tarballs); always gitignored.
 - **MCP server:** stdio at the client boundary. No HTTP. No network listener. No telemetry. From v0.5.0 onward (daemon mode), a per-vault Unix Domain Socket sits between the ``engram serve`` proxy and the daemon process that owns the vault — UDS is local IPC, not a network listener. Filesystem perms (0o600) plus ``SO_PEERCRED``/``getpeereid`` enforce same-UID access. The daemon calls ``os.setsid()`` after fork so it survives proxy exit (e.g. Claude Code session close) and does not die with the proxy's process group.
 - **`delete_thought` confirmation contract:** the MCP `delete_thought(id, confirm)` tool requires `confirm` to be passed explicitly (no default). Always call once with `confirm=False` first — the response carries metadata + the first ~200 chars of the body — show that preview to the user, then call again with `confirm=True` only after explicit user approval. Each call deletes at most one thought; bulk delete-by-search is intentionally not supported via MCP. The `engram delete <id>` CLI parallels this with a typed-string (`delete`) confirmation gate and a `--dry-run` flag.
-- **CI matrix:** Python 3.11 + 3.12, macOS + Ubuntu. ruff + ruff-format + mypy + pytest + coverage all gate the merge.
+- **CI matrix:** Python 3.11, 3.12 and 3.13, macOS + Ubuntu. ruff + ruff-format + mypy + pytest + coverage all gate the merge.
 
 ## See also
 

@@ -1,4 +1,4 @@
-"""Reindex flows per ``02-TECHNICAL_DESIGN.md`` Flow D.
+"""Reindex flows: rebuild the SQLite index from the markdown source of truth.
 
 Four modes:
 

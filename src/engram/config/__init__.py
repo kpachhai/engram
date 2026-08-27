@@ -1,6 +1,6 @@
 """Configuration loading for engram.
 
-Five-layer precedence (lowest to highest, per ``02-TECHNICAL_DESIGN.md``):
+Five-layer precedence (lowest to highest):
 
 1. Defaults baked into the Pydantic model classes.
 2. Per-user config: ``~/.config/engram/config.yaml``.

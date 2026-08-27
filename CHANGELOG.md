@@ -40,6 +40,37 @@ The MCP tool surface is committed-stable for the v1.x lifetime per the API stabi
   with nothing listening they skip, and a daemon that is listening while its
   state file is missing or unreadable warns, because an unanswered question is
   not a match.
+- **`capture_thought`, `search_thoughts` and `list_thoughts` advertise their
+  real input schema.** `metadata` and `filter` were typed as `dict`, so the
+  schema an MCP client reads said `additionalProperties: true` and named no
+  fields at all, while the handler validated against `extra="forbid"` models -
+  the advertised surface and the enforced one disagreed. Both are the Pydantic
+  models now, every field carries a description, and the `capture_thought`
+  description states the `[Prefix]` content convention and what each
+  portability value means. The three portability levels are the headline
+  privacy control and an assistant had no way to discover the field existed.
+- **A capture response echoes the `portability` and `source` it resolved.**
+  Both are stamped into frontmatter that is never rewritten, and both can come
+  from a default the caller never saw - the per-prefix portability fallback, or
+  the configured `default_user`. The agent that just captured could not tell a
+  misclassification from a correct one without going to look on disk.
+- **`default_user_placeholder` doctor row.** The quickstart config block ships
+  `default_user: <your-username>`; pasted verbatim it is a non-empty,
+  path-safe string, so it validates and is then stamped into every capture. A
+  missing config fails loudly at load time; the unfilled placeholder was silent
+  everywhere. The row warns and names the fix, and `engram doctor` is the step
+  the quickstart already runs next.
+- **Python 3.13 is tested.** Both CI matrices and the classifier list include
+  it; the lockfile already resolved cp313 wheels for every native dependency.
+
+### Changed
+
+- **`engram.diagnostics.phase3_checks` and `phase4_checks` are now
+  `multivault_checks` and `team_checks`.** Both ship in the wheel, so a reader
+  of the installed package met module paths naming a delivery schedule they
+  cannot see. `Phase4DoctorRow` is `TeamDoctorRow`, and the row printed when
+  the team-vault probes raise is `team_checks_internal`. `engram.diagnostics`
+  is internal, so no documented import surface moves.
 
 ### Fixed
 
@@ -57,6 +88,17 @@ The MCP tool surface is committed-stable for the v1.x lifetime per the API stabi
   command both named 80, and the command-line flag won - so raising the value
   in the config file would have changed nothing about what merges. CI no longer
   passes `--cov-fail-under`.
+- **The documented Python range no longer promises a version that cannot
+  install.** The onnxruntime pin that keeps Intel Mac wheels available admits
+  no 3.14 wheel, so a reader on current-stable Python followed `pip install`
+  from the first line of the README into a resolver error naming a transitive
+  dependency rather than engram's own constraint. The README, the quickstart
+  and the migration guide say 3.11-3.13, and why.
+- **Docstrings no longer cite the unpublished spec.** Thirty-six references
+  across `src/` and `tests/` pointed at four documents that live in a separate
+  planning repo, so the installed package sent its reader to files they cannot
+  open. CLAUDE.md already forbade this and nothing caught it: the reachability
+  gate matches paths, and these were bare filenames.
 
 ### Fixed - CI
 

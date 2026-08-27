@@ -1,6 +1,6 @@
 r"""Filename derivation for thoughts.
 
-Pattern (per ``02-TECHNICAL_DESIGN.md`` File Naming Convention)::
+Pattern::
 
     {prefix-dir}/{YYYYMMDDHHMMSS}-{slug}-{shortuuid12}.md
 

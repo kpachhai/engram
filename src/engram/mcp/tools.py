@@ -152,6 +152,8 @@ async def capture_thought_handler(
         file_path=_relative_file_path(storage, thought.file_path),
         fingerprint=thought.fingerprint,
         index_state="failed" if index_failed else "ok",
+        portability=thought.portability,
+        source=thought.source,
     )
 
 

@@ -1,8 +1,8 @@
 """Frontmatter schema and the canonical engram prefix vocabulary.
 
 The :class:`Frontmatter` model is the strict-validation Pydantic boundary for
-parsed YAML frontmatter. It accepts (with a structured warning at the storage
-layer, per ``02-TECHNICAL_DESIGN.md`` Frontmatter Schema Drift Handling) any
+parsed YAML frontmatter. It accepts (with a structured drift warning raised
+by the storage layer rather than an exception) any
 ``prefix`` value, including non-canonical strings, but enforces:
 
 * All required fields present (``id``, ``prefix``, ``portability``, ``source``,
@@ -25,8 +25,7 @@ from uuid import UUID
 from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 
 #: The 15 canonical prefix values in their authoritative case-sensitive form.
-#: Defined in ``02-TECHNICAL_DESIGN.md`` Canonical Prefix Vocabulary; this is the
-#: single source of truth in code.
+#: This tuple is the single source of truth for the canonical vocabulary.
 CANONICAL_PREFIXES: Final[tuple[str, ...]] = (
     "Lesson",
     "Pattern",

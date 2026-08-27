@@ -1,8 +1,8 @@
 """SQLite + sqlite-vec connection factory and schema management.
 
-Per ``02-TECHNICAL_DESIGN.md`` Storage Schema, the engram index has three
-spec-defined tables (``thoughts``, ``thought_embeddings`` virtual, and
-``migrations``) plus an implementation-detail table (``engram_settings``)
+The engram index has three core tables (``thoughts``,
+``thought_embeddings`` virtual, and ``migrations``) plus an
+implementation-detail table (``engram_settings``)
 that stores model name + dimension so a startup mismatch can be detected and
 reported via ``engram doctor``.
 
@@ -35,7 +35,7 @@ ENGRAM_SCHEMA_VERSION: Final[int] = 1
 #: Default vector dimension; matches ``BAAI/bge-small-en-v1.5``.
 DEFAULT_EMBEDDING_DIM: Final[int] = 384
 
-#: SQLite database file mode (per ``06-SECURITY.md`` Boundary B1).
+#: SQLite database file mode (owner-only).
 _DB_FILE_MODE: Final[int] = 0o600
 
 #: Settings KV keys reserved at this layer.

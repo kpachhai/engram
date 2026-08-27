@@ -4,9 +4,9 @@ These models describe the YAML config files (``~/.config/engram/config.yaml``
 and ``<vault>/engram.config.yaml``) and the merged runtime view returned by
 :func:`engram.config.loader.load_config`.
 
-The optional ``llm:`` block configures LLM-mediated features per
-``02-TECHNICAL_DESIGN.md``. When LLM features are not in use, the block
-is parsed tolerantly and ignored at runtime.
+The optional ``llm:`` block configures LLM-mediated features. When those
+features are not in use, the block is parsed tolerantly and ignored at
+runtime.
 """
 
 from __future__ import annotations
@@ -83,7 +83,6 @@ class SyncConfig(BaseModel):
 class LLMConfig(BaseModel):
     """Optional LLM provider config.
 
-    Per ``02-TECHNICAL_DESIGN.md`` Optional LLM-Mediated Features.
     ``api_key_env`` names an environment variable holding the key;
     engram never stores keys on disk.
     """

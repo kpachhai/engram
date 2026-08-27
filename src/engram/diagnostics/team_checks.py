@@ -42,13 +42,13 @@ if TYPE_CHECKING:
     from engram.team.identity import GpgIdentity
     from engram.team.members import MembersList
 
-_log = logging.getLogger("engram.diagnostics.phase4_checks")
+_log = logging.getLogger("engram.diagnostics.team_checks")
 
 DoctorStatus = Literal["OK", "INFO", "WARN", "FAIL"]
 
 
 @dataclass(frozen=True)
-class Phase4DoctorRow:
+class TeamDoctorRow:
     """One row in the team-vault portion of the doctor report.
 
     Mirrors the single-vault and multi-vault row shape so the top-level
@@ -61,10 +61,10 @@ class Phase4DoctorRow:
     detail: str
 
 
-def check_multiple_team_write_vaults(config: UserConfig) -> Phase4DoctorRow:
+def check_multiple_team_write_vaults(config: UserConfig) -> TeamDoctorRow:
     """INFO row counting team-write mounts."""
     count = sum(1 for v in config.vaults if v.role == "team-write")
-    return Phase4DoctorRow(
+    return TeamDoctorRow(
         code=MULTIPLE_TEAM_WRITE_VAULTS_OK,
         status="INFO",
         detail=f"{count} team-write vault(s) mounted",
@@ -76,16 +76,16 @@ def check_team_member_enrollment(
     config: UserConfig,
     members_lookup: dict[str, MembersList],
     gpg_identity: GpgIdentity | None,
-) -> list[Phase4DoctorRow]:
+) -> list[TeamDoctorRow]:
     """FAIL when the local GPG fingerprint is absent from any team-vault."""
-    rows: list[Phase4DoctorRow] = []
+    rows: list[TeamDoctorRow] = []
     team_vaults = [v for v in config.vaults if v.role == "team-write"]
     if not team_vaults:
         return rows
 
     if gpg_identity is None:
         return [
-            Phase4DoctorRow(
+            TeamDoctorRow(
                 code=TEAM_MEMBER_NOT_ENROLLED,
                 status="FAIL",
                 detail="no GPG identity configured but team-write vaults are mounted",
@@ -95,7 +95,7 @@ def check_team_member_enrollment(
     primary_fp = gpg_identity.primary_fingerprint()
     if primary_fp is None:
         rows.append(
-            Phase4DoctorRow(
+            TeamDoctorRow(
                 code=TEAM_MEMBER_NOT_ENROLLED,
                 status="FAIL",
                 detail="no GPG signing key found on this machine",
@@ -107,7 +107,7 @@ def check_team_member_enrollment(
         members = members_lookup.get(vault.name)
         if members is None:
             rows.append(
-                Phase4DoctorRow(
+                TeamDoctorRow(
                     code=TEAM_MEMBER_NOT_ENROLLED,
                     status="FAIL",
                     detail=f"vault {vault.name!r}: no members.yaml available",
@@ -116,7 +116,7 @@ def check_team_member_enrollment(
             continue
         if not members.is_enrolled(primary_fp):
             rows.append(
-                Phase4DoctorRow(
+                TeamDoctorRow(
                     code=TEAM_MEMBER_NOT_ENROLLED,
                     status="FAIL",
                     detail=(
@@ -132,11 +132,11 @@ def check_team_member_enrollment(
 def check_pending_pushes(
     *,
     config: UserConfig,
-) -> list[Phase4DoctorRow]:
+) -> list[TeamDoctorRow]:
     """INFO row reporting per-vault push queue depth."""
     from engram.team.push_queue import PersistentPushQueue
 
-    rows: list[Phase4DoctorRow] = []
+    rows: list[TeamDoctorRow] = []
     for vault in config.vaults:
         if vault.role != "team-write":
             continue
@@ -145,7 +145,7 @@ def check_pending_pushes(
         if not pending:
             continue
         rows.append(
-            Phase4DoctorRow(
+            TeamDoctorRow(
                 code=TEAM_PENDING_PUSHES,
                 status="INFO",
                 detail=(
@@ -160,9 +160,9 @@ def check_pending_pushes(
 def check_orphan_quarantine(
     *,
     personal_vault_path: Path | None,
-) -> list[Phase4DoctorRow]:
+) -> list[TeamDoctorRow]:
     """WARN when orphan tarballs await operator triage."""
-    rows: list[Phase4DoctorRow] = []
+    rows: list[TeamDoctorRow] = []
     if personal_vault_path is None:
         return rows
     orphans_dir = personal_vault_path / ".engram" / "orphans"
@@ -172,7 +172,7 @@ def check_orphan_quarantine(
     if not orphan_files:
         return rows
     rows.append(
-        Phase4DoctorRow(
+        TeamDoctorRow(
             code=TEAM_POLICY_VIOLATION_QUARANTINED,
             status="WARN",
             detail=(
@@ -188,7 +188,7 @@ def check_serve_config_stale(
     *,
     config_path: Path | None,
     serve_loaded_at: float | None,
-) -> list[Phase4DoctorRow]:
+) -> list[TeamDoctorRow]:
     """WARN when serve's config-load time is older than file mtime."""
     if config_path is None or serve_loaded_at is None:
         return []
@@ -201,7 +201,7 @@ def check_serve_config_stale(
     if file_mtime <= serve_loaded_at:
         return []
     return [
-        Phase4DoctorRow(
+        TeamDoctorRow(
             code=SERVE_CONFIG_STALE,
             status="WARN",
             detail=(
@@ -212,9 +212,9 @@ def check_serve_config_stale(
     ]
 
 
-def check_routing_rule_priority_collision(config: UserConfig) -> list[Phase4DoctorRow]:
+def check_routing_rule_priority_collision(config: UserConfig) -> list[TeamDoctorRow]:
     """WARN when two routing rules tie on prefix without a priority tiebreaker."""
-    rows: list[Phase4DoctorRow] = []
+    rows: list[TeamDoctorRow] = []
     if not config.routing_rules:
         return rows
 
@@ -228,7 +228,7 @@ def check_routing_rule_priority_collision(config: UserConfig) -> list[Phase4Doct
         has_unique_priority = priorities and len(set(priorities)) > 1
         if not has_unique_priority:
             rows.append(
-                Phase4DoctorRow(
+                TeamDoctorRow(
                     code=ROUTING_RULE_PRIORITY_COLLISION,
                     status="WARN",
                     detail=(
@@ -245,7 +245,7 @@ def check_routing_rule_priority_collision(config: UserConfig) -> list[Phase4Doct
 def check_branch_drift(
     *,
     storages: dict[str, object],
-) -> list[Phase4DoctorRow]:
+) -> list[TeamDoctorRow]:
     """WARN when any vault's branch HEAD differs from mount-time HEAD.
 
     Args:
@@ -253,14 +253,14 @@ def check_branch_drift(
             a ``current_branch_drifted()`` method that returns
             ``(drifted, mounted_at, current)``).
     """
-    rows: list[Phase4DoctorRow] = []
+    rows: list[TeamDoctorRow] = []
     for vault_name, storage in storages.items():
         if not hasattr(storage, "current_branch_drifted"):
             continue
         drifted, mounted_at, current = storage.current_branch_drifted()
         if drifted:
             rows.append(
-                Phase4DoctorRow(
+                TeamDoctorRow(
                     code=GIT_BRANCH_DRIFTED,
                     status="WARN",
                     detail=(
@@ -272,7 +272,7 @@ def check_branch_drift(
     return rows
 
 
-def run_phase4_checks(
+def run_team_checks(
     report: DoctorReport,
     user_config: UserConfig,
     *,
@@ -317,7 +317,7 @@ def run_phase4_checks(
         if candidate.is_gpg_available():
             gpg_identity = candidate
 
-    rows: list[Phase4DoctorRow] = [check_multiple_team_write_vaults(user_config)]
+    rows: list[TeamDoctorRow] = [check_multiple_team_write_vaults(user_config)]
     rows.extend(
         check_team_member_enrollment(
             config=user_config,
@@ -334,7 +334,7 @@ def run_phase4_checks(
 
 __all__ = [
     "DoctorStatus",
-    "Phase4DoctorRow",
+    "TeamDoctorRow",
     "check_branch_drift",
     "check_multiple_team_write_vaults",
     "check_orphan_quarantine",
@@ -342,5 +342,5 @@ __all__ = [
     "check_routing_rule_priority_collision",
     "check_serve_config_stale",
     "check_team_member_enrollment",
-    "run_phase4_checks",
+    "run_team_checks",
 ]

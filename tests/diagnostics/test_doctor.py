@@ -496,3 +496,41 @@ def test_run_diagnostics_includes_daemon_rows(short_vault: Path):
     names = {c.name for c in report.checks}
     missing = set(ALL_DAEMON_CHECK_CODES) - names
     assert not missing, f"daemon doctor rows missing from report: {sorted(missing)}"
+
+
+# === default_user placeholder (config sanity) ===
+
+
+def _fresh_vault_config(root: Path) -> EffectiveConfig:
+    """A fresh vault with the SQLite settings pre-recorded (see test_fresh_vault_all_ok)."""
+    config = _make_config(root)
+    storage = VaultStorage(
+        thoughts_dir=config.thoughts_dir,
+        index_db_path=config.index_dir / "engram.db",
+        embedding_dim=_DIM,
+        embedding_model_name=DEFAULT_EMBEDDING_MODEL,
+    )
+    storage.close()
+    return config
+
+
+def test_default_user_placeholder_warns(short_vault: Path):
+    """The quickstart's `<your-username>` pasted verbatim surfaces as a WARN row."""
+    config = _fresh_vault_config(short_vault).model_copy(update={"default_user": "<your-username>"})
+    report = run_diagnostics(config, embedder_factory=_stub_factory)
+    statuses = {c.name: c.status for c in report.checks}
+    assert statuses["default_user_placeholder"] is CheckStatus.WARN
+    row = next(c for c in report.checks if c.name == "default_user_placeholder")
+    assert "<your-username>" in row.message
+    assert row.detail is not None
+    assert "source:" in row.detail
+    assert report.exit_code == 1
+
+
+def test_default_user_real_value_is_ok_row(short_vault: Path):
+    """A real username produces an OK row - the check looked and said so."""
+    config = _fresh_vault_config(short_vault)
+    report = run_diagnostics(config, embedder_factory=_stub_factory)
+    statuses = {c.name: c.status for c in report.checks}
+    assert statuses["default_user_placeholder"] is CheckStatus.OK
+    assert report.exit_code == 0

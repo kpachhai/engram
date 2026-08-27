@@ -139,6 +139,17 @@ ALL_PHASE_4_CHECK_CODES: Final[tuple[str, ...]] = (
 )
 
 
+# Config-sanity check codes. Check implementation lives in `doctor.py`.
+
+#: WARN when the resolved ``default_user`` is still an angle-bracket
+#: placeholder (``<your-username>``) pasted verbatim from the quickstart
+#: config example. The value validates (it is a non-empty, path-safe
+#: string) and every capture would stamp it into frontmatter ``source:``,
+#: which is never rewritten - so without this row the paste leaves no
+#: trace until the vault is full of it.
+DEFAULT_USER_PLACEHOLDER: Final[str] = "default_user_placeholder"
+
+
 # Daemon-mode check codes. Check implementations live in
 # `daemon_checks.py`.
 DAEMON_RUNNING: Final[str] = "daemon_running"
@@ -203,6 +214,7 @@ __all__ = [
     "DAEMON_SOCKET_STALE",
     "DAEMON_UPTIME_EXCESSIVE",
     "DAEMON_VERSION_MATCHES_CLI",
+    "DEFAULT_USER_PLACEHOLDER",
     "EMBEDDING_MODEL_MISMATCH_ACROSS_VAULTS",
     "FRIEND_VAULT_BLOCK_THOUGHT_PRESENT",
     "GITIGNORE_INDEXES",

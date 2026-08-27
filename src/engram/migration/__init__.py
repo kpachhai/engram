@@ -1,7 +1,7 @@
 """Open Brain -> engram migration command.
 
 The :func:`engram.migration.open_brain.run_migration` function executes the
-6-step pipeline defined in ``04-MIGRATION.md``:
+6-step pipeline:
 
 1. Connect / Probe (verifies sort=created_at_asc parameter is accepted - B4 mitigation)
 2. Enumerate (paginated list_thoughts)

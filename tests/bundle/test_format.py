@@ -86,8 +86,8 @@ def test_bundle_source_tag_format() -> None:
     assert m.bundle_source_tag == f"bundle:{m.bundle_id}"
 
 
-def test_constants_match_security_md_caps() -> None:
-    """Per 06-SECURITY.md: 1 MB / file, 4 GB / bundle."""
+def test_constants_match_documented_caps() -> None:
+    """Reception ceilings: 1 MB / file, 4 GB / bundle."""
     assert MAX_PER_FILE_BYTES == 1 * 1024 * 1024
     assert MAX_TOTAL_BYTES == 4 * 1024 * 1024 * 1024
     assert BUNDLE_THOUGHTS_DIR == "thoughts"

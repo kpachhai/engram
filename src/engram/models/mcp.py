@@ -1,4 +1,4 @@
-"""MCP tool I/O Pydantic models per ``02-TECHNICAL_DESIGN.md`` MCP API Contract.
+"""MCP tool I/O Pydantic models: the wire contract for every MCP tool.
 
 Each of the five core tools - ``capture_thought``, ``search_thoughts``,
 ``list_thoughts``, ``thought_stats``, ``fetch`` - has paired Input and Output
@@ -6,9 +6,9 @@ models. Inputs use ``extra="forbid"`` so unknown fields surface as clear
 validation errors; outputs use ``extra="ignore"`` so the tool implementation
 can pass extra context internally without polluting the wire format.
 
-API stability: per ``02-TECHNICAL_DESIGN.md`` API Stability Commitment, these
-shapes are stable for the v1.x lifetime. Only non-breaking additions are
-permitted (new optional fields, new tools, new optional filter dimensions).
+API stability: these shapes are stable for the v1.x lifetime. Only
+non-breaking additions are permitted (new optional fields, new tools, new
+optional filter dimensions).
 Breaking changes warrant v2.0.
 """
 
@@ -37,13 +37,44 @@ class Filter(BaseModel):
 
     model_config = ConfigDict(extra="forbid")
 
-    prefix: str | list[str] | None = None
-    portability: Portability | list[Portability] | None = None
-    source: str | list[str] | None = None
-    tags: list[str] | None = None
-    vault: str | list[str] | None = None
-    created_after: datetime | None = None
-    created_before: datetime | None = None
+    prefix: str | list[str] | None = Field(
+        default=None,
+        description=(
+            "Match thoughts carrying this prefix (or any of the listed "
+            "prefixes), e.g. 'Lesson' or ['Decision', 'Friction']."
+        ),
+    )
+    portability: Portability | list[Portability] | None = Field(
+        default=None,
+        description=(
+            "Match by privacy classification: 'portable', 'sensitive', or "
+            "'block' (or a list of them)."
+        ),
+    )
+    source: str | list[str] | None = Field(
+        default=None,
+        description="Match by the source attribution stamped at capture time.",
+    )
+    tags: list[str] | None = Field(
+        default=None,
+        description="Match if ANY listed tag is present on the thought.",
+    )
+    vault: str | list[str] | None = Field(
+        default=None,
+        description=(
+            "Vault name(s) to target. Under multi-vault serving, '*' opts "
+            "search_thoughts into cross-vault search; a single name routes "
+            "to that vault; absence means the primary vault."
+        ),
+    )
+    created_after: datetime | None = Field(
+        default=None,
+        description="Only thoughts created strictly after this timestamp.",
+    )
+    created_before: datetime | None = Field(
+        default=None,
+        description="Only thoughts created strictly before this timestamp.",
+    )
 
 
 class CaptureInputMetadata(BaseModel):
@@ -55,14 +86,49 @@ class CaptureInputMetadata(BaseModel):
 
     model_config = ConfigDict(extra="forbid")
 
-    prefix: str | None = None
-    portability: Portability | None = None
-    source: str | None = None
-    tags: list[str] | None = None
+    prefix: str | None = Field(
+        default=None,
+        description=(
+            "Explicit prefix override. Omit to parse the prefix from a "
+            "leading [Prefix] marker in content, falling back to 'Note'. "
+            "Canonical prefixes: Lesson, Pattern, Decision, Friction, "
+            "Resolution, Action Item, Parked, Notice, Domain, Workflow, "
+            "Style, Artifact, Session Summary, Meta, Note. Non-canonical "
+            "values are accepted but land outside the standard taxonomy."
+        ),
+    )
+    portability: Portability | None = Field(
+        default=None,
+        description=(
+            "Privacy classification stamped into the thought's frontmatter. "
+            "'portable': may sync anywhere and reach any configured LLM. "
+            "'sensitive': only ever reaches LOCAL LLM providers, never a "
+            "remote API. 'block': never reaches any LLM and always lands in "
+            "the primary vault. Omitted: defaults by prefix (Domain and "
+            "Artifact default to sensitive, every other prefix to portable)."
+        ),
+    )
+    source: str | None = Field(
+        default=None,
+        description=(
+            "Attribution recorded in frontmatter. Omit to use the server's configured default_user."
+        ),
+    )
+    tags: list[str] | None = Field(
+        default=None,
+        description="Freeform tags stored in frontmatter; filterable in search/list.",
+    )
     #: Explicit target-vault alias. None means "no preference"
     #: (routing rules fire if ``auto_route: true``; otherwise lands in
     #: primary). Explicit always wins over rules.
-    vault: str | None = None
+    vault: str | None = Field(
+        default=None,
+        description=(
+            "Explicit target-vault name. Omit for no preference: routing "
+            "rules fire when auto_route is enabled, otherwise the capture "
+            "lands in the primary vault. Explicit always wins over rules."
+        ),
+    )
 
 
 class CaptureInput(BaseModel):
@@ -84,6 +150,12 @@ class CaptureOutput(BaseModel):
     is absent and the thought won't appear in search/list until
     ``engram reindex`` runs. The markdown source-of-truth is always
     preserved either way.
+
+    ``portability`` and ``source`` are additive on the same terms: they echo
+    the values resolved at capture (explicit metadata, or the per-prefix /
+    default_user fallbacks) so the calling agent can see a misclassified or
+    mis-attributed capture immediately, before the stamp becomes permanent
+    history. ``None`` only when a pre-upgrade server omits them.
     """
 
     model_config = ConfigDict(extra="ignore")
@@ -92,6 +164,8 @@ class CaptureOutput(BaseModel):
     file_path: str
     fingerprint: str
     index_state: Literal["ok", "failed"] = "ok"
+    portability: Portability | None = None
+    source: str | None = None
 
 
 class SearchInput(BaseModel):

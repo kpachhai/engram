@@ -6,13 +6,13 @@ Pattern:
    ``os.replace`` is a same-filesystem rename (atomic on POSIX).
 2. Write the bytes; flush; fsync the file. On macOS use ``F_FULLFSYNC`` because
    plain ``fsync`` on APFS does not flush to media.
-3. ``chmod`` the tempfile to ``0600`` (per ``06-SECURITY.md`` Boundary B1).
+3. ``chmod`` the tempfile to ``0600`` (owner-only, like the final file).
 4. ``os.replace`` the tempfile to the destination.
 5. fsync the parent directory FD so the rename itself is durable across crash.
 
 If any step fails, the tempfile remains in the target directory and surfaces via
-``engram doctor`` (per ``02-TECHNICAL_DESIGN.md`` Frontmatter Schema Drift Handling
-edge case A14). ``engram doctor --repair`` removes orphan ``.tmp`` files safely.
+``engram doctor`` as an orphan ``.tmp`` file. ``engram doctor --repair``
+removes orphan ``.tmp`` files safely.
 """
 
 from __future__ import annotations

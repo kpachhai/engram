@@ -17,7 +17,7 @@ from unittest.mock import MagicMock
 import pytest
 
 from engram.diagnostics.check_codes import GIT_BRANCH_DRIFTED
-from engram.diagnostics.phase4_checks import check_branch_drift
+from engram.diagnostics.team_checks import check_branch_drift
 from engram.storage.facade import VaultStorage
 
 

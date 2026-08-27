@@ -1,4 +1,4 @@
-"""Tests for engram.utils.file_naming - filename derivation per 02-TECHNICAL_DESIGN.md."""
+"""Tests for engram.utils.file_naming - filename derivation."""
 
 from __future__ import annotations
 

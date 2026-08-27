@@ -136,8 +136,8 @@ def resolve_default_user(
 def ensure_user_config_dir() -> Path:
     """Create ``~/.config/engram/`` with mode 0700 if missing; return the path.
 
-    Per ``06-SECURITY.md`` Boundary B1, the per-user config directory is mode
-    0700 (only the owner can read its contents).
+    The per-user config directory is mode 0700 (only the owner can read
+    its contents).
     """
     _USER_CONFIG_DIR.mkdir(parents=True, exist_ok=True)
     current_mode = _USER_CONFIG_DIR.stat().st_mode & 0o777

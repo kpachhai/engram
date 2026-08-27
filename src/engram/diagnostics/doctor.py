@@ -21,6 +21,7 @@ import asyncio
 import enum
 import logging
 import os
+import re
 from collections.abc import Callable
 from dataclasses import dataclass, field
 from pathlib import Path
@@ -134,6 +135,40 @@ class DoctorReport:
 
 
 # === individual checks ===
+
+#: An angle-bracketed value is the quickstart's fill-me-in convention
+#: (``<your-username>``), never a plausible real username.
+_PLACEHOLDER_USER_RE = re.compile(r"^<.*>$")
+
+
+def _check_default_user(report: DoctorReport, config: EffectiveConfig) -> None:
+    """WARN when ``default_user`` is an unfilled angle-bracket placeholder.
+
+    The quickstart config example ships ``default_user: <your-username>``;
+    pasted verbatim, the placeholder passes validation and gets stamped
+    into every capture's frontmatter ``source:``, which is never
+    rewritten. A missing config fails loudly at load time; the pasted
+    placeholder is silent everywhere but here.
+    """
+    value = config.default_user
+    if _PLACEHOLDER_USER_RE.fullmatch(value):
+        report.add(
+            check_codes.DEFAULT_USER_PLACEHOLDER,
+            CheckStatus.WARN,
+            f"default_user is the unfilled placeholder {value!r}",
+            detail=(
+                "Every capture stamps this value into frontmatter source:. "
+                "Set default_user in ~/.config/engram/config.yaml to a real "
+                "username, or delete the line to use the documented fallback "
+                "chain (devkit identity.json, then $USER)."
+            ),
+        )
+        return
+    report.add(
+        check_codes.DEFAULT_USER_PLACEHOLDER,
+        CheckStatus.OK,
+        f"default_user {value!r}",
+    )
 
 
 def _check_thoughts_dir(report: DoctorReport, config: EffectiveConfig) -> None:
@@ -697,6 +732,7 @@ def run_diagnostics(
         ``exit_code`` derived from the worst status.
     """
     report = DoctorReport()
+    _check_default_user(report, config)
     _check_thoughts_dir(report, config)
     _check_index_dir(report, config)
 

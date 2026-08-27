@@ -30,7 +30,7 @@ If you run an AI assistant daily and want its memory to (a) survive across sessi
 > and the `engram` import package; only the install-time name differs.
 
 ```bash
-# 1. Install (Python 3.11+; macOS or Linux)
+# 1. Install (Python 3.11-3.13; macOS or Linux)
 pip install engram-mcp-server
 
 # 2. Scaffold a vault
@@ -52,6 +52,10 @@ engram doctor
 claude mcp add --scope user engram -- "$(which engram)" serve
 # Claude Desktop uses a different config path; see docs/QUICKSTART.md Step 5.
 ```
+
+Python 3.14 is not supported yet: the pinned onnxruntime that keeps Intel Mac
+wheels available ships no 3.14 wheels, so the ceiling moves when that pin does
+(see the dependency comment in `pyproject.toml`).
 
 Now ask your AI assistant: *"Capture a thought: [Lesson] engram took five minutes to set up."*
 

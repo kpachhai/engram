@@ -3,8 +3,8 @@
 The :func:`run` helper enforces ``shell=False`` (the default) and validates the
 ``args`` sequence is well-formed strings BEFORE handing to subprocess. The
 :func:`run_git` helper additionally pre-stages the four non-interactive
-environment variables required by ``02-TECHNICAL_DESIGN.md`` Flow C so git
-never prompts for credentials, merge editor input, or LFS smudge.
+environment variables the sync flow requires so git never prompts for
+credentials, merge editor input, or LFS smudge.
 
 The helper exists ahead of any sync caller so the sync coordinator builds on
 it without having to retrofit env-var hygiene into already-wired call sites.
@@ -18,7 +18,7 @@ from collections.abc import Mapping, Sequence
 from pathlib import Path
 from typing import Final
 
-#: Non-interactive git environment per ``02-TECHNICAL_DESIGN.md`` Flow C.
+#: Non-interactive git environment for every sync-flow git invocation.
 GIT_NON_INTERACTIVE_ENV: Final[Mapping[str, str]] = {
     "GIT_TERMINAL_PROMPT": "0",
     "GIT_MERGE_AUTOEDIT": "no",
@@ -92,9 +92,9 @@ def run_git(
     """Run ``git`` with non-interactive env vars pre-staged.
 
     Equivalent to :func:`run` but ALWAYS prepends ``"git"`` to ``args``, sets
-    the four ``GIT_*`` env vars per ``02-TECHNICAL_DESIGN.md`` Flow C, and
-    requires an explicit ``cwd``. The default timeout is 30s so long-running
-    git operations cannot hang the calling process indefinitely.
+    the four non-interactive ``GIT_*`` env vars, and requires an explicit
+    ``cwd``. The default timeout is 30s so long-running git operations
+    cannot hang the calling process indefinitely.
 
     Args:
         args: Git subcommand and its arguments (do NOT include the leading ``"git"``).

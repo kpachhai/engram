@@ -4,7 +4,7 @@ Five minutes from "no engram" to "AI assistant has memory."
 
 ## Prerequisites
 
-- Python 3.11 or later
+- Python 3.11-3.13 (not 3.14: the pinned onnxruntime that keeps Intel Mac wheels available ships no 3.14 wheels; see the dependency comment in `pyproject.toml`)
 - macOS or Linux (Windows via WSL works)
 - Either pip or [uv](https://docs.astral.sh/uv/) (uv recommended)
 - An MCP-aware client: Claude Code, Claude Desktop, or any other MCP-compatible AI tool
@@ -180,6 +180,28 @@ From inside an MCP client, ask the AI to capture something:
 The AI calls `capture_thought`. Engram writes a markdown file under `thoughts/lesson/`, indexes the embedding locally, and returns the ID.
 
 Most users capture via the MCP tool — the AI is the natural capture surface. There is intentionally no `engram capture` CLI subcommand; if you need to seed thoughts from scripts, drop markdown files directly into `thoughts/<prefix>/` and run `engram reindex`.
+
+### Teach your assistant the capture format
+
+The `capture_thought` tool description carries this contract, so an MCP client can
+discover it on its own - but stating it in your assistant's standing instructions makes
+captures consistent from day one:
+
+- **Prefix:** open the thought body with a bracketed marker naming its category. The 15
+  canonical prefixes are `Lesson`, `Pattern`, `Decision`, `Friction`, `Resolution`,
+  `Action Item`, `Parked`, `Notice`, `Domain`, `Workflow`, `Style`, `Artifact`,
+  `Session Summary`, `Meta`, and `Note`. Unmarked content is filed as `Note`; other
+  bracketed values are accepted but land outside the standard taxonomy.
+- **Portability:** classify privacy at capture via `metadata.portability`. `portable`
+  thoughts may sync anywhere and reach any configured LLM; `sensitive` thoughts only
+  ever reach local LLM providers; `block` thoughts never reach any LLM. When omitted,
+  `Domain` and `Artifact` captures default to `sensitive` and every other prefix to
+  `portable` - so anything private under a different prefix needs the explicit value.
+- **Source:** `metadata.source` overrides the attribution stamped into frontmatter;
+  omitted captures use the configured `default_user`.
+
+The capture response echoes the resolved `portability` and `source`, so a
+misclassified capture is visible to the assistant immediately.
 
 ## Step 7: Search your memory
 

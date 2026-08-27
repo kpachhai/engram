@@ -17,7 +17,7 @@ succeeds and overwrites the diagnostic metadata.
 
 The ``--force`` flag lets a user take over a contested lock by unlinking the
 lock file and retrying once. This is a deliberate user-initiated override
-(per ``02-TECHNICAL_DESIGN.md`` Concurrent serve and Locking).
+of the concurrent-serve guard.
 
 Caveat: POSIX file locking on NFS/SMB and on consumer cloud-sync providers
 (Dropbox, iCloud) is unreliable; engram's startup-time path-detection check

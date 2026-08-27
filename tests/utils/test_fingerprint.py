@@ -1,4 +1,4 @@
-"""Tests for engram.utils.fingerprint - canonical body fingerprint per 02-TECHNICAL_DESIGN.md."""
+"""Tests for engram.utils.fingerprint - the canonical body fingerprint."""
 
 from __future__ import annotations
 
@@ -73,7 +73,7 @@ def test_normalize_body_returns_bytes():
 
 
 def test_leading_prefix_line_included_in_fingerprint():
-    """The body INCLUDES the leading [Prefix] line per 02-TECHNICAL_DESIGN.md."""
+    """The body INCLUDES the leading [Prefix] line."""
     with_prefix = "[Lesson] never use yaml.load"
     without_prefix = "never use yaml.load"
     assert compute_fingerprint(with_prefix) != compute_fingerprint(without_prefix)

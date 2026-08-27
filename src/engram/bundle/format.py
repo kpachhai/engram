@@ -9,7 +9,7 @@ The on-disk format is a single ``.tar.gz`` containing:
   ``Pattern/2026/05/05/<id>.md``); the importer treats this as
   data and re-anchors under the target vault's ``thoughts_dir``.
 
-Per ``06-SECURITY.md`` lines 31-44, the bundle reception gate enforces:
+The bundle reception gate enforces:
 
 * Per-file ceiling :data:`MAX_PER_FILE_BYTES` (1 MB).
 * Total bundle ceiling :data:`MAX_TOTAL_BYTES` (4 GB).
