@@ -65,6 +65,14 @@ def test_most_restrictive_portability_ordering():
     assert most_restrictive_portability(["portable"]) == "portable"
 
 
+def test_most_restrictive_portability_rejects_unknown():
+    # Ranking used to treat anything unrecognised as rank 0 ("portable") and
+    # hand it back as a plain str; the bad value only surfaced later, as a
+    # pydantic ValidationError on the model that consumed it.
+    with pytest.raises(ValueError, match="unrecognised portability"):
+        most_restrictive_portability(["block", "not-a-portability"])
+
+
 def test_empty_vault_produces_clean_report(storage: VaultStorage):
     report = _report_for(storage)
     assert report.clusters == []
