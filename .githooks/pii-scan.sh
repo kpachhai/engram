@@ -128,9 +128,30 @@ if [[ "${1:-}" == "--staged" ]]; then
   # `AM` alone silently skipped renames, so `git mv` moved PII past the gate.
   # -z + read -d '' keeps paths with spaces or non-ASCII bytes intact, which
   # the plain --name-only form mangles and the old -f test then dropped.
+  #
+  # Enumerate as its own step and read ITS status. The old form ended
+  # `2>/dev/null || true`, which threw away git's exit code and its diagnosis
+  # together: outside a work tree (git exits 129), against an unreadable index,
+  # or under a safe.directory refusal, the loop ran zero times, and zero staged
+  # paths then hit the `--staged` carve-out below and exited 0. That carve-out
+  # is only true when the enumeration SUCCEEDED and returned nothing; nothing
+  # was reading whether it had. The pre-commit PII gate reported a clean commit
+  # it never read, which is the same shape this file's grep guard already
+  # refuses further down. Output is NUL-delimited and command substitution
+  # drops NUL bytes, so stdout goes to a temp file while stderr is captured for
+  # the failure message.
+  staged_list="$(mktemp "${TMPDIR:-/tmp}/pii-staged.XXXXXX")" || die "mktemp failed"
+  staged_err="$(git diff --cached -z --name-only --diff-filter=ACMRT 2>&1 >"$staged_list")" \
+    && staged_rc=0 || staged_rc=$?
+  if [[ $staged_rc -ne 0 ]]; then
+    rm -f "$staged_list"
+    if [[ -n "$staged_err" ]]; then printf '%s\n' "${staged_err%%$'\n'*}" >&2; fi
+    die "git diff --cached failed (exit ${staged_rc}) - a staging area that cannot be enumerated has not been scanned clean"
+  fi
   while IFS= read -r -d '' f; do
     [[ -n "$f" ]] && files+=("$f")
-  done < <(git diff --cached -z --name-only --diff-filter=ACMRT 2>/dev/null || true)
+  done <"$staged_list"
+  rm -f "$staged_list"
 else
   # Files from args (`-` is the stdin marker, never a filename)
   for arg in "$@"; do
@@ -156,7 +177,22 @@ else
   fi
 fi
 
-[[ ${#files[@]} -gt 0 ]] || exit 0
+# A file list that resolved to nothing is not a clean scan. `git ls-files |
+# pii-scan.sh` is the CI form, and when its pathspec is mistyped or narrowed to a
+# directory that no longer exists it emits nothing - at which point scanning 468
+# files and scanning none were byte-identical here: exit 0, no output. Refuse
+# instead, with the same exit 2 the no-files-given case above already uses, so
+# the pre-commit hook's "scan_rc >= 2 -> ABORT" branch catches it unchanged.
+#
+# `--staged` is exempt on purpose and is the one mode where empty is real: a
+# deletion-only commit stages no content, and that is a genuine no-op.
+if [[ ${#files[@]} -eq 0 ]]; then
+  if [[ "$STAGED" -eq 1 ]]; then
+    exit 0
+  fi
+  echo "pii-scan: 0 files to scan - a file list that resolved to nothing is not a clean result; check the caller's pathspec" >&2
+  exit 2
+fi
 
 # --- Scan ---
 
@@ -176,6 +212,10 @@ content_of() {
 }
 
 found=0
+# Counted AFTER the skip arms below, so this is what was really read rather than
+# what the caller listed. The pass line prints it: a checker that reports success
+# without saying how much it examined cannot show that its own scope narrowed.
+scanned=0
 for f in "${files[@]}"; do
   [[ "$STAGED" -eq 1 || -f "$f" ]] || continue
   # Auto-skip pattern definition files and the scanner itself (self-reference loop).
@@ -203,6 +243,7 @@ for f in "${files[@]}"; do
   if content_of "$f" | file --brief --mime-encoding - 2>/dev/null | grep -qE '^(binary|application/)'; then
     continue
   fi
+  scanned=$((scanned + 1))
   # -i because identity values and brand names appear in mixed case; the conf
   # listing a brand twice, once capitalised and once lowercased, was hand-rolling
   # exactly this. A gate that misses PERSON@EXAMPLE.COM is not a gate.
@@ -269,4 +310,5 @@ EOF
   exit 1
 fi
 
+echo "pii-scan: 0 matches across ${scanned} file(s) scanned, ${#patterns[@]} pattern(s) loaded."
 exit 0

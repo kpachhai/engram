@@ -1,8 +1,8 @@
 # sha256  path  (hash is the identity; path is metadata)
 # Each line carries pii-allow: the 40-hex GPG-fingerprint pattern also
 # matches the first 40 chars of any sha256.
-5ba4f0b82d9f58acd906881198f5a77e0f62866fa3a3908d3d86207fb704fe47  .githooks/pii-scan.sh  # pii-allow: sha256
+23eb8e9d7c9967b026cb7025b24a8a4b08b914a7e93e604b65ee3ab8fb55649d  .githooks/pii-scan.sh  # pii-allow: sha256
 1d3862211f2ae7c985b66d3a189f2a0e087f21aadaa5cf01f95f30fa62004cc7  .githooks/pii-patterns.conf  # pii-allow: sha256
-98a731ca61992ce9f72aae1248d1b8109489fdbfba619b9aaeb8cad6bc3d84a9  .githooks/planning-vocab-scan.sh  # pii-allow: sha256
+f347cd84733c388d366bf14e7bfae35a041db00f211c99eae69235b70f8258a8  .githooks/planning-vocab-scan.sh  # pii-allow: sha256
 acc2ec2f0d6ec3a56253cada8b91f8e739da0ddb4d11fa788fd2a4c83d073c9e  .githooks/planning-vocab-patterns.conf  # pii-allow: sha256
-9e0ed249a9e97f7d2dceafbd03dbcad36c4ef637e65cd056d46f9062ec251665  .githooks/planning-vocab-ratchet.sh  # pii-allow: sha256
+21b4ef0e3bb7fc99792d2eed7d12e1bd61db771802f6bc65cc12b1ffb19f4100  .githooks/planning-vocab-ratchet.sh  # pii-allow: sha256
