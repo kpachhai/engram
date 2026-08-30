@@ -37,6 +37,7 @@ from engram.consolidate.pairs import contradiction_band_pairs
 from engram.consolidate.staleness import effective_age, is_future_dated
 from engram.errors import BlockThoughtLLMDisallowed, LLMProviderError
 from engram.llm.budget import estimate_tokens
+from engram.models.frontmatter import Portability
 from engram.storage.sqlite import SETTING_EMBEDDING_MODEL_NAME, get_setting
 from engram.storage.sqlite_queries import fetch_all_embeddings, list_all_thought_rows
 
@@ -54,7 +55,7 @@ JudgeFn = Callable[[str, str], tuple[str, str]]
 #: Distills a cluster: ``(members as (id, content) pairs, prefix) -> draft``.
 DistillFn = Callable[[list[tuple[str, str]], str], str]
 
-_PORTABILITY_RANK = {"portable": 0, "sensitive": 1, "block": 2}
+_PORTABILITY_RANK: dict[Portability, int] = {"portable": 0, "sensitive": 1, "block": 2}
 
 
 @dataclass(frozen=True)
@@ -77,9 +78,26 @@ class ReportSettings:
     exclude_prefixes: tuple[str, ...] = ("Session Summary",)
 
 
-def most_restrictive_portability(values: list[str]) -> str:
+def _parse_portability(value: object) -> Portability:
+    """Narrow an untrusted sqlite value to the ``Portability`` literal.
+
+    The column is free-form text at the storage boundary. Pydantic already
+    rejects a bad value, but only later, when the model is constructed, and
+    ranking treated anything unrecognised as rank 0 (``portable``). Validating
+    on read names the offending value and the permitted set at the point the
+    row enters, and lets the call sites drop ``type: ignore[arg-type]``.
+    """
+    text = str(value)
+    if text not in _PORTABILITY_RANK:
+        raise ValueError(
+            f"unrecognised portability {text!r}; expected one of {sorted(_PORTABILITY_RANK)}"
+        )
+    return text
+
+
+def most_restrictive_portability(values: list[str]) -> Portability:
     """Block > sensitive > portable; a merged thought inherits the strictest."""
-    return max(values, key=lambda v: _PORTABILITY_RANK.get(v, 0))
+    return max((_parse_portability(v) for v in values), key=lambda v: _PORTABILITY_RANK[v])
 
 
 def cluster_id_for(fingerprints: list[str]) -> str:
@@ -107,7 +125,7 @@ def _pin(row: dict[str, Any]) -> PinnedThought:
     return PinnedThought(
         thought_id=UUID(str(row["id"])),
         fingerprint=str(row["fingerprint"]),
-        portability=str(row["portability"]),  # type: ignore[arg-type]
+        portability=_parse_portability(row["portability"]),
     )
 
 
@@ -171,9 +189,7 @@ def generate_report(
                 prefix=str(group[0]["prefix"]),
                 members=[_pin(r) for r in group],
                 similarity_floor=1.0,
-                portability=most_restrictive_portability(  # type: ignore[arg-type]
-                    [str(r["portability"]) for r in group]
-                ),
+                portability=most_restrictive_portability([str(r["portability"]) for r in group]),
                 keep_thought_id=UUID(str(newest["id"])),
             )
         )

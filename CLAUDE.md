@@ -159,3 +159,7 @@ The CLI is self-documenting (`engram --help`, `engram <cmd> --help`); recipes fo
 - `docs/DAEMON_MODE.md` — operator + migration guide for daemon mode (v0.5.0+).
 - `docs/CONSOLIDATION.md` — report-then-action vault curation (v0.6.0+).
 - `docs/archive/phases/` — the shipped delivery plans and close-out records. The per-phase retrospectives live in the maintainer's unpublished planning repo and are not readable from here.
+
+## Refactoring Guardrails
+
+@.claudecode.md

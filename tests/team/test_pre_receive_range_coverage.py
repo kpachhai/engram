@@ -14,6 +14,7 @@ from unittest.mock import patch
 
 import pytest
 
+from engram.team.server_hooks import pre_receive
 from engram.team.server_hooks.pre_receive import run_hook
 
 VALID_FP = "1234567890ABCDEF1234567890ABCDEF12345678"  # pii-allow: synthetic test fingerprint
@@ -192,3 +193,42 @@ def test_clean_multi_commit_push_by_member_is_allowed(team_repo: Path) -> None:
         )
 
     assert code == 0, stderr
+
+
+def test_unreadable_thought_content_is_refused_not_skipped(team_repo: Path) -> None:
+    """A git failure reading a thought must refuse the push, not skip the check.
+
+    ``_ls_tree_at`` wrapped ``git show`` in a bare ``except RuntimeError`` and
+    returned ``None`` for every failure alike, and both callers read ``None`` as
+    "nothing here to validate". A timeout or an unreadable object therefore let
+    the file past the gate unchecked - the wrong direction for a gate whose job
+    is refusing bad pushes.
+    """
+    base_sha = _git(["rev-parse", "HEAD"], team_repo).stdout.strip()
+    _write(team_repo, "thoughts/postmortem/note.md", _thought())
+    tip_sha = _commit_all(team_repo, "add a thought")
+
+    real_git_cmd = pre_receive._git_cmd
+
+    def flaky(args: list[str], *, cwd: str | None = None) -> str:
+        # Only the content read fails; ls-tree still reports the path present,
+        # so this is unmistakably "unreadable" rather than "absent".
+        if args and args[0] == "show" and args[-1].endswith("thoughts/postmortem/note.md"):
+            msg = "git show timed out after 30.0s"
+            raise RuntimeError(msg)
+        return real_git_cmd(args, cwd=cwd)
+
+    with (
+        patch(
+            "engram.team.server_hooks.pre_receive._committer_fingerprint",
+            return_value=VALID_FP,
+        ),
+        patch.object(pre_receive, "_git_cmd", side_effect=flaky),
+    ):
+        code, stderr = run_hook(
+            stdin_text=f"{base_sha} {tip_sha} refs/heads/main\n",
+            repo_path=str(team_repo),
+        )
+
+    assert code != 0, "an unreadable thought file was skipped and the push allowed"
+    assert "thought_content_unreadable" in stderr, stderr

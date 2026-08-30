@@ -257,11 +257,21 @@ def _git_cmd(args: list[str], *, cwd: str | None = None) -> str:
 
 
 def _ls_tree_at(sha: str, path: str, *, cwd: str | None = None) -> str | None:
-    """Read a file's content at a specific commit (via ``git show <sha>:<path>``)."""
-    try:
-        return _git_cmd(["show", f"{sha}:{path}"], cwd=cwd)
-    except RuntimeError:
+    """Read a file's content at a commit. ``None`` only when the path is absent there.
+
+    Absence is established with ``ls-tree``, which exits 0 and prints nothing for
+    a path that is not in the tree, and nonzero for a sha it cannot read. That
+    separation is the point: this used to wrap ``git show`` in a bare
+    ``except RuntimeError`` and return ``None`` for every failure alike, and two
+    callers read ``None`` as "nothing here to validate" and moved on. A timeout
+    or an unreadable object therefore let a thought file through the gate
+    unchecked. Everything that is not a genuine absence now raises, so it
+    reaches a caller that can refuse the push instead of skipping it.
+    """
+    listing = _git_cmd(["ls-tree", "--name-only", sha, "--", path], cwd=cwd)
+    if not listing.strip():
         return None
+    return _git_cmd(["show", f"{sha}:{path}"], cwd=cwd)
 
 
 def _changed_files(
@@ -656,7 +666,19 @@ def _validate_range(
         for path in touched:
             if not path.startswith("thoughts/") or not path.endswith(".md"):
                 continue
-            content = _ls_tree_at(commit, path, cwd=repo_path)
+            try:
+                content = _ls_tree_at(commit, path, cwd=repo_path)
+            except RuntimeError as exc:
+                # Unreadable is not absent. Skipping here would pass the file
+                # through unvalidated, so it is refused with the git error.
+                violations.append(
+                    _Violation(
+                        file_path=path,
+                        reason="thought_content_unreadable",
+                        detail=f"could not read {path} at {commit}: {exc}",
+                    ),
+                )
+                continue
             if content is None:
                 continue
             violations.extend(
@@ -716,8 +738,21 @@ def run_hook(
         if set(upd.old_sha) == {"0"}:
             policy_source_sha = _existing_head_sha(cwd=repo_path) or upd.new_sha
 
-        policy_text = _ls_tree_at(policy_source_sha, ".engram/team-policy.yaml", cwd=repo_path)
-        members_text = _ls_tree_at(policy_source_sha, ".engram/members.yaml", cwd=repo_path)
+        try:
+            policy_text = _ls_tree_at(policy_source_sha, ".engram/team-policy.yaml", cwd=repo_path)
+            members_text = _ls_tree_at(policy_source_sha, ".engram/members.yaml", cwd=repo_path)
+        except RuntimeError as exc:
+            # Unreadable canonical state is not absent canonical state. Both
+            # refuse, but say which: a push refused for a git failure should not
+            # send the operator looking for a setup step they already ran.
+            all_violations.append(
+                _Violation(
+                    file_path=upd.ref,
+                    reason="team_canonical_files_unreadable",
+                    detail=f"could not read policy at {policy_source_sha}: {exc}",
+                ),
+            )
+            continue
         if policy_text is None or members_text is None:
             # Initial setup push without canonical files - rejected.
             all_violations.append(
@@ -785,7 +820,17 @@ def run_hook(
                 continue
             if not path.endswith(".md"):
                 continue
-            content = _ls_tree_at(upd.new_sha, path, cwd=repo_path)
+            try:
+                content = _ls_tree_at(upd.new_sha, path, cwd=repo_path)
+            except RuntimeError as exc:
+                all_violations.append(
+                    _Violation(
+                        file_path=path,
+                        reason="thought_content_unreadable",
+                        detail=f"could not read {path} at {upd.new_sha}: {exc}",
+                    ),
+                )
+                continue
             if content is None:
                 continue
             all_violations.extend(

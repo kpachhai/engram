@@ -89,7 +89,18 @@ trap 'rm -rf "$TMP"' EXIT
 
 # Run the scanner. It exits 1 when it finds anything, which is its normal
 # reporting state and not an error here.
-bash "$SCAN" --repo "$REPO_ABS" >"$TMP/raw" 2>/dev/null || true
+#
+# But 0 and 1 are the ONLY acceptable statuses. This used to be `|| true`, which
+# was written for that exit 1 and swallowed everything else as collateral: a
+# scanner that died, or exited 2 because its rule set was empty, produced an
+# empty result file, which scored as zero new findings and turned CI green while
+# nothing had actually been scanned. A gate that cannot run must fail, not pass.
+# --tsv keeps the path in its own field. The human "path:line:content" form is
+# ambiguous for any path containing a colon, and the split below silently
+# corrupted both the path and the hashed content for those.
+bash "$SCAN" --tsv --repo "$REPO_ABS" >"$TMP/raw" 2>/dev/null
+scan_rc=$?
+[ "$scan_rc" -le 1 ] || die "scanner exited $scan_rc - refusing to treat an unscanned repo as clean"
 
 # Normalise to "<sha1-of-content>\t<count>\t<relpath>".
 #
@@ -98,11 +109,9 @@ bash "$SCAN" --repo "$REPO_ABS" >"$TMP/raw" 2>/dev/null || true
 # path - the scanner prefixes whatever form it was given, and CI and a local run
 # do not use the same form.
 : > "$TMP/pairs"
-while IFS= read -r line; do
-  [ -n "$line" ] || continue
-  file="${line%%:*}"
-  rest="${line#*:}"
-  content="${rest#*:}"                 # drop the line number
+while IFS=$'\t' read -r file lineno content; do
+  [ -n "$file" ] || continue
+  : "$lineno"                          # line number is deliberately not hashed
   rel="${file#"$REPO_ABS"/}"
   rel="${rel#./}"
   printf '%s\t%s\n' "$(printf '%s' "$content" | sha1of)" "$rel" >> "$TMP/pairs"
@@ -113,6 +122,24 @@ sort "$TMP/pairs" | uniq -c \
   | sort > "$TMP/current"
 
 current_count=$(wc -l < "$TMP/current" | tr -d ' ')
+
+# A corpus that collapsed to nothing is a discovery failure, not debt paid down
+# in one go. The scanner's own status is guarded above, but a scanner that ran
+# and enumerated no files still returns 0; the only way to tell the two apart is
+# to compare against what the baseline says was there. On this repo that is
+# hundreds of baselined entries against 0 found, and both used to print
+# "no new findings".
+baseline_count=0
+if [ -f "$BASELINE" ]; then
+  baseline_count=$(grep -v '^#' "$BASELINE" | grep -cv '^[[:space:]]*$' || true)
+fi
+if [ "$MODE" = "--check" ] && [ "$current_count" -eq 0 ] && [ "$baseline_count" -gt 0 ]; then
+  echo "$SELF: scanned 0 findings but the baseline pins $baseline_count." >&2
+  echo "  Paying down every baselined finding at once is possible; a corpus that vanished is" >&2
+  echo "  likelier - check that $REPO_ABS is a git work tree the scanner can enumerate." >&2
+  echo "  If the debt really is cleared, re-record it with: $SELF --write $REPO" >&2
+  exit 1
+fi
 
 if [ "$MODE" = "--write" ]; then
   {
