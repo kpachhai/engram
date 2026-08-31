@@ -48,6 +48,21 @@ fail=0
 checked=0
 tracked=$(cd "$REPO" && git ls-files 2>/dev/null)
 
+# Paths the declaration itself says are NOT in a clone. A `local-only:` field is a
+# statement that a machine-local exclude hides something here and that a fresh
+# checkout will not have it - so failing on it contradicts the very sentence being
+# read. This cost a red CI run: engram declares .claude/RESUME.md local-only, the
+# check passed on the machine that had the file and failed in CI, which is the
+# machine-dependent verdict this whole script exists to make impossible.
+# The field runs until a blank line or the next `key:`, which is how every one of
+# these declarations is laid out.
+local_only=$(printf '%s\n' "$block" | awk '
+  /^[[:space:]]*local-only:/ { f = 1; print; next }
+  f && /^[[:space:]]*$/ { f = 0 }
+  f && /^[[:space:]]*[A-Za-z][A-Za-z0-9_-]*:[[:space:]]/ { f = 0 }
+  f { print }
+' | tr -s '[:space:]' '\n' | sed -e 's/^[`("]*//' -e 's/[`),.;:"]*$//' -e 's#^\./##')
+
 note() { printf '  %-7s %s\n' "$1" "$2"; }
 
 # --- npm scripts -------------------------------------------------------------
@@ -119,10 +134,19 @@ while read -r raw; do
   # A gitignored path is a generated artifact the repo deliberately does not
   # track, so naming one is correct and its absence proves nothing: it exists
   # only after a build. Asked of git rather than guessed from the wording.
-  if (cd "$REPO" && git check-ignore -q "$path" 2>/dev/null); then
-    note "ok" "$path (generated, gitignored)"
+  if [ -n "$local_only" ] && printf '%s\n' "$local_only" | grep -qxF "$path"; then
+    note "ok" "$path (declared local-only)"
     continue
   fi
+  # `git check-ignore` also honours .git/info/exclude and the user's global ignore
+  # file, and NEITHER is committed - so trusting a bare yes/no makes this script
+  # answer differently on the maintainer's machine than in CI. Read the source of
+  # the rule with -v and accept it only when it came from a tracked .gitignore.
+  ignored_by=$( (cd "$REPO" && git check-ignore -v "$path" 2>/dev/null) | head -1 | cut -d: -f1 )
+  case "$ignored_by" in
+    ""|/*|.git/info/exclude|*/.git/info/exclude) ;;
+    *) note "ok" "$path (generated, gitignored)"; continue ;;
+  esac
   # Resolve, then confirm the resolved file is ON DISK. `git ls-files` reads the
   # INDEX, so an earlier version passed for a file deleted from the working tree -
   # it matched the index entry and never looked. A mutation test caught it:
