@@ -6,3 +6,4 @@
 f347cd84733c388d366bf14e7bfae35a041db00f211c99eae69235b70f8258a8  .githooks/planning-vocab-scan.sh  # pii-allow: sha256
 acc2ec2f0d6ec3a56253cada8b91f8e739da0ddb4d11fa788fd2a4c83d073c9e  .githooks/planning-vocab-patterns.conf  # pii-allow: sha256
 21b4ef0e3bb7fc99792d2eed7d12e1bd61db771802f6bc65cc12b1ffb19f4100  .githooks/planning-vocab-ratchet.sh  # pii-allow: sha256
+6fa8f2569a75a0d2b73a53831a5e23fc0d368df948312843caabae1c73b3f8d5  .githooks/project-contracts-check.sh  # pii-allow: sha256

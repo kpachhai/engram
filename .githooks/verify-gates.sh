@@ -153,5 +153,16 @@ else
   fi
 fi
 
+# --- the declared contracts still name things that exist ---------------------
+# .claudecode.md states facts about this repo: which command is the gate, which
+# paths are generated, which files are vendored. Prose cannot be enforced, but a
+# declaration naming a file that no longer exists reads as current, which is
+# worse than no declaration. Referents only; running the suites is CI's job.
+if run_gate bash "$ROOT/.githooks/project-contracts-check.sh" "$ROOT" >/dev/null 2>&1; then
+  note "project-contracts: every declared referent resolves"
+else
+  bad "project-contracts: .claudecode.md names something that is gone"
+fi
+
 [[ "$FAIL" -eq 0 ]] || exit 1
 note "OK"

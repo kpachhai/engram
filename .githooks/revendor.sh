@@ -20,7 +20,7 @@ DEST="$ROOT/.githooks"
 
 # The vendored set. verify-gates.sh reads the same list out of vendor.lock, so
 # adding a file here and re-running is what puts it under the hash check.
-VENDORED="pii-scan.sh pii-patterns.conf planning-vocab-scan.sh planning-vocab-patterns.conf planning-vocab-ratchet.sh"
+VENDORED="pii-scan.sh pii-patterns.conf planning-vocab-scan.sh planning-vocab-patterns.conf planning-vocab-ratchet.sh project-contracts-check.sh"
 
 die() { echo "revendor: $*" >&2; exit 2; }
 
