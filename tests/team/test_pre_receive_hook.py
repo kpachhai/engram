@@ -13,14 +13,16 @@ from unittest.mock import patch
 
 import pytest
 
-from engram.team.server_hooks.pre_receive import (
-    _committer_fingerprint,
-    _git_cmd,
-    _is_indexes_path,
+from engram.team.server_hooks.policy_yaml import (
     _is_valid_fingerprint,
     _normalize_fingerprint,
     _parse_simple_yaml,
     _split_frontmatter,
+)
+from engram.team.server_hooks.pre_receive import (
+    _committer_fingerprint,
+    _git_cmd,
+    _is_indexes_path,
     run_hook,
 )
 
