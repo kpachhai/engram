@@ -14,9 +14,9 @@ from pathlib import Path
 
 import pytest
 
+from engram.team.server_hooks.policy_yaml import _coerce_scalar
 from engram.team.server_hooks.pre_receive import (
     _changed_files,
-    _coerce_scalar,
     _committer_fingerprint,
     _parse_stdin,
 )
